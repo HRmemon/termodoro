@@ -1,34 +1,53 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Box, useInput, useApp } from 'ink';
-import type { Config, View, TagInfo, PostSessionInfo } from './types.js';
+import { useInput, useApp } from 'ink';
+import type { Config, View } from './types.js';
 import { loadSessions } from './lib/store.js';
-import { PlanView } from './components/PlanView.js';
+import { loadTasks } from './lib/tasks.js';
 import { useTimer } from './hooks/useTimer.js';
 import { usePomodoroEngine } from './hooks/usePomodoroEngine.js';
-import { Timer } from './components/Timer.js';
-import { Controls } from './components/Controls.js';
-import { Header } from './components/Header.js';
-import { StatusBar } from './components/StatusBar.js';
-import { SessionTagger } from './components/SessionTagger.js';
-import { StatsView } from './components/StatsView.js';
+import { useSequence, parseSequenceString, PRESET_SEQUENCES } from './hooks/useSequence.js';
+import { Layout } from './components/Layout.js';
+import { StatusLine } from './components/StatusLine.js';
+import { KeysBar } from './components/KeysBar.js';
+import { TimerView } from './components/TimerView.js';
+import { ZenMode } from './components/ZenMode.js';
+import { PlannerView } from './components/PlannerView.js';
+import { ReportsView } from './components/ReportsView.js';
+import { ConfigView } from './components/ConfigView.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { SearchView } from './components/SearchView.js';
 import { InsightsView } from './components/InsightsView.js';
+import { getStreaks } from './lib/stats.js';
 
 interface AppProps {
   config: Config;
   initialView?: View;
 }
 
-export function App({ config, initialView }: AppProps) {
+export function App({ config: initialConfig, initialView }: AppProps) {
+  const [config, setConfig] = useState(initialConfig);
   const [view, setView] = useState<View>(initialView ?? 'timer');
+  const [isZen, setIsZen] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [engine, engineActions] = usePomodoroEngine(config);
   const { exit } = useApp();
+
+  const [engine, engineActions] = usePomodoroEngine(config);
+  const [seqState, seqActions] = useSequence();
 
   const onTimerComplete = useCallback(() => {
     engineActions.completeSession();
-  }, [engineActions]);
+
+    // If sequence is active, advance to next block
+    if (seqState.isActive) {
+      const nextBlock = seqActions.advance();
+      if (nextBlock) {
+        engineActions.applySequenceBlock(nextBlock);
+      }
+    }
+  }, [engineActions, seqState.isActive, seqActions]);
 
   const [timer, timerActions] = useTimer(engine.durationSeconds, onTimerComplete);
 
@@ -41,34 +60,29 @@ export function App({ config, initialView }: AppProps) {
     };
   }, [timer.isComplete]);
 
-  const handleTagSubmit = useCallback((info: TagInfo) => {
-    engineActions.setTagInfo(info);
+  const streak = useMemo(() => getStreaks().currentStreak, [timer.isComplete]);
+
+  const currentTask = useMemo(() => {
+    const tasks = loadTasks();
+    return tasks.find(t => !t.completed)?.text;
+  }, [view]);
+
+  // Auto-start breaks
+  const isBreak = engine.sessionType !== 'work';
+  if (isBreak && config.autoStartBreaks && !timer.isRunning && !timer.isPaused && timer.secondsLeft === engine.durationSeconds) {
+    setTimeout(() => {
+      timerActions.start();
+      engineActions.startSession();
+    }, 0);
+  }
+
+  // Reset timer when engine session changes
+  if (timer.totalSeconds !== engine.durationSeconds && !timer.isRunning) {
     timerActions.reset(engine.durationSeconds);
-    timerActions.start();
-    engineActions.startSession();
-    setView('timer');
-  }, [engineActions, timerActions, engine.durationSeconds]);
-
-  const handleTagSkip = useCallback(() => {
-    engineActions.setTagInfo({});
-    timerActions.reset(engine.durationSeconds);
-    timerActions.start();
-    engineActions.startSession();
-    setView('timer');
-  }, [engineActions, timerActions, engine.durationSeconds]);
-
-  const handlePostSubmit = useCallback((info: PostSessionInfo) => {
-    engineActions.setPostSessionInfo(info);
-    // Engine will advance; reset timer for next session
-    setView('timer');
-  }, [engineActions]);
-
-  const handlePostSkip = useCallback(() => {
-    engineActions.setPostSessionInfo({});
-    setView('timer');
-  }, [engineActions]);
+  }
 
   const handleCommand = useCallback((cmd: string, args: string) => {
+    setShowCommandPalette(false);
     switch (cmd) {
       case 'stats':
         setView('stats');
@@ -78,58 +92,74 @@ export function App({ config, initialView }: AppProps) {
         break;
       case 'search':
         setSearchQuery(args);
-        setView('search');
+        setShowSearch(true);
         break;
       case 'insights':
-        setView('insights');
+        setShowInsights(true);
         break;
-      case 'export':
+      case 'session': {
+        // Parse sequence: "45w 15b 45w" or preset name
+        const preset = PRESET_SEQUENCES[args.trim()];
+        if (preset) {
+          seqActions.setSequence(preset);
+          engineActions.applySequenceBlock(preset.blocks[0]!);
+        } else {
+          const seq = parseSequenceString(args);
+          if (seq) {
+            seqActions.setSequence(seq);
+            engineActions.applySequenceBlock(seq.blocks[0]!);
+          }
+        }
         setView('timer');
         break;
-      case 'backup':
-        setView('timer');
-        break;
-      case 'config':
-        setView('timer');
-        break;
+      }
       case 'quit':
         engineActions.abandonSession();
         exit();
         break;
       default:
-        setView('timer');
         break;
     }
-  }, [engineActions, exit]);
-
-  // Auto-start breaks if configured
-  const needsAutoStart = !engine.isWaitingForTag && !engine.isWaitingForPostSession &&
-    !timer.isRunning && !timer.isComplete && engine.sessionType !== 'work';
-
-  if (needsAutoStart && config.autoStartBreaks && !timer.isRunning && timer.secondsLeft === engine.durationSeconds) {
-    // Will be picked up on next render
-    setTimeout(() => {
-      timerActions.start();
-      engineActions.startSession();
-    }, 0);
-  }
+  }, [engineActions, exit, seqActions]);
 
   useInput((input, key) => {
-    // Subviews that manage their own useInput handle their own keys
-    if (view === 'command-palette' || view === 'search' || view === 'insights') return;
+    if (showCommandPalette || showSearch || showInsights) return;
 
-    // Global keybinds
-    if (input === 'q') {
+    // Quit
+    if (input === 'q' && !isZen) {
       engineActions.abandonSession();
       exit();
       return;
     }
 
-    if (view === 'timer' && !engine.isWaitingForTag && !engine.isWaitingForPostSession) {
+    // Zen mode toggle
+    if (input === 'z' && view === 'timer' && !isZen) {
+      setIsZen(true);
+      return;
+    }
+    if (key.escape && isZen) {
+      setIsZen(false);
+      return;
+    }
+
+    // View switching (1-4) - not in zen
+    if (!isZen) {
+      if (input === '1') { setView('timer'); return; }
+      if (input === '2') { setView('plan'); return; }
+      if (input === '3') { setView('stats'); return; }
+      if (input === '4') { setView('config'); return; }
+    }
+
+    // Command palette
+    if (input === ':' && !isZen) {
+      setShowCommandPalette(true);
+      return;
+    }
+
+    // Timer controls (work in both timer view and zen mode)
+    if (view === 'timer' || isZen) {
       if (input === ' ') {
         if (!timer.isRunning && !timer.isPaused) {
-          // Not started yet — start
-          if (engine.sessionType === 'work' && engine.isWaitingForTag) return;
           timerActions.start();
           engineActions.startSession();
         } else if (timer.isPaused) {
@@ -137,111 +167,100 @@ export function App({ config, initialView }: AppProps) {
         } else if (!config.strictMode) {
           timerActions.pause();
         }
+        return;
       }
-
-      if (input === 's' && !config.strictMode && timer.isRunning) {
+      if (input === 's' && !config.strictMode && timer.isRunning && !isZen) {
         timerActions.skip();
         engineActions.skipSession();
+        return;
       }
-    }
-
-    // View switching
-    if (input === 't' && !engine.isWaitingForTag && !engine.isWaitingForPostSession) {
-      setView(view === 'stats' ? 'timer' : 'stats');
-    }
-    if (input === 'p' && !engine.isWaitingForTag && !engine.isWaitingForPostSession) {
-      setView(view === 'plan' ? 'timer' : 'plan');
-    }
-    if (input === ':' && !engine.isWaitingForTag && !engine.isWaitingForPostSession) {
-      setView('command-palette');
-    }
-    if (key.escape) {
-      setView('timer');
     }
   });
 
-  // Tagger views
-  if (engine.isWaitingForTag && engine.sessionType === 'work') {
-    return <SessionTagger mode="pre" onSubmit={handleTagSubmit} onSkip={handleTagSkip} />;
-  }
-  if (engine.isWaitingForPostSession) {
-    return <SessionTagger mode="post" onSubmit={handlePostSubmit} onSkip={handlePostSkip} />;
-  }
-
-  // Reset timer if engine changed the session type and timer is stale
-  if (timer.totalSeconds !== engine.durationSeconds && !timer.isRunning) {
-    timerActions.reset(engine.durationSeconds);
-  }
-
-  // Full-screen views rendered without the main chrome
-  if (view === 'command-palette') {
+  // Full-screen overlays
+  if (showCommandPalette) {
     return (
       <CommandPalette
         onCommand={handleCommand}
-        onDismiss={() => setView('timer')}
+        onDismiss={() => setShowCommandPalette(false)}
       />
     );
   }
 
-  if (view === 'search') {
+  if (showSearch) {
     return (
       <SearchView
-        onBack={() => setView('timer')}
+        onBack={() => setShowSearch(false)}
         initialQuery={searchQuery}
       />
     );
   }
 
-  if (view === 'insights') {
+  if (showInsights) {
     return (
       <InsightsView
-        onBack={() => setView('timer')}
+        onBack={() => setShowInsights(false)}
       />
     );
   }
 
-  return (
-    <Box flexDirection="column">
-      <Header
+  // Zen mode
+  if (isZen) {
+    return (
+      <ZenMode
+        secondsLeft={timer.secondsLeft}
+        totalSeconds={timer.totalSeconds}
         sessionType={engine.sessionType}
-        sessionNumber={engine.sessionNumber}
-        totalWorkSessions={engine.totalWorkSessions}
-        longBreakInterval={config.longBreakInterval}
-        label={engine.currentLabel}
-        project={engine.currentProject}
+        isPaused={timer.isPaused}
+        isRunning={timer.isRunning}
+        currentTask={currentTask}
       />
+    );
+  }
+
+  // Status and keys bars
+  const statusLine = (
+    <StatusLine
+      sessionType={engine.sessionType}
+      isRunning={timer.isRunning}
+      isPaused={timer.isPaused}
+      streak={streak}
+      todaySessions={todayStats.count}
+      todayFocusMinutes={todayStats.focusMinutes}
+    />
+  );
+
+  const keysBar = (
+    <KeysBar
+      view={view}
+      isRunning={timer.isRunning}
+      isPaused={timer.isPaused}
+      strictMode={config.strictMode}
+      isZen={false}
+    />
+  );
+
+  // Main layout with views
+  return (
+    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar}>
       {view === 'timer' && (
-        <>
-          <Timer
-            secondsLeft={timer.secondsLeft}
-            totalSeconds={timer.totalSeconds}
-            sessionType={engine.sessionType}
-            isPaused={timer.isPaused}
-          />
-          <Controls
-            isRunning={timer.isRunning}
-            isPaused={timer.isPaused}
-            strictMode={config.strictMode}
-            vimKeys={config.vimKeys}
-          />
-        </>
-      )}
-      {view === 'stats' && (
-        <StatsView />
-      )}
-      {view === 'plan' && (
-        <PlanView
-          date={new Date().toISOString().slice(0, 10)}
-          sessions={loadSessions()}
-          onBack={() => setView('timer')}
+        <TimerView
+          secondsLeft={timer.secondsLeft}
+          totalSeconds={timer.totalSeconds}
+          sessionType={engine.sessionType}
+          isPaused={timer.isPaused}
+          isRunning={timer.isRunning}
+          sessionNumber={engine.sessionNumber}
+          totalWorkSessions={engine.totalWorkSessions}
+          sequenceBlocks={seqState.sequence?.blocks}
+          currentBlockIndex={seqState.currentBlockIndex}
         />
       )}
-      <StatusBar
-        sessionType={engine.sessionType}
-        secondsLeft={timer.secondsLeft}
-        todaySessionCount={todayStats.count}
-        todayFocusMinutes={todayStats.focusMinutes}
-      />
-    </Box>
+      {view === 'plan' && <PlannerView />}
+      {view === 'stats' && <ReportsView />}
+      {view === 'config' && (
+        <ConfigView config={config} onConfigChange={setConfig} />
+      )}
+    </Layout>
   );
 }

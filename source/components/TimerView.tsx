@@ -1,0 +1,151 @@
+import React, { useState, useCallback } from 'react';
+import { Box, Text, useInput } from 'ink';
+import TextInput from 'ink-text-input';
+import type { Task, SessionType, SequenceBlock } from '../types.js';
+import { BigTimer } from './BigTimer.js';
+import { TaskList } from './TaskList.js';
+import { loadTasks, addTask, completeTask, deleteTask } from '../lib/tasks.js';
+
+interface TimerViewProps {
+  secondsLeft: number;
+  totalSeconds: number;
+  sessionType: SessionType;
+  isPaused: boolean;
+  isRunning: boolean;
+  sessionNumber: number;
+  totalWorkSessions: number;
+  sequenceBlocks?: SequenceBlock[];
+  currentBlockIndex?: number;
+}
+
+export function TimerView({
+  secondsLeft, totalSeconds, sessionType, isPaused, isRunning,
+  sessionNumber, totalWorkSessions,
+  sequenceBlocks, currentBlockIndex,
+}: TimerViewProps) {
+  const [tasks, setTasks] = useState<Task[]>(loadTasks);
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [newTaskText, setNewTaskText] = useState('');
+  const [selectedTask, setSelectedTask] = useState(0);
+
+  const refreshTasks = useCallback(() => {
+    setTasks(loadTasks());
+  }, []);
+
+  useInput((input, key) => {
+    if (isAddingTask) return;
+
+    if (input === 'a') {
+      setIsAddingTask(true);
+      setNewTaskText('');
+      return;
+    }
+
+    // Task navigation
+    if (input === 'j' || (key.downArrow)) {
+      setSelectedTask(prev => Math.min(prev + 1, tasks.length - 1));
+    }
+    if (input === 'k' || (key.upArrow)) {
+      setSelectedTask(prev => Math.max(prev - 1, 0));
+    }
+    if (input === 'x' && tasks.length > 0) {
+      const task = tasks[selectedTask];
+      if (task) {
+        completeTask(task.id);
+        refreshTasks();
+      }
+    }
+    if (input === 'd' && tasks.length > 0) {
+      const task = tasks[selectedTask];
+      if (task) {
+        deleteTask(task.id);
+        refreshTasks();
+        setSelectedTask(prev => Math.max(0, Math.min(prev, tasks.length - 2)));
+      }
+    }
+  });
+
+  const handleAddTask = useCallback((text: string) => {
+    if (text.trim()) {
+      // Parse "task text /3" for expected pomodoros
+      const match = text.match(/^(.+?)\s*\/(\d+)\s*$/);
+      if (match) {
+        addTask(match[1]!.trim(), parseInt(match[2]!, 10));
+      } else {
+        addTask(text.trim());
+      }
+      refreshTasks();
+    }
+    setIsAddingTask(false);
+    setNewTaskText('');
+  }, [refreshTasks]);
+
+  return (
+    <Box flexDirection="column" flexGrow={1}>
+      {/* Session info */}
+      <Box marginBottom={1}>
+        <Text dimColor>Session </Text>
+        <Text bold>{sessionNumber}</Text>
+        <Text dimColor> | Work sessions: </Text>
+        <Text>{totalWorkSessions}</Text>
+      </Box>
+
+      {/* Sequence progress */}
+      {sequenceBlocks && sequenceBlocks.length > 0 && (
+        <Box marginBottom={1}>
+          {sequenceBlocks.map((block, i) => {
+            const isCurrent = i === currentBlockIndex;
+            const isDone = i < (currentBlockIndex ?? 0);
+            const label = `${block.durationMinutes}m ${block.type === 'work' ? 'W' : 'B'}`;
+            return (
+              <Box key={i} marginRight={1}>
+                <Text
+                  color={isCurrent ? 'yellow' : isDone ? 'green' : 'gray'}
+                  bold={isCurrent}
+                  dimColor={!isCurrent && !isDone}
+                >
+                  {isDone ? '[x]' : isCurrent ? '[>]' : '[ ]'} {label}
+                </Text>
+                {i < sequenceBlocks.length - 1 && (
+                  <Text dimColor> → </Text>
+                )}
+              </Box>
+            );
+          })}
+        </Box>
+      )}
+
+      {/* Big timer */}
+      <BigTimer
+        secondsLeft={secondsLeft}
+        totalSeconds={totalSeconds}
+        sessionType={sessionType}
+        isPaused={isPaused}
+        isRunning={isRunning}
+      />
+
+      {/* Tasks section */}
+      <Box marginTop={1} flexDirection="column">
+        <Box marginBottom={1}>
+          <Text bold color="white">Tasks</Text>
+          <Text dimColor> ({tasks.filter(t => !t.completed).length} remaining)</Text>
+        </Box>
+        <TaskList
+          tasks={tasks}
+          selectedIndex={selectedTask}
+        />
+        {isAddingTask && (
+          <Box marginTop={1}>
+            <Text color="yellow">{'> '}</Text>
+            <TextInput
+              value={newTaskText}
+              onChange={setNewTaskText}
+              onSubmit={handleAddTask}
+              placeholder="Task name (/N for pomodoros)"
+            />
+          </Box>
+        )}
+      </Box>
+    </Box>
+  );
+}

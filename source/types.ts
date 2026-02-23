@@ -49,12 +49,33 @@ export interface Achievement {
   unlockedAt?: string;
 }
 
+export interface Task {
+  id: string;
+  text: string;
+  completed: boolean;
+  project?: string;
+  expectedPomodoros: number;
+  completedPomodoros: number;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface SequenceBlock {
+  type: 'work' | 'short-break' | 'long-break';
+  durationMinutes: number;
+}
+
+export interface SessionSequence {
+  name: string;
+  blocks: SequenceBlock[];
+}
+
 export type SessionType = Session['type'];
 export type SessionStatus = Session['status'];
 export type EnergyLevel = NonNullable<Session['energyLevel']>;
 export type Priority = TimeBlock['priority'];
 
-export type View = 'timer' | 'tagger' | 'stats' | 'plan' | 'search' | 'insights' | 'command-palette';
+export type View = 'timer' | 'plan' | 'stats' | 'config';
 
 export interface TagInfo {
   label?: string;

@@ -11,9 +11,9 @@ const cli = meow(`
     $ pomodorocli [command]
 
   Commands
-    start       Start a Pomodoro session (default)
-    stats       View stats dashboard
-    plan        View today's plan
+    start       Start Pomodoro (default)
+    stats       View stats
+    plan        View planner
     backup      Backup session data
     export      Export sessions to CSV
     import      Import sessions from file
@@ -23,14 +23,11 @@ const cli = meow(`
     --short-break     Short break duration (default: 5)
     --long-break      Long break duration (default: 15)
     --strict          Enable strict mode (no pause/skip)
-    --label, -l       Session label
-    --project, -p     Project name
 
   Examples
     $ pomodorocli
     $ pomodorocli start --work 50 --strict
     $ pomodorocli stats
-    $ pomodorocli export --output sessions.csv
 `, {
   importMeta: import.meta,
   flags: {
@@ -38,8 +35,6 @@ const cli = meow(`
     shortBreak: { type: 'number' },
     longBreak: { type: 'number' },
     strict: { type: 'boolean' },
-    label: { type: 'string', shortFlag: 'l' },
-    project: { type: 'string', shortFlag: 'p' },
     output: { type: 'string', shortFlag: 'o' },
   },
 });
@@ -80,6 +75,7 @@ const viewMap: Record<string, View> = {
   start: 'timer',
   stats: 'stats',
   plan: 'plan',
+  config: 'config',
 };
 const initialView = viewMap[command] ?? 'timer';
 
