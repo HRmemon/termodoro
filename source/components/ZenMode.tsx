@@ -61,7 +61,6 @@ export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRu
       <Box marginTop={2} justifyContent="center">
         <Text dimColor>
           {!isRunning && !isPaused ? 'Space: Start' : isPaused ? 'Space: Resume' : 'Space: Pause'}
-          {' | z / Esc: Exit Zen'}
         </Text>
       </Box>
     </Box>

@@ -51,9 +51,6 @@ export function ZenClock() {
         <Text dimColor>{time}:</Text>
         <Text dimColor>{secs}</Text>
       </Box>
-      <Box marginTop={2} justifyContent="center">
-        <Text dimColor>z / Esc: Exit Zen</Text>
-      </Box>
     </Box>
   );
 }
