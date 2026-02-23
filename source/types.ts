@@ -23,6 +23,7 @@ export interface Config {
   strictMode: boolean;
   sound: boolean;
   notifications: boolean;
+  notificationDuration: number;
   vimKeys: boolean;
 }
 
@@ -53,11 +54,20 @@ export interface Task {
   id: string;
   text: string;
   completed: boolean;
+  active?: boolean;
   project?: string;
   expectedPomodoros: number;
   completedPomodoros: number;
   createdAt: string;
   completedAt?: string;
+}
+
+export interface ScheduledNotification {
+  id: string;
+  time: string; // HH:MM
+  title: string;
+  taskId?: string;
+  enabled: boolean;
 }
 
 export interface SequenceBlock {
@@ -75,7 +85,7 @@ export type SessionStatus = Session['status'];
 export type EnergyLevel = NonNullable<Session['energyLevel']>;
 export type Priority = TimeBlock['priority'];
 
-export type View = 'timer' | 'plan' | 'stats' | 'config' | 'clock';
+export type View = 'timer' | 'plan' | 'stats' | 'config' | 'clock' | 'reminders';
 
 export interface TagInfo {
   label?: string;

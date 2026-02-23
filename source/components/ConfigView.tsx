@@ -27,6 +27,7 @@ const FIELDS: ConfigField[] = [
   { key: 'strictMode', label: 'Strict Mode', type: 'boolean' },
   { key: 'sound', label: 'Sound', type: 'boolean' },
   { key: 'notifications', label: 'Notifications', type: 'boolean' },
+  { key: 'notificationDuration', label: 'Notif Duration', type: 'number', unit: 'sec' },
   { key: 'vimKeys', label: 'Vim Keys', type: 'boolean' },
 ];
 

@@ -81,3 +81,11 @@ export function updateTask(id: string, updates: Partial<Pick<Task, 'text' | 'exp
     saveTasks(tasks);
   }
 }
+
+export function setActiveTask(id: string | null): void {
+  const tasks = loadTasks();
+  for (const t of tasks) {
+    t.active = t.id === id;
+  }
+  saveTasks(tasks);
+}

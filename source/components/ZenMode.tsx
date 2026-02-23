@@ -10,7 +10,6 @@ interface ZenModeProps {
   sessionType: SessionType;
   isPaused: boolean;
   isRunning: boolean;
-  currentTask?: string;
 }
 
 const COLORS: Record<SessionType, string> = {
@@ -25,13 +24,13 @@ const MODE_LABELS: Record<SessionType, string> = {
   'long-break': 'Long Break',
 };
 
-export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning, currentTask }: ZenModeProps) {
+export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning }: ZenModeProps) {
   const { columns, rows } = useFullScreen();
   const lines = renderBigTime(secondsLeft);
   const color = COLORS[sessionType];
 
   // Center everything vertically
-  const contentHeight = 5 + (currentTask ? 3 : 1) + 3; // digits + task + hints
+  const contentHeight = 5 + 1 + 3; // digits + mode label + space hint
   const topPad = Math.max(0, Math.floor((rows - contentHeight) / 2));
 
   return (
@@ -50,12 +49,6 @@ export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRu
       {isPaused && (
         <Box marginTop={1} justifyContent="center">
           <Text color="yellow" bold>PAUSED</Text>
-        </Box>
-      )}
-      {currentTask && (
-        <Box marginTop={1} justifyContent="center">
-          <Text dimColor>Task: </Text>
-          <Text color="white">{currentTask}</Text>
         </Box>
       )}
       <Box marginTop={2} justifyContent="center">

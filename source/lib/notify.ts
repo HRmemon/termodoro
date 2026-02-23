@@ -16,12 +16,24 @@ const MESSAGES: Record<SessionType, { title: string; message: string }> = {
   },
 };
 
-export function sendNotification(type: SessionType): void {
+export function sendNotification(type: SessionType, durationSeconds = 5): void {
   const msg = MESSAGES[type];
-  notifier.notify({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (notifier as any).notify({
     title: msg.title,
     message: msg.message,
     sound: true,
+    expire: durationSeconds * 1000,
+  });
+}
+
+export function sendReminderNotification(title: string, message: string, durationSeconds = 5): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (notifier as any).notify({
+    title,
+    message,
+    sound: false,
+    expire: durationSeconds * 1000,
   });
 }
 
@@ -29,11 +41,11 @@ export function ringBell(): void {
   process.stdout.write('\x07');
 }
 
-export function notifySessionEnd(type: SessionType, soundEnabled: boolean, notificationsEnabled: boolean): void {
+export function notifySessionEnd(type: SessionType, soundEnabled: boolean, notificationsEnabled: boolean, durationSeconds = 5): void {
   if (soundEnabled) {
     ringBell();
   }
   if (notificationsEnabled) {
-    sendNotification(type);
+    sendNotification(type, durationSeconds);
   }
 }

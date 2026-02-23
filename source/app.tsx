@@ -1,8 +1,10 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useInput, useApp } from 'ink';
 import type { Config, View } from './types.js';
 import { loadSessions } from './lib/store.js';
 import { loadTasks } from './lib/tasks.js';
+import { loadReminders } from './lib/reminders.js';
+import { sendReminderNotification } from './lib/notify.js';
 import { useTimer } from './hooks/useTimer.js';
 import { usePomodoroEngine } from './hooks/usePomodoroEngine.js';
 import { useSequence, parseSequenceString, PRESET_SEQUENCES } from './hooks/useSequence.js';
@@ -19,6 +21,7 @@ import { ZenClock } from './components/ZenClock.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { SearchView } from './components/SearchView.js';
 import { InsightsView } from './components/InsightsView.js';
+import { RemindersView } from './components/RemindersView.js';
 import { getStreaks } from './lib/stats.js';
 
 interface AppProps {
@@ -40,10 +43,11 @@ export function App({ config: initialConfig, initialView }: AppProps) {
   const [engine, engineActions] = usePomodoroEngine(config);
   const [seqState, seqActions] = useSequence();
 
+  // Track which reminder times have already fired (keyed by "HH:MM") each day
+  const firedRemindersRef = useRef<Set<string>>(new Set());
+
   const onTimerComplete = useCallback(() => {
     engineActions.completeSession();
-
-    // If sequence is active, advance to next block
     if (seqState.isActive) {
       const nextBlock = seqActions.advance();
       if (nextBlock) {
@@ -65,10 +69,42 @@ export function App({ config: initialConfig, initialView }: AppProps) {
 
   const streak = useMemo(() => getStreaks().currentStreak, [timer.isComplete]);
 
-  const currentTask = useMemo(() => {
-    const tasks = loadTasks();
-    return tasks.find(t => !t.completed)?.text;
-  }, [view]);
+  // Reminder checker — runs every 30s
+  useEffect(() => {
+    const checkReminders = () => {
+      if (!config.notifications) return;
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      // Reset fired set at midnight
+      const today = now.toISOString().slice(0, 10);
+      const firedKey = `${today}:${currentTime}`;
+
+      const reminders = loadReminders();
+      for (const r of reminders) {
+        if (!r.enabled) continue;
+        if (r.time === currentTime && !firedRemindersRef.current.has(firedKey + r.id)) {
+          firedRemindersRef.current.add(firedKey + r.id);
+          let message = r.title;
+          if (r.taskId) {
+            const tasks = loadTasks();
+            const task = tasks.find(t => t.id === r.taskId);
+            if (task) message = `${r.title}\nTask: ${task.text}`;
+          }
+          sendReminderNotification(r.title, message, config.notificationDuration);
+        }
+      }
+    };
+
+    checkReminders();
+    const interval = setInterval(checkReminders, 30_000);
+    return () => clearInterval(interval);
+  }, [config.notifications, config.notificationDuration]);
+
+  const handleActivateSequence = useCallback((seq: import('./types.js').SessionSequence) => {
+    seqActions.setSequence(seq);
+    engineActions.applySequenceBlock(seq.blocks[0]!);
+    setView('timer');
+  }, [seqActions, engineActions]);
 
   // Auto-start breaks
   const isBreak = engine.sessionType !== 'work';
@@ -93,6 +129,9 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       case 'plan':
         setView('plan');
         break;
+      case 'reminders':
+        setView('reminders');
+        break;
       case 'search':
         setSearchQuery(args);
         setShowSearch(true);
@@ -101,19 +140,13 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         setShowInsights(true);
         break;
       case 'session': {
-        // Parse sequence: "45w 15b 45w" or preset name
         const preset = PRESET_SEQUENCES[args.trim()];
         if (preset) {
-          seqActions.setSequence(preset);
-          engineActions.applySequenceBlock(preset.blocks[0]!);
+          handleActivateSequence(preset);
         } else {
           const seq = parseSequenceString(args);
-          if (seq) {
-            seqActions.setSequence(seq);
-            engineActions.applySequenceBlock(seq.blocks[0]!);
-          }
+          if (seq) handleActivateSequence(seq);
         }
-        setView('timer');
         break;
       }
       case 'quit':
@@ -123,19 +156,17 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       default:
         break;
     }
-  }, [engineActions, exit, seqActions]);
+  }, [engineActions, exit, handleActivateSequence]);
 
   useInput((input, key) => {
     if (showCommandPalette || showSearch || showInsights || isTyping) return;
 
-    // Quit
     if (input === 'q' && !isZen) {
       engineActions.abandonSession();
       exit();
       return;
     }
 
-    // Zen mode toggle
     if (input === 'z' && (view === 'timer' || view === 'clock')) {
       setIsZen(prev => !prev);
       return;
@@ -145,22 +176,20 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       return;
     }
 
-    // View switching (1-4) - not in zen
     if (!isZen) {
       if (input === '1') { setView('timer'); return; }
       if (input === '2') { setView('plan'); return; }
       if (input === '3') { setView('stats'); return; }
       if (input === '4') { setView('config'); return; }
       if (input === '5') { setView('clock'); return; }
+      if (input === '6') { setView('reminders'); return; }
     }
 
-    // Command palette
     if (input === ':' && !isZen) {
       setShowCommandPalette(true);
       return;
     }
 
-    // Timer controls (work in both timer view and zen mode)
     if (view === 'timer' || isZen) {
       if (input === ' ') {
         if (!timer.isRunning && !timer.isPaused) {
@@ -220,12 +249,10 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         sessionType={engine.sessionType}
         isPaused={timer.isPaused}
         isRunning={timer.isRunning}
-        currentTask={currentTask}
       />
     );
   }
 
-  // Status and keys bars
   const statusLine = (
     <StatusLine
       sessionType={engine.sessionType}
@@ -247,7 +274,6 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     />
   );
 
-  // Main layout with views
   return (
     <Layout activeView={view} statusLine={statusLine} keysBar={keysBar}>
       {view === 'timer' && (
@@ -264,12 +290,21 @@ export function App({ config: initialConfig, initialView }: AppProps) {
           setIsTyping={setIsTyping}
         />
       )}
-      {view === 'plan' && <PlannerView setIsTyping={setIsTyping} />}
+      {view === 'plan' && (
+        <PlannerView
+          activeSequence={seqState.sequence}
+          onActivateSequence={handleActivateSequence}
+          setIsTyping={setIsTyping}
+        />
+      )}
       {view === 'stats' && <ReportsView />}
       {view === 'config' && (
         <ConfigView config={config} onConfigChange={setConfig} setIsTyping={setIsTyping} />
       )}
       {view === 'clock' && <ClockView />}
+      {view === 'reminders' && (
+        <RemindersView setIsTyping={setIsTyping} />
+      )}
     </Layout>
   );
 }

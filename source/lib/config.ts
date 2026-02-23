@@ -16,6 +16,7 @@ const DEFAULT_CONFIG: Config = {
   strictMode: false,
   sound: true,
   notifications: true,
+  notificationDuration: 5,
   vimKeys: false,
 };
 

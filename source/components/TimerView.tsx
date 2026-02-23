@@ -4,7 +4,7 @@ import TextInput from 'ink-text-input';
 import type { Task, SessionType, SequenceBlock } from '../types.js';
 import { BigTimer } from './BigTimer.js';
 import { TaskList } from './TaskList.js';
-import { loadTasks, addTask, completeTask, deleteTask } from '../lib/tasks.js';
+import { loadTasks, addTask, completeTask, deleteTask, setActiveTask } from '../lib/tasks.js';
 
 interface TimerViewProps {
   secondsLeft: number;
@@ -30,6 +30,8 @@ export function TimerView({
   const [newTaskText, setNewTaskText] = useState('');
   const [selectedTask, setSelectedTask] = useState(0);
 
+  const incompleteTasks = tasks.filter(t => !t.completed);
+
   const refreshTasks = useCallback(() => {
     setTasks(loadTasks());
   }, []);
@@ -50,26 +52,33 @@ export function TimerView({
       return;
     }
 
-    // Task navigation
     if (input === 'j' || key.downArrow) {
-      setSelectedTask(prev => Math.min(prev + 1, tasks.length - 1));
+      setSelectedTask(prev => Math.min(prev + 1, incompleteTasks.length - 1));
     }
     if (input === 'k' || key.upArrow) {
       setSelectedTask(prev => Math.max(prev - 1, 0));
     }
-    if (input === 'x' && tasks.length > 0) {
-      const task = tasks[selectedTask];
+    if (key.return && incompleteTasks.length > 0) {
+      const task = incompleteTasks[selectedTask];
+      if (task) {
+        const newActiveId = task.active ? null : task.id;
+        setActiveTask(newActiveId);
+        refreshTasks();
+      }
+    }
+    if (input === 'x' && incompleteTasks.length > 0) {
+      const task = incompleteTasks[selectedTask];
       if (task) {
         completeTask(task.id);
         refreshTasks();
       }
     }
-    if (input === 'd' && tasks.length > 0) {
-      const task = tasks[selectedTask];
+    if (input === 'd' && incompleteTasks.length > 0) {
+      const task = incompleteTasks[selectedTask];
       if (task) {
         deleteTask(task.id);
         refreshTasks();
-        setSelectedTask(prev => Math.max(0, Math.min(prev, tasks.length - 2)));
+        setSelectedTask(prev => Math.max(0, Math.min(prev, incompleteTasks.length - 2)));
       }
     }
   });
@@ -89,6 +98,8 @@ export function TimerView({
     setNewTaskText('');
   }, [refreshTasks, setIsTyping]);
 
+  const activeTask = incompleteTasks.find(t => t.active);
+
   return (
     <Box flexDirection="column" flexGrow={1}>
       {/* Session info */}
@@ -101,7 +112,7 @@ export function TimerView({
 
       {/* Sequence progress */}
       {sequenceBlocks && sequenceBlocks.length > 0 && (
-        <Box marginBottom={1}>
+        <Box marginBottom={1} flexWrap="wrap">
           {sequenceBlocks.map((block, i) => {
             const isCurrent = i === currentBlockIndex;
             const isDone = i < (currentBlockIndex ?? 0);
@@ -115,12 +126,19 @@ export function TimerView({
                 >
                   {isDone ? '[x]' : isCurrent ? '[>]' : '[ ]'} {label}
                 </Text>
-                {i < sequenceBlocks.length - 1 && (
-                  <Text dimColor> → </Text>
-                )}
+                {i < sequenceBlocks.length - 1 && <Text dimColor> → </Text>}
               </Box>
             );
           })}
+        </Box>
+      )}
+
+      {/* Active task */}
+      {activeTask && (
+        <Box marginBottom={1}>
+          <Text color="green" bold>▶ </Text>
+          <Text color="white">{activeTask.text}</Text>
+          <Text dimColor>  [{activeTask.completedPomodoros}/{activeTask.expectedPomodoros}]</Text>
         </Box>
       )}
 
@@ -137,7 +155,8 @@ export function TimerView({
       <Box marginTop={1} flexDirection="column">
         <Box marginBottom={1}>
           <Text bold color="white">Tasks</Text>
-          <Text dimColor> ({tasks.filter(t => !t.completed).length} remaining)</Text>
+          <Text dimColor> ({incompleteTasks.length} remaining)</Text>
+          <Text dimColor>  Enter: set active  x: done  d: delete  a: add</Text>
         </Box>
         <TaskList
           tasks={tasks}

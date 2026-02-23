@@ -13,10 +13,11 @@ interface LayoutProps {
 
 const VIEW_TITLES: Record<View, string> = {
   timer: 'Timer & Tasks',
-  plan: 'Plan',
+  plan: 'Sequences',
   stats: 'Stats',
   config: 'Config',
   clock: 'Clock',
+  reminders: 'Reminders',
 };
 
 const VIEW_NUMS: Record<View, string> = {
@@ -25,6 +26,7 @@ const VIEW_NUMS: Record<View, string> = {
   stats: '3',
   config: '4',
   clock: '5',
+  reminders: '6',
 };
 
 export function Layout({ activeView, statusLine, keysBar, children }: LayoutProps) {

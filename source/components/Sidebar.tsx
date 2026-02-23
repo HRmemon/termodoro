@@ -9,10 +9,11 @@ interface SidebarProps {
 
 const VIEWS: { key: View; num: string; label: string }[] = [
   { key: 'timer', num: '1', label: 'Timer' },
-  { key: 'plan', num: '2', label: 'Plan' },
+  { key: 'plan', num: '2', label: 'Sequences' },
   { key: 'stats', num: '3', label: 'Stats' },
   { key: 'config', num: '4', label: 'Config' },
   { key: 'clock', num: '5', label: 'Clock' },
+  { key: 'reminders', num: '6', label: 'Reminders' },
 ];
 
 export function Sidebar({ activeView, height }: SidebarProps) {
