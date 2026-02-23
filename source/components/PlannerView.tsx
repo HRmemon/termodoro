@@ -8,6 +8,7 @@ import { loadCustomSequences, addCustomSequence, deleteCustomSequence } from '..
 interface PlannerViewProps {
   activeSequence: SessionSequence | null;
   onActivateSequence: (seq: SessionSequence) => void;
+  onClearSequence: () => void;
   setIsTyping: (v: boolean) => void;
 }
 
@@ -24,7 +25,7 @@ function totalMinutes(seq: SessionSequence): number {
   return seq.blocks.reduce((s, b) => s + b.durationMinutes, 0);
 }
 
-export function PlannerView({ activeSequence, onActivateSequence, setIsTyping }: PlannerViewProps) {
+export function PlannerView({ activeSequence, onActivateSequence, onClearSequence, setIsTyping }: PlannerViewProps) {
   const presets = Object.values(PRESET_SEQUENCES);
   const [customs, setCustoms] = useState<SessionSequence[]>(loadCustomSequences);
   const all = [...presets, ...customs];
@@ -93,6 +94,11 @@ export function PlannerView({ activeSequence, onActivateSequence, setIsTyping }:
         refreshCustoms();
         setSelectedIdx(i => Math.max(0, i - 1));
       }
+      return;
+    }
+
+    if (input === 'c' && activeSequence) {
+      onClearSequence();
       return;
     }
   });
@@ -195,6 +201,14 @@ export function PlannerView({ activeSequence, onActivateSequence, setIsTyping }:
 
       {error !== '' && (
         <Box marginTop={1}><Text color="red">{error}</Text></Box>
+      )}
+
+      {activeSequence && (
+        <Box marginTop={1}>
+          <Text dimColor>Active: </Text>
+          <Text color="green">{activeSequence.name}</Text>
+          <Text dimColor>  c: clear</Text>
+        </Box>
       )}
     </Box>
   );

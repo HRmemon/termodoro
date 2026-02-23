@@ -25,6 +25,7 @@ export interface Config {
   notifications: boolean;
   notificationDuration: number;
   vimKeys: boolean;
+  compactTime: boolean;
 }
 
 export interface TimeBlock {
@@ -68,6 +69,7 @@ export interface ScheduledNotification {
   title: string;
   taskId?: string;
   enabled: boolean;
+  recurring: boolean;
 }
 
 export interface SequenceBlock {
@@ -85,7 +87,7 @@ export type SessionStatus = Session['status'];
 export type EnergyLevel = NonNullable<Session['energyLevel']>;
 export type Priority = TimeBlock['priority'];
 
-export type View = 'timer' | 'plan' | 'stats' | 'config' | 'clock' | 'reminders';
+export type View = 'timer' | 'plan' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks';
 
 export interface TagInfo {
   label?: string;

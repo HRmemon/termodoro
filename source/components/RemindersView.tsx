@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { nanoid } from 'nanoid';
@@ -8,11 +8,37 @@ import { loadTasks } from '../lib/tasks.js';
 
 interface RemindersViewProps {
   setIsTyping: (v: boolean) => void;
+  compactTime: boolean;
+  focusId?: string | null;
+  onFocusConsumed?: () => void;
 }
 
 type InputStep = 'none' | 'time' | 'title' | 'task';
 
-export function RemindersView({ setIsTyping }: RemindersViewProps) {
+function parseTimeInput(input: string, compact: boolean): string | null {
+  if (!compact) {
+    // standard HH:MM
+    if (/^\d{2}:\d{2}$/.test(input)) return input;
+    return null;
+  }
+  // compact: digits only, 3 or 4 chars
+  const digits = input.replace(/\D/g, '');
+  if (digits.length === 3) {
+    const h = '0' + digits[0];
+    const m = digits[1] + digits[2];
+    const candidate = `${h}:${m}`;
+    if (parseInt(h) < 24 && parseInt(m) < 60) return candidate;
+  }
+  if (digits.length === 4) {
+    const h = digits[0] + digits[1];
+    const m = digits[2] + digits[3];
+    const candidate = `${h}:${m}`;
+    if (parseInt(h) < 24 && parseInt(m) < 60) return candidate;
+  }
+  return null;
+}
+
+export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsumed }: RemindersViewProps) {
   const [reminders, setReminders] = useState<ScheduledNotification[]>(loadReminders);
   const [tasks] = useState<Task[]>(() => loadTasks().filter(t => !t.completed));
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -25,6 +51,16 @@ export function RemindersView({ setIsTyping }: RemindersViewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const refresh = useCallback(() => setReminders(loadReminders()), []);
+
+  // Handle focusId from global search
+  useEffect(() => {
+    if (focusId) {
+      const allReminders = loadReminders();
+      const idx = allReminders.findIndex(r => r.id === focusId);
+      if (idx >= 0) setSelectedIdx(idx);
+      onFocusConsumed?.();
+    }
+  }, [focusId, onFocusConsumed]);
 
   useInput((input, key) => {
     if (step === 'task') {
@@ -100,6 +136,15 @@ export function RemindersView({ setIsTyping }: RemindersViewProps) {
       return;
     }
 
+    if (input === 'r' && reminders.length > 0) {
+      const r = reminders[selectedIdx];
+      if (r) {
+        updateReminder(r.id, { recurring: !r.recurring });
+        refresh();
+      }
+      return;
+    }
+
     if (key.return && reminders.length > 0) {
       const r = reminders[selectedIdx];
       if (r) {
@@ -120,6 +165,7 @@ export function RemindersView({ setIsTyping }: RemindersViewProps) {
         title: pendingTitle || pendingTime,
         taskId: linkedTaskId ?? undefined,
         enabled: true,
+        recurring: true,
       });
     }
     refresh();
@@ -131,15 +177,18 @@ export function RemindersView({ setIsTyping }: RemindersViewProps) {
 
   const handleTimeSubmit = useCallback((value: string) => {
     const trimmed = value.trim();
-    if (!/^\d{2}:\d{2}$/.test(trimmed)) {
-      setError('Invalid time. Use HH:MM (e.g. 09:30)');
+    const parsed = parseTimeInput(trimmed, compactTime);
+    if (!parsed) {
+      setError(compactTime
+        ? 'Invalid time. Use 3-4 digits (e.g. 930 or 2233)'
+        : 'Invalid time. Use HH:MM (e.g. 09:30)');
       return;
     }
-    setPendingTime(trimmed);
+    setPendingTime(parsed);
     setInputValue(editingId ? pendingTitle : '');
     setStep('title');
     setError('');
-  }, [editingId, pendingTitle]);
+  }, [editingId, pendingTitle, compactTime]);
 
   const handleTitleSubmit = useCallback((value: string) => {
     setPendingTitle(value.trim() || pendingTime);
@@ -160,6 +209,7 @@ export function RemindersView({ setIsTyping }: RemindersViewProps) {
       {reminders.map((r, i) => {
         const isSelected = i === selectedIdx;
         const linkedTask = tasks.find(t => t.id === r.taskId);
+        const recurringLabel = r.recurring ? '(R)' : '(1)';
         return (
           <Box key={r.id}>
             <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>{isSelected ? '> ' : '  '}</Text>
@@ -173,8 +223,9 @@ export function RemindersView({ setIsTyping }: RemindersViewProps) {
                 {r.title}
               </Text>
             </Box>
+            <Text dimColor>{recurringLabel}</Text>
             {linkedTask && (
-              <Text dimColor>→ {linkedTask.text}</Text>
+              <Text dimColor> {'→'} {linkedTask.text}</Text>
             )}
             {!r.enabled && <Text dimColor>  [off]</Text>}
           </Box>
@@ -184,10 +235,10 @@ export function RemindersView({ setIsTyping }: RemindersViewProps) {
       {/* Input steps */}
       {step === 'time' && (
         <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Time (HH:MM):</Text>
+          <Text color="yellow">{compactTime ? 'Time (e.g. 930 or 2233):' : 'Time (HH:MM):'}</Text>
           <Box>
             <Text color="yellow">{'> '}</Text>
-            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleTimeSubmit} placeholder="09:30" />
+            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleTimeSubmit} placeholder={compactTime ? '930' : '09:30'} />
           </Box>
         </Box>
       )}

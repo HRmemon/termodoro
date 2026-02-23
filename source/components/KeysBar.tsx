@@ -29,7 +29,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen }: KeysBa
     return <HintRow hints={hints} />;
   }
 
-  hints.push({ key: '1-6', label: 'Switch View' });
+  hints.push({ key: '1-7', label: 'Switch View' });
 
   if (view === 'timer') {
     if (isRunning && !isPaused && !strictMode) {
@@ -42,15 +42,25 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen }: KeysBa
     if (isRunning && !strictMode) {
       hints.push({ key: 's', label: 'Skip' });
     }
-    hints.push({ key: 'a', label: 'Add Task' });
     hints.push({ key: 'z', label: 'Zen' });
   }
 
   if (view === 'plan') {
     hints.push({ key: 'j/k', label: 'Navigate' });
     hints.push({ key: 'Enter', label: 'Activate' });
+    hints.push({ key: 'c', label: 'Clear' });
     hints.push({ key: 'n', label: 'New' });
     hints.push({ key: 'e/d', label: 'Edit/Del' });
+  }
+
+  if (view === 'tasks') {
+    hints.push({ key: 'j/k', label: 'Navigate' });
+    hints.push({ key: 'Enter', label: 'Active' });
+    hints.push({ key: 'x', label: 'Done' });
+    hints.push({ key: 'u', label: 'Undo' });
+    hints.push({ key: 'e', label: 'Edit' });
+    hints.push({ key: 'd', label: 'Del' });
+    hints.push({ key: 'a', label: 'Add' });
   }
 
   if (view === 'reminders') {

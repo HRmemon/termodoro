@@ -18,6 +18,7 @@ const DEFAULT_CONFIG: Config = {
   notifications: true,
   notificationDuration: 5,
   vimKeys: false,
+  compactTime: false,
 };
 
 export function loadConfig(): Config {

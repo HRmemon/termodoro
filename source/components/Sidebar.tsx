@@ -14,13 +14,14 @@ const VIEWS: { key: View; num: string; label: string }[] = [
   { key: 'config', num: '4', label: 'Config' },
   { key: 'clock', num: '5', label: 'Clock' },
   { key: 'reminders', num: '6', label: 'Reminders' },
+  { key: 'tasks', num: '7', label: 'Tasks' },
 ];
 
 export function Sidebar({ activeView, height }: SidebarProps) {
   return (
     <Box
       flexDirection="column"
-      width={16}
+      width={20}
       height={height}
       borderStyle="single"
       borderColor="gray"

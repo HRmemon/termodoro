@@ -22,17 +22,29 @@ export function useTimer(
   onComplete: () => void,
 ): [TimerState, TimerActions] {
   const [secondsLeft, setSecondsLeft] = useState(durationSeconds);
+  const [totalSeconds, setTotalSeconds] = useState(durationSeconds);
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
-  const startTimeRef = useRef<number | null>(null);
-  const pausedElapsedRef = useRef(0);
+  const isRunningRef = useRef(isRunning);
+  isRunningRef.current = isRunning;
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
+
+  // Auto-reset when the engine changes duration while idle (e.g. sequence activation)
+  useEffect(() => {
+    if (!isRunningRef.current && !isPausedRef.current) {
+      setSecondsLeft(durationSeconds);
+      setTotalSeconds(durationSeconds);
+      setIsComplete(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [durationSeconds]);
 
   useEffect(() => {
     if (!isRunning || isPaused) return;
-
     const interval = setInterval(() => {
       setSecondsLeft(prev => {
         if (prev <= 1) {
@@ -45,7 +57,6 @@ export function useTimer(
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(interval);
   }, [isRunning, isPaused]);
 
@@ -53,25 +64,15 @@ export function useTimer(
     setIsRunning(true);
     setIsPaused(false);
     setIsComplete(false);
-    startTimeRef.current = Date.now();
-    pausedElapsedRef.current = 0;
   }, []);
 
   const pause = useCallback(() => {
-    if (isRunning && !isPaused) {
-      setIsPaused(true);
-      if (startTimeRef.current) {
-        pausedElapsedRef.current += Math.floor((Date.now() - startTimeRef.current) / 1000);
-      }
-    }
-  }, [isRunning, isPaused]);
+    setIsPaused(true);
+  }, []);
 
   const resume = useCallback(() => {
-    if (isRunning && isPaused) {
-      setIsPaused(false);
-      startTimeRef.current = Date.now();
-    }
-  }, [isRunning, isPaused]);
+    setIsPaused(false);
+  }, []);
 
   const skip = useCallback(() => {
     setSecondsLeft(0);
@@ -82,23 +83,16 @@ export function useTimer(
   const reset = useCallback((newDuration?: number) => {
     const dur = newDuration ?? durationSeconds;
     setSecondsLeft(dur);
+    setTotalSeconds(dur);
     setIsRunning(false);
     setIsPaused(false);
     setIsComplete(false);
-    startTimeRef.current = null;
-    pausedElapsedRef.current = 0;
   }, [durationSeconds]);
 
-  const elapsed = durationSeconds - secondsLeft;
+  const elapsed = totalSeconds - secondsLeft;
 
-  const state: TimerState = {
-    secondsLeft,
-    totalSeconds: durationSeconds,
-    isRunning,
-    isPaused,
-    isComplete,
-    elapsed,
-  };
-
-  return [state, { start, pause, resume, skip, reset }];
+  return [
+    { secondsLeft, totalSeconds, isRunning, isPaused, isComplete, elapsed },
+    { start, pause, resume, skip, reset },
+  ];
 }

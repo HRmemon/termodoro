@@ -3,7 +3,7 @@ import { useInput, useApp } from 'ink';
 import type { Config, View } from './types.js';
 import { loadSessions } from './lib/store.js';
 import { loadTasks } from './lib/tasks.js';
-import { loadReminders } from './lib/reminders.js';
+import { loadReminders, updateReminder } from './lib/reminders.js';
 import { sendReminderNotification } from './lib/notify.js';
 import { useTimer } from './hooks/useTimer.js';
 import { usePomodoroEngine } from './hooks/usePomodoroEngine.js';
@@ -22,6 +22,8 @@ import { CommandPalette } from './components/CommandPalette.js';
 import { SearchView } from './components/SearchView.js';
 import { InsightsView } from './components/InsightsView.js';
 import { RemindersView } from './components/RemindersView.js';
+import { TasksView } from './components/TasksView.js';
+import { GlobalSearch } from './components/GlobalSearch.js';
 import { getStreaks } from './lib/stats.js';
 
 interface AppProps {
@@ -36,8 +38,14 @@ export function App({ config: initialConfig, initialView }: AppProps) {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
+  // Focus state for global search navigation
+  const [taskFocusId, setTaskFocusId] = useState<string | null>(null);
+  const [reminderFocusId, setReminderFocusId] = useState<string | null>(null);
+
   const { exit } = useApp();
 
   const [engine, engineActions] = usePomodoroEngine(config);
@@ -75,7 +83,6 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       if (!config.notifications) return;
       const now = new Date();
       const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      // Reset fired set at midnight
       const today = now.toISOString().slice(0, 10);
       const firedKey = `${today}:${currentTime}`;
 
@@ -91,6 +98,10 @@ export function App({ config: initialConfig, initialView }: AppProps) {
             if (task) message = `${r.title}\nTask: ${task.text}`;
           }
           sendReminderNotification(r.title, message, config.notificationDuration);
+          // Disable non-recurring reminders after firing
+          if (!r.recurring) {
+            updateReminder(r.id, { enabled: false });
+          }
         }
       }
     };
@@ -106,6 +117,11 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     setView('timer');
   }, [seqActions, engineActions]);
 
+  const handleClearSequence = useCallback(() => {
+    seqActions.clear();
+    engineActions.resetOverride();
+  }, [seqActions, engineActions]);
+
   // Auto-start breaks
   const isBreak = engine.sessionType !== 'work';
   if (isBreak && config.autoStartBreaks && !timer.isRunning && !timer.isPaused && timer.secondsLeft === engine.durationSeconds) {
@@ -113,11 +129,6 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       timerActions.start();
       engineActions.startSession();
     }, 0);
-  }
-
-  // Reset timer when engine session changes
-  if (timer.totalSeconds !== engine.durationSeconds && !timer.isRunning) {
-    timerActions.reset(engine.durationSeconds);
   }
 
   const handleCommand = useCallback((cmd: string, args: string) => {
@@ -131,6 +142,9 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         break;
       case 'reminders':
         setView('reminders');
+        break;
+      case 'tasks':
+        setView('tasks');
         break;
       case 'search':
         setSearchQuery(args);
@@ -158,8 +172,19 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     }
   }, [engineActions, exit, handleActivateSequence]);
 
+  const handleGlobalSearchNavigate = useCallback((targetView: View, focusId: string, type: 'task' | 'sequence' | 'reminder') => {
+    setShowGlobalSearch(false);
+    setView(targetView);
+    if (type === 'task') {
+      setTaskFocusId(focusId);
+    } else if (type === 'reminder') {
+      setReminderFocusId(focusId);
+    }
+    // sequences: just navigate to plan view, no focus needed
+  }, []);
+
   useInput((input, key) => {
-    if (showCommandPalette || showSearch || showInsights || isTyping) return;
+    if (showCommandPalette || showSearch || showInsights || showGlobalSearch || isTyping) return;
 
     if (input === 'q' && !isZen) {
       engineActions.abandonSession();
@@ -183,10 +208,16 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       if (input === '4') { setView('config'); return; }
       if (input === '5') { setView('clock'); return; }
       if (input === '6') { setView('reminders'); return; }
+      if (input === '7') { setView('tasks'); return; }
     }
 
     if (input === ':' && !isZen) {
       setShowCommandPalette(true);
+      return;
+    }
+
+    if (input === '/' && !isZen) {
+      setShowGlobalSearch(true);
       return;
     }
 
@@ -233,6 +264,15 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     return (
       <InsightsView
         onBack={() => setShowInsights(false)}
+      />
+    );
+  }
+
+  if (showGlobalSearch) {
+    return (
+      <GlobalSearch
+        onNavigate={handleGlobalSearchNavigate}
+        onDismiss={() => setShowGlobalSearch(false)}
       />
     );
   }
@@ -294,6 +334,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         <PlannerView
           activeSequence={seqState.sequence}
           onActivateSequence={handleActivateSequence}
+          onClearSequence={handleClearSequence}
           setIsTyping={setIsTyping}
         />
       )}
@@ -303,7 +344,19 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       )}
       {view === 'clock' && <ClockView />}
       {view === 'reminders' && (
-        <RemindersView setIsTyping={setIsTyping} />
+        <RemindersView
+          setIsTyping={setIsTyping}
+          compactTime={config.compactTime}
+          focusId={reminderFocusId}
+          onFocusConsumed={() => setReminderFocusId(null)}
+        />
+      )}
+      {view === 'tasks' && (
+        <TasksView
+          setIsTyping={setIsTyping}
+          focusId={taskFocusId}
+          onFocusConsumed={() => setTaskFocusId(null)}
+        />
       )}
     </Layout>
   );
