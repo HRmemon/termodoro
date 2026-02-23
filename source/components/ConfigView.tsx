@@ -7,6 +7,7 @@ import { saveConfig } from '../lib/config.js';
 interface ConfigViewProps {
   config: Config;
   onConfigChange: (config: Config) => void;
+  setIsTyping: (isTyping: boolean) => void;
 }
 
 interface ConfigField {
@@ -29,14 +30,20 @@ const FIELDS: ConfigField[] = [
   { key: 'vimKeys', label: 'Vim Keys', type: 'boolean' },
 ];
 
-export function ConfigView({ config, onConfigChange }: ConfigViewProps) {
+export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [saved, setSaved] = useState(false);
 
   useInput((input, key) => {
-    if (isEditing) return;
+    if (isEditing) {
+      if (key.escape) {
+        setIsEditing(false);
+        setIsTyping(false);
+      }
+      return;
+    }
 
     if (input === 'j' || key.downArrow) {
       setSelectedIdx(i => Math.min(i + 1, FIELDS.length - 1));
@@ -50,13 +57,12 @@ export function ConfigView({ config, onConfigChange }: ConfigViewProps) {
     if (key.return) {
       const field = FIELDS[selectedIdx]!;
       if (field.type === 'boolean') {
-        // Toggle boolean
         const newConfig = { ...config, [field.key]: !config[field.key] };
         onConfigChange(newConfig);
       } else {
-        // Edit number
         setEditValue(String(config[field.key]));
         setIsEditing(true);
+        setIsTyping(true);
       }
       return;
     }
@@ -77,7 +83,8 @@ export function ConfigView({ config, onConfigChange }: ConfigViewProps) {
       onConfigChange(newConfig);
     }
     setIsEditing(false);
-  }, [selectedIdx, config, onConfigChange]);
+    setIsTyping(false);
+  }, [selectedIdx, config, onConfigChange, setIsTyping]);
 
   return (
     <Box flexDirection="column" flexGrow={1}>

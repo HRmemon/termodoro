@@ -16,12 +16,14 @@ interface TimerViewProps {
   totalWorkSessions: number;
   sequenceBlocks?: SequenceBlock[];
   currentBlockIndex?: number;
+  setIsTyping: (isTyping: boolean) => void;
 }
 
 export function TimerView({
   secondsLeft, totalSeconds, sessionType, isPaused, isRunning,
   sessionNumber, totalWorkSessions,
   sequenceBlocks, currentBlockIndex,
+  setIsTyping,
 }: TimerViewProps) {
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [isAddingTask, setIsAddingTask] = useState(false);
@@ -33,19 +35,26 @@ export function TimerView({
   }, []);
 
   useInput((input, key) => {
-    if (isAddingTask) return;
+    if (isAddingTask) {
+      if (key.escape) {
+        setIsAddingTask(false);
+        setIsTyping(false);
+      }
+      return;
+    }
 
     if (input === 'a') {
       setIsAddingTask(true);
+      setIsTyping(true);
       setNewTaskText('');
       return;
     }
 
     // Task navigation
-    if (input === 'j' || (key.downArrow)) {
+    if (input === 'j' || key.downArrow) {
       setSelectedTask(prev => Math.min(prev + 1, tasks.length - 1));
     }
-    if (input === 'k' || (key.upArrow)) {
+    if (input === 'k' || key.upArrow) {
       setSelectedTask(prev => Math.max(prev - 1, 0));
     }
     if (input === 'x' && tasks.length > 0) {
@@ -67,7 +76,6 @@ export function TimerView({
 
   const handleAddTask = useCallback((text: string) => {
     if (text.trim()) {
-      // Parse "task text /3" for expected pomodoros
       const match = text.match(/^(.+?)\s*\/(\d+)\s*$/);
       if (match) {
         addTask(match[1]!.trim(), parseInt(match[2]!, 10));
@@ -77,8 +85,9 @@ export function TimerView({
       refreshTasks();
     }
     setIsAddingTask(false);
+    setIsTyping(false);
     setNewTaskText('');
-  }, [refreshTasks]);
+  }, [refreshTasks, setIsTyping]);
 
   return (
     <Box flexDirection="column" flexGrow={1}>

@@ -28,8 +28,8 @@ export interface Config {
 
 export interface TimeBlock {
   id: string;
-  startTime: string;
-  endTime: string;
+  startTime?: string;
+  endTime?: string;
   label: string;
   expectedSessions: number;
   priority: 'P1' | 'P2' | 'P3';

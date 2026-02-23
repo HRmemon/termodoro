@@ -32,6 +32,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
   const [showSearch, setShowSearch] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const { exit } = useApp();
 
   const [engine, engineActions] = usePomodoroEngine(config);
@@ -123,7 +124,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
   }, [engineActions, exit, seqActions]);
 
   useInput((input, key) => {
-    if (showCommandPalette || showSearch || showInsights) return;
+    if (showCommandPalette || showSearch || showInsights || isTyping) return;
 
     // Quit
     if (input === 'q' && !isZen) {
@@ -254,12 +255,13 @@ export function App({ config: initialConfig, initialView }: AppProps) {
           totalWorkSessions={engine.totalWorkSessions}
           sequenceBlocks={seqState.sequence?.blocks}
           currentBlockIndex={seqState.currentBlockIndex}
+          setIsTyping={setIsTyping}
         />
       )}
-      {view === 'plan' && <PlannerView />}
+      {view === 'plan' && <PlannerView setIsTyping={setIsTyping} />}
       {view === 'stats' && <ReportsView />}
       {view === 'config' && (
-        <ConfigView config={config} onConfigChange={setConfig} />
+        <ConfigView config={config} onConfigChange={setConfig} setIsTyping={setIsTyping} />
       )}
     </Layout>
   );
