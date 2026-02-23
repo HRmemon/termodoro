@@ -27,14 +27,17 @@ Zen mode bypasses the layout entirely and renders a full-screen centered compone
 ### Views
 | Key | View | Component |
 |-----|------|-----------|
-| 1 | Timer & Tasks | `TimerView.tsx` |
-| 2 | Sequences | `PlannerView.tsx` |
+| 1 | Timer | `TimerView.tsx` — shows active tasks + big timer + sequence progress |
+| 2 | Sequences | `PlannerView.tsx` — browse/activate/create/edit sequences |
 | 3 | Stats | `ReportsView.tsx` |
 | 4 | Config | `ConfigView.tsx` |
 | 5 | Clock | `ClockView.tsx` |
-| 6 | Reminders | `RemindersView.tsx` |
+| 6 | Reminders | `RemindersView.tsx` — scheduled notifications |
+| 7 | Tasks | `TasksView.tsx` — full task CRUD, active toggling |
 
 Zen mode (`z` key, timer and clock views only): `ZenMode.tsx` / `ZenClock.tsx`.
+
+Global search overlay (`/` key): `GlobalSearch.tsx` — searches tasks, sequences, reminders; navigates to view with item focused.
 
 ### State in app.tsx
 All global state lives in `app.tsx`:
@@ -45,6 +48,8 @@ All global state lives in `app.tsx`:
 - `engine` / `engineActions` — session state machine from `usePomodoroEngine`
 - `seqState` / `seqActions` — sequence progress from `useSequence`
 - `isTyping` — set to `true` by any child with an active text input; gates global `useInput` handler
+- `taskFocusId` / `reminderFocusId` — set by GlobalSearch to focus a specific item in target view; consumed and cleared by the view via `onFocusConsumed`
+- `showGlobalSearch` — `/` key overlay
 
 ### isTyping pattern
 Child components that use `TextInput` must call `setIsTyping(true)` on input focus and `setIsTyping(false)` on submit/escape. This prevents global hotkeys (`:`, `q`, `z`, etc.) from firing while typing.
@@ -71,7 +76,7 @@ Child components that use `TextInput` must call `setIsTyping(true)` on input foc
 |------|---------|
 | `lib/config.ts` | Load/save `~/.config/pomodorocli/config.json` |
 | `lib/store.ts` | Session and plan persistence to `~/.local/share/pomodorocli/` |
-| `lib/tasks.ts` | Task CRUD + `setActiveTask` |
+| `lib/tasks.ts` | Task CRUD + `setActiveTask(id | null)` + `updateTask` |
 | `lib/sequences.ts` | Custom sequence persistence to `sequences.json` |
 | `lib/reminders.ts` | Scheduled notification CRUD to `reminders.json` |
 | `lib/notify.ts` | node-notifier wrapper; `notifySessionEnd`, `sendReminderNotification` |
@@ -111,5 +116,15 @@ Config: `~/.config/pomodorocli/config.json`
 - No backward compatibility shims — delete dead code outright
 - `useInput` in child components fires in addition to `app.tsx`'s `useInput`; guard with `isTyping` or component-local state flags
 - Sequence activation always calls both `seqActions.setSequence(seq)` and `engineActions.applySequenceBlock(seq.blocks[0])` — see `handleActivateSequence` in `app.tsx`
+- Sequence clear calls `seqActions.clear()` + `engineActions.resetOverride()` to restore config defaults
 - Notifications use `config.notificationDuration` (seconds) as expire time
 - `nanoid` for generating IDs throughout
+- Task "active" state: only one task can be active at a time (`setActiveTask(id)` clears all others); timer shows active tasks only; full management in TasksView
+- Reminders: `recurring: true` = fires every day; `recurring: false` = fires once then `enabled` set to false automatically
+- `compactTime` config: when true, RemindersView accepts compact digit input (e.g. `930` → `09:30`)
+- `useTimer` bug history: `totalSeconds` must be state (not derived from prop) to correctly report progress bar; auto-reset via `useEffect` on `durationSeconds` change while idle
+
+## Known Limitations / Not Yet Implemented
+
+- Play/pause events are not individually logged; sessions record `startedAt`/`endedAt`/`status` but not pause timestamps. `durationActual` is wall-clock time (includes pauses). Timer's `elapsed` = `totalSeconds - secondsLeft` = actual focus seconds (correct).
+- Global search (`/`) navigates to the view but only focuses tasks and reminders by ID; sequence search navigates to Sequences view without auto-selecting.
