@@ -26,7 +26,6 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen }: KeysBa
     } else {
       hints.push({ key: 'Space', label: 'Start' });
     }
-    hints.push({ key: 'Esc', label: 'Exit Zen' });
     return <HintRow hints={hints} />;
   }
 
