@@ -1,0 +1,68 @@
+export interface Session {
+  id: string;
+  type: 'work' | 'short-break' | 'long-break';
+  status: 'completed' | 'skipped' | 'abandoned';
+  label?: string;
+  project?: string;
+  tag?: string;
+  energyLevel?: 'high' | 'medium' | 'low';
+  distractionScore?: number;
+  startedAt: string;
+  endedAt: string;
+  durationPlanned: number;
+  durationActual: number;
+}
+
+export interface Config {
+  workDuration: number;
+  shortBreakDuration: number;
+  longBreakDuration: number;
+  longBreakInterval: number;
+  autoStartBreaks: boolean;
+  autoStartWork: boolean;
+  strictMode: boolean;
+  sound: boolean;
+  notifications: boolean;
+  vimKeys: boolean;
+}
+
+export interface TimeBlock {
+  id: string;
+  startTime: string;
+  endTime: string;
+  label: string;
+  expectedSessions: number;
+  priority: 'P1' | 'P2' | 'P3';
+  project?: string;
+}
+
+export interface DayPlan {
+  date: string;
+  theme?: string;
+  blocks: TimeBlock[];
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  unlockedAt?: string;
+}
+
+export type SessionType = Session['type'];
+export type SessionStatus = Session['status'];
+export type EnergyLevel = NonNullable<Session['energyLevel']>;
+export type Priority = TimeBlock['priority'];
+
+export type View = 'timer' | 'tagger' | 'stats' | 'plan' | 'search' | 'insights' | 'command-palette';
+
+export interface TagInfo {
+  label?: string;
+  project?: string;
+  tag?: string;
+  energyLevel?: EnergyLevel;
+}
+
+export interface PostSessionInfo {
+  distractionScore?: number;
+}

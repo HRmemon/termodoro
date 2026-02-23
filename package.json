@@ -1,0 +1,30 @@
+{
+  "name": "pomodorocli",
+  "version": "1.0.0",
+  "description": "Terminal-first Pomodoro + productivity system",
+  "type": "module",
+  "bin": {
+    "pomodorocli": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx source/cli.tsx",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "ink": "^5.2.0",
+    "ink-select-input": "^6.0.0",
+    "ink-text-input": "^6.0.0",
+    "meow": "^13.2.0",
+    "nanoid": "^5.0.9",
+    "node-notifier": "^10.0.1",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/node-notifier": "^8.0.5",
+    "@types/react": "^18.3.18",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
