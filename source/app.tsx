@@ -24,6 +24,8 @@ import { InsightsView } from './components/InsightsView.js';
 import { RemindersView } from './components/RemindersView.js';
 import { TasksView } from './components/TasksView.js';
 import { GlobalSearch } from './components/GlobalSearch.js';
+import { HelpView } from './components/HelpView.js';
+import { ResetModal } from './components/ResetModal.js';
 import { getStreaks } from './lib/stats.js';
 
 interface AppProps {
@@ -39,6 +41,8 @@ export function App({ config: initialConfig, initialView }: AppProps) {
   const [showSearch, setShowSearch] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
@@ -111,16 +115,40 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     return () => clearInterval(interval);
   }, [config.notifications, config.notificationDuration]);
 
+  // CHANGE 7: Force timer reset when activating a sequence
   const handleActivateSequence = useCallback((seq: import('./types.js').SessionSequence) => {
     seqActions.setSequence(seq);
-    engineActions.applySequenceBlock(seq.blocks[0]!);
+    const firstBlock = seq.blocks[0]!;
+    engineActions.applySequenceBlock(firstBlock);
+    timerActions.reset(firstBlock.durationMinutes * 60);
     setView('timer');
-  }, [seqActions, engineActions]);
+  }, [seqActions, engineActions, timerActions]);
 
   const handleClearSequence = useCallback(() => {
     seqActions.clear();
     engineActions.resetOverride();
   }, [seqActions, engineActions]);
+
+  // CHANGE 6: Set custom duration
+  const handleSetCustomDuration = useCallback((minutes: number) => {
+    if (minutes > 0 && minutes <= 180) {
+      engineActions.setDurationOverride(minutes * 60);
+      timerActions.reset(minutes * 60);
+    }
+  }, [engineActions, timerActions]);
+
+  // CHANGE 8: Reset modal confirm
+  const handleResetConfirm = useCallback((asProductive: boolean) => {
+    if (timer.elapsed >= 10) {
+      if (asProductive) {
+        engineActions.completeSession();
+      } else {
+        engineActions.abandonSession();
+      }
+    }
+    timerActions.reset();
+    setShowResetModal(false);
+  }, [timer.elapsed, engineActions, timerActions]);
 
   // Auto-start breaks
   const isBreak = engine.sessionType !== 'work';
@@ -184,7 +212,8 @@ export function App({ config: initialConfig, initialView }: AppProps) {
   }, []);
 
   useInput((input, key) => {
-    if (showCommandPalette || showSearch || showInsights || showGlobalSearch || isTyping) return;
+    // CHANGE 12: include showHelp and showResetModal in the guard
+    if (showCommandPalette || showSearch || showInsights || showGlobalSearch || showHelp || showResetModal || isTyping) return;
 
     if (input === 'q' && !isZen) {
       engineActions.abandonSession();
@@ -201,14 +230,21 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       return;
     }
 
+    // CHANGE 10: help overlay
+    if (input === '?' && !isZen) {
+      setShowHelp(true);
+      return;
+    }
+
     if (!isZen) {
+      // CHANGE 1: updated view numbers
       if (input === '1') { setView('timer'); return; }
-      if (input === '2') { setView('plan'); return; }
-      if (input === '3') { setView('stats'); return; }
-      if (input === '4') { setView('config'); return; }
-      if (input === '5') { setView('clock'); return; }
-      if (input === '6') { setView('reminders'); return; }
-      if (input === '7') { setView('tasks'); return; }
+      if (input === '2') { setView('tasks'); return; }
+      if (input === '3') { setView('reminders'); return; }
+      if (input === '4') { setView('clock'); return; }
+      if (input === '5') { setView('plan'); return; }
+      if (input === '6') { setView('stats'); return; }
+      if (input === '7') { setView('config'); return; }
     }
 
     if (input === ':' && !isZen) {
@@ -218,6 +254,18 @@ export function App({ config: initialConfig, initialView }: AppProps) {
 
     if (input === '/' && !isZen) {
       setShowGlobalSearch(true);
+      return;
+    }
+
+    // CHANGE 3: clear sequence from timer screen
+    if (input === 'c' && view === 'timer' && seqState.isActive) {
+      handleClearSequence();
+      return;
+    }
+
+    // CHANGE 8: reset modal from timer screen
+    if (input === 'r' && view === 'timer') {
+      setShowResetModal(true);
       return;
     }
 
@@ -277,6 +325,23 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     );
   }
 
+  // CHANGE 10: help overlay
+  if (showHelp) {
+    return <HelpView onClose={() => setShowHelp(false)} />;
+  }
+
+  // CHANGE 8: reset modal overlay
+  if (showResetModal) {
+    return (
+      <ResetModal
+        elapsed={timer.elapsed}
+        sessionType={engine.sessionType}
+        onConfirm={handleResetConfirm}
+        onCancel={() => setShowResetModal(false)}
+      />
+    );
+  }
+
   // Zen mode
   if (isZen) {
     if (view === 'clock') {
@@ -289,6 +354,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         sessionType={engine.sessionType}
         isPaused={timer.isPaused}
         isRunning={timer.isRunning}
+        timerFormat={config.timerFormat}
       />
     );
   }
@@ -311,6 +377,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       isPaused={timer.isPaused}
       strictMode={config.strictMode}
       isZen={false}
+      hasActiveSequence={seqState.isActive}
     />
   );
 
@@ -328,6 +395,8 @@ export function App({ config: initialConfig, initialView }: AppProps) {
           sequenceBlocks={seqState.sequence?.blocks}
           currentBlockIndex={seqState.currentBlockIndex}
           setIsTyping={setIsTyping}
+          timerFormat={config.timerFormat}
+          onSetCustomDuration={handleSetCustomDuration}
         />
       )}
       {view === 'plan' && (

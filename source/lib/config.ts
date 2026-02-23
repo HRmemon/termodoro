@@ -19,6 +19,7 @@ const DEFAULT_CONFIG: Config = {
   notificationDuration: 5,
   vimKeys: false,
   compactTime: false,
+  timerFormat: 'mm:ss',
 };
 
 export function loadConfig(): Config {

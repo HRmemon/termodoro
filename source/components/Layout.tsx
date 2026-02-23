@@ -23,20 +23,20 @@ const VIEW_TITLES: Record<View, string> = {
 
 const VIEW_NUMS: Record<View, string> = {
   timer: '1',
-  plan: '2',
-  stats: '3',
-  config: '4',
-  clock: '5',
-  reminders: '6',
-  tasks: '7',
+  tasks: '2',
+  reminders: '3',
+  clock: '4',
+  plan: '5',
+  stats: '6',
+  config: '7',
 };
 
 export function Layout({ activeView, statusLine, keysBar, children }: LayoutProps) {
   const { columns, rows } = useFullScreen();
   const sidebarWidth = 22;
   const mainWidth = columns - sidebarWidth - 2;
-  // Reserve 2 lines for status + keys at bottom
-  const contentHeight = rows - 4;
+  // Reserve 3 lines for status + 2-row keys at bottom
+  const contentHeight = rows - 5;
 
   return (
     <Box flexDirection="column" width={columns} height={rows}>

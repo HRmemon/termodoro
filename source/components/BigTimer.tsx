@@ -9,6 +9,7 @@ interface BigTimerProps {
   sessionType: SessionType;
   isPaused: boolean;
   isRunning: boolean;
+  timerFormat?: 'mm:ss' | 'hh:mm:ss' | 'minutes';
 }
 
 const COLORS: Record<SessionType, string> = {
@@ -17,8 +18,8 @@ const COLORS: Record<SessionType, string> = {
   'long-break': 'blue',
 };
 
-export function BigTimer({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning }: BigTimerProps) {
-  const lines = renderBigTime(secondsLeft);
+export function BigTimer({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning, timerFormat }: BigTimerProps) {
+  const lines = renderBigTime(secondsLeft, timerFormat ?? 'mm:ss');
   const color = COLORS[sessionType];
   const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
   const barWidth = 30;

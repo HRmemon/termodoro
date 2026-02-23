@@ -67,7 +67,7 @@ export function PlannerView({ activeSequence, onActivateSequence, onClearSequenc
       return;
     }
 
-    if (input === 'n') {
+    if (input === 'a') {
       setInputValue('');
       setPendingName('');
       setInputMode('new-name');
@@ -154,7 +154,7 @@ export function PlannerView({ activeSequence, onActivateSequence, onClearSequenc
 
       <Box marginTop={1} marginBottom={1}>
         <Text dimColor>Custom</Text>
-        {customs.length === 0 && <Text dimColor italic>  (none — n to create)</Text>}
+        {customs.length === 0 && <Text dimColor italic>  (none — a to create)</Text>}
       </Box>
       {customs.map((seq, i) => {
         const idx = presets.length + i;

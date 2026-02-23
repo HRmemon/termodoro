@@ -20,7 +20,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
 
   const incompleteTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
-  const navItems = incompleteTasks;
+  const allNavItems = [...incompleteTasks, ...completedTasks];
 
   const refresh = useCallback(() => setTasks(loadTasks()), []);
 
@@ -44,7 +44,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
     }
 
     if (input === 'j' || key.downArrow) {
-      setSelectedIdx(i => Math.min(i + 1, navItems.length - 1));
+      setSelectedIdx(i => Math.min(i + 1, allNavItems.length - 1));
       return;
     }
     if (input === 'k' || key.upArrow) {
@@ -59,8 +59,8 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
       return;
     }
 
-    if (input === 'e' && navItems.length > 0) {
-      const task = navItems[selectedIdx];
+    if (input === 'e' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+      const task = incompleteTasks[selectedIdx];
       if (task) {
         setInputValue(task.text);
         setInputMode('edit');
@@ -69,12 +69,27 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
       return;
     }
 
-    if (input === 'x' && navItems.length > 0) {
-      const task = navItems[selectedIdx];
-      if (task) {
-        completeTask(task.id);
-        refresh();
-        setSelectedIdx(i => Math.max(0, Math.min(i, navItems.length - 2)));
+    if (input === 'x') {
+      if (selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+        // Complete the incomplete task
+        const task = incompleteTasks[selectedIdx];
+        if (task) {
+          completeTask(task.id);
+          refresh();
+          setSelectedIdx(i => Math.max(0, Math.min(i, incompleteTasks.length - 2)));
+        }
+      } else if (selectedIdx >= incompleteTasks.length && completedTasks.length > 0) {
+        // Undo the completed task
+        const task = allNavItems[selectedIdx];
+        if (task) {
+          const allTasks = loadTasks();
+          const idx = allTasks.findIndex(t => t.id === task.id);
+          if (idx >= 0) {
+            allTasks[idx] = { ...allTasks[idx]!, completed: false, completedAt: undefined };
+            saveTasks(allTasks);
+            refresh();
+          }
+        }
       }
       return;
     }
@@ -94,18 +109,18 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
       return;
     }
 
-    if (input === 'd' && navItems.length > 0) {
-      const task = navItems[selectedIdx];
+    if (input === 'd' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+      const task = incompleteTasks[selectedIdx];
       if (task) {
         deleteTask(task.id);
         refresh();
-        setSelectedIdx(i => Math.max(0, Math.min(i, navItems.length - 2)));
+        setSelectedIdx(i => Math.max(0, Math.min(i, incompleteTasks.length - 2)));
       }
       return;
     }
 
-    if (key.return && navItems.length > 0) {
-      const task = navItems[selectedIdx];
+    if (key.return && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+      const task = incompleteTasks[selectedIdx];
       if (task) {
         setActiveTask(task.active ? null : task.id);
         refresh();
@@ -130,7 +145,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
   }, [refresh, setIsTyping]);
 
   const handleEditSubmit = useCallback((value: string) => {
-    const task = navItems[selectedIdx];
+    const task = incompleteTasks[selectedIdx];
     if (task && value.trim()) {
       updateTask(task.id, { text: value.trim() });
       refresh();
@@ -138,15 +153,16 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
     setInputMode('none');
     setIsTyping(false);
     setInputValue('');
-  }, [navItems, selectedIdx, refresh, setIsTyping]);
+  }, [incompleteTasks, selectedIdx, refresh, setIsTyping]);
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {navItems.length === 0 && inputMode === 'none' && (
+      {allNavItems.length === 0 && inputMode === 'none' && (
         <Text dimColor>No tasks. Press 'a' to add one.</Text>
       )}
 
-      {navItems.map((task, i) => {
+      {/* Incomplete tasks */}
+      {incompleteTasks.map((task, i) => {
         const isSelected = i === selectedIdx;
         return (
           <Box key={task.id}>
@@ -172,17 +188,24 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
         </Box>
       )}
 
+      {/* Divider */}
       {completedTasks.length > 0 && (
-        <Box marginTop={1} flexDirection="column">
-          <Text dimColor>{'── Completed ('}{completedTasks.length}{') ── press u to undo last'}</Text>
-          {completedTasks.slice(-5).map(task => (
-            <Box key={task.id}>
-              <Text dimColor>{'  [x] '}</Text>
-              <Text color="gray" strikethrough>{task.text}</Text>
-            </Box>
-          ))}
+        <Box marginTop={1} marginBottom={0}>
+          <Text dimColor>{'── Completed ('}{completedTasks.length}{') ──  x: undo'}</Text>
         </Box>
       )}
+
+      {/* Completed tasks — navigable */}
+      {completedTasks.map((task, i) => {
+        const absIdx = incompleteTasks.length + i;
+        const isSelected = absIdx === selectedIdx;
+        return (
+          <Box key={task.id}>
+            <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>{isSelected ? '> ' : '  '}</Text>
+            <Text color="gray" strikethrough dimColor={!isSelected}>[x] {task.text}</Text>
+          </Box>
+        );
+      })}
     </Box>
   );
 }

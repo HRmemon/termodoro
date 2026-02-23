@@ -8,13 +8,13 @@ interface SidebarProps {
 }
 
 const VIEWS: { key: View; num: string; label: string }[] = [
-  { key: 'timer', num: '1', label: 'Timer' },
-  { key: 'plan', num: '2', label: 'Sequences' },
-  { key: 'stats', num: '3', label: 'Stats' },
-  { key: 'config', num: '4', label: 'Config' },
-  { key: 'clock', num: '5', label: 'Clock' },
-  { key: 'reminders', num: '6', label: 'Reminders' },
-  { key: 'tasks', num: '7', label: 'Tasks' },
+  { key: 'timer',     num: '1', label: 'Timer' },
+  { key: 'tasks',     num: '2', label: 'Tasks' },
+  { key: 'reminders', num: '3', label: 'Reminders' },
+  { key: 'clock',     num: '4', label: 'Clock' },
+  { key: 'plan',      num: '5', label: 'Sequences' },
+  { key: 'stats',     num: '6', label: 'Stats' },
+  { key: 'config',    num: '7', label: 'Config' },
 ];
 
 export function Sidebar({ activeView, height }: SidebarProps) {

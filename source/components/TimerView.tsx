@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
+import TextInput from 'ink-text-input';
 import type { Task, SessionType, SequenceBlock } from '../types.js';
 import { BigTimer } from './BigTimer.js';
 import { loadTasks, completeTask, setActiveTask } from '../lib/tasks.js';
@@ -15,16 +16,22 @@ interface TimerViewProps {
   sequenceBlocks?: SequenceBlock[];
   currentBlockIndex?: number;
   setIsTyping: (isTyping: boolean) => void;
+  timerFormat?: 'mm:ss' | 'hh:mm:ss' | 'minutes';
+  onSetCustomDuration: (minutes: number) => void;
 }
 
 export function TimerView({
   secondsLeft, totalSeconds, sessionType, isPaused, isRunning,
   sessionNumber, totalWorkSessions,
   sequenceBlocks, currentBlockIndex,
-  setIsTyping: _setIsTyping,
+  setIsTyping,
+  timerFormat,
+  onSetCustomDuration,
 }: TimerViewProps) {
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [selectedTask, setSelectedTask] = useState(0);
+  const [isSettingDuration, setIsSettingDuration] = useState(false);
+  const [durationInput, setDurationInput] = useState('');
 
   const activeTasks = tasks.filter(t => t.active && !t.completed);
 
@@ -32,8 +39,33 @@ export function TimerView({
     setTasks(loadTasks());
   }, []);
 
+  const handleDurationSubmit = useCallback((value: string) => {
+    const mins = parseInt(value, 10);
+    if (!isNaN(mins) && mins > 0) {
+      onSetCustomDuration(mins);
+    }
+    setIsSettingDuration(false);
+    setIsTyping(false);
+    setDurationInput('');
+  }, [onSetCustomDuration, setIsTyping]);
+
   useInput((_input, key) => {
     const input = _input;
+
+    // Escape guard for duration input
+    if (isSettingDuration && key.escape) {
+      setIsSettingDuration(false);
+      setIsTyping(false);
+      return;
+    }
+    if (isSettingDuration) return;
+
+    if (input === 't') {
+      setIsSettingDuration(true);
+      setIsTyping(true);
+      setDurationInput('');
+      return;
+    }
 
     if (input === 'j' || key.downArrow) {
       setSelectedTask(prev => Math.min(prev + 1, activeTasks.length - 1));
@@ -96,6 +128,14 @@ export function TimerView({
         </Box>
       )}
 
+      {/* Duration input */}
+      {isSettingDuration && (
+        <Box marginBottom={1}>
+          <Text color="yellow">Duration (min): </Text>
+          <TextInput value={durationInput} onChange={setDurationInput} onSubmit={handleDurationSubmit} placeholder="45" />
+        </Box>
+      )}
+
       {/* Active tasks */}
       {activeTasks.length > 0 && (
         <Box marginBottom={1} flexDirection="column">
@@ -114,7 +154,7 @@ export function TimerView({
       {activeTasks.length === 0 && (
         <Box marginBottom={1}>
           <Text dimColor>No active task. Go to </Text>
-          <Text color="yellow">[7] Tasks</Text>
+          <Text color="yellow">[2] Tasks</Text>
           <Text dimColor> to activate one.</Text>
         </Box>
       )}
@@ -126,6 +166,7 @@ export function TimerView({
         sessionType={sessionType}
         isPaused={isPaused}
         isRunning={isRunning}
+        timerFormat={timerFormat}
       />
     </Box>
   );

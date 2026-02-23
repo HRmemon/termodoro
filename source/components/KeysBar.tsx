@@ -8,6 +8,7 @@ interface KeysBarProps {
   isPaused: boolean;
   strictMode: boolean;
   isZen: boolean;
+  hasActiveSequence: boolean;
 }
 
 interface KeyHint {
@@ -15,85 +16,100 @@ interface KeyHint {
   label: string;
 }
 
-export function KeysBar({ view, isRunning, isPaused, strictMode, isZen }: KeysBarProps) {
-  const hints: KeyHint[] = [];
-
+export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence }: KeysBarProps) {
+  // Zen mode: minimal
   if (isZen) {
-    if (isRunning && !isPaused) {
-      hints.push({ key: 'Space', label: 'Pause' });
-    } else if (isPaused) {
-      hints.push({ key: 'Space', label: 'Resume' });
-    } else {
-      hints.push({ key: 'Space', label: 'Start' });
-    }
-    return <HintRow hints={hints} />;
+    const hint = isRunning && !isPaused ? 'Pause' : isPaused ? 'Resume' : 'Start';
+    return (
+      <Box paddingX={1}>
+        <Text color="yellow">Space</Text><Text dimColor>: {hint}</Text>
+      </Box>
+    );
   }
 
-  hints.push({ key: '1-7', label: 'Switch View' });
+  // Build action hints (top row)
+  const actionHints: KeyHint[] = [];
 
   if (view === 'timer') {
-    if (isRunning && !isPaused && !strictMode) {
-      hints.push({ key: 'Space', label: 'Pause' });
-    } else if (isPaused) {
-      hints.push({ key: 'Space', label: 'Resume' });
+    if (!strictMode) {
+      if (isRunning && !isPaused) actionHints.push({ key: 'Space', label: 'Pause' });
+      else if (isPaused) actionHints.push({ key: 'Space', label: 'Resume' });
+      else actionHints.push({ key: 'Space', label: 'Start' });
     } else if (!isRunning) {
-      hints.push({ key: 'Space', label: 'Start' });
+      actionHints.push({ key: 'Space', label: 'Start' });
     }
-    if (isRunning && !strictMode) {
-      hints.push({ key: 's', label: 'Skip' });
-    }
-    hints.push({ key: 'z', label: 'Zen' });
-  }
-
-  if (view === 'plan') {
-    hints.push({ key: 'j/k', label: 'Navigate' });
-    hints.push({ key: 'Enter', label: 'Activate' });
-    hints.push({ key: 'c', label: 'Clear' });
-    hints.push({ key: 'n', label: 'New' });
-    hints.push({ key: 'e/d', label: 'Edit/Del' });
+    if (isRunning && !strictMode) actionHints.push({ key: 's', label: 'Skip' });
+    actionHints.push({ key: 'z', label: 'Zen' });
+    actionHints.push({ key: 't', label: 'Set duration' });
+    actionHints.push({ key: 'r', label: 'Reset+log' });
+    if (hasActiveSequence) actionHints.push({ key: 'c', label: 'Clear seq' });
   }
 
   if (view === 'tasks') {
-    hints.push({ key: 'j/k', label: 'Navigate' });
-    hints.push({ key: 'Enter', label: 'Active' });
-    hints.push({ key: 'x', label: 'Done' });
-    hints.push({ key: 'u', label: 'Undo' });
-    hints.push({ key: 'e', label: 'Edit' });
-    hints.push({ key: 'd', label: 'Del' });
-    hints.push({ key: 'a', label: 'Add' });
+    actionHints.push({ key: 'j/k', label: 'Navigate' });
+    actionHints.push({ key: 'Enter', label: 'Toggle active' });
+    actionHints.push({ key: 'x', label: 'Done/Undo' });
+    actionHints.push({ key: 'a', label: 'Add' });
+    actionHints.push({ key: 'e', label: 'Edit' });
+    actionHints.push({ key: 'd', label: 'Delete' });
   }
 
   if (view === 'reminders') {
-    hints.push({ key: 'j/k', label: 'Navigate' });
-    hints.push({ key: 'a', label: 'Add' });
-    hints.push({ key: 'e/d', label: 'Edit/Del' });
-    hints.push({ key: 'Enter', label: 'Toggle' });
+    actionHints.push({ key: 'j/k', label: 'Navigate' });
+    actionHints.push({ key: 'a', label: 'Add' });
+    actionHints.push({ key: 'e', label: 'Edit' });
+    actionHints.push({ key: 'd', label: 'Delete' });
+    actionHints.push({ key: 'Enter', label: 'On/Off' });
+    actionHints.push({ key: 'r', label: 'Recurring' });
+  }
+
+  if (view === 'clock') {
+    actionHints.push({ key: 'z', label: 'Zen' });
+  }
+
+  if (view === 'plan') {
+    actionHints.push({ key: 'j/k', label: 'Navigate' });
+    actionHints.push({ key: 'Enter', label: 'Activate' });
+    actionHints.push({ key: 'a', label: 'New' });
+    actionHints.push({ key: 'e', label: 'Edit' });
+    actionHints.push({ key: 'd', label: 'Delete' });
+    if (hasActiveSequence) actionHints.push({ key: 'c', label: 'Clear' });
   }
 
   if (view === 'stats') {
-    hints.push({ key: 'j/k', label: 'Scroll' });
+    actionHints.push({ key: 'j/k', label: 'Scroll' });
   }
 
   if (view === 'config') {
-    hints.push({ key: 'j/k', label: 'Navigate' });
-    hints.push({ key: 'Enter', label: 'Edit' });
-    hints.push({ key: 's', label: 'Save' });
+    actionHints.push({ key: 'j/k', label: 'Navigate' });
+    actionHints.push({ key: 'Enter', label: 'Edit/Toggle' });
+    actionHints.push({ key: 's', label: 'Save' });
   }
 
-  hints.push({ key: ':', label: 'Command' });
-  hints.push({ key: 'q', label: 'Quit' });
+  // Global nav hints (bottom row)
+  const globalHints: KeyHint[] = [
+    { key: '1-7', label: 'Views' },
+    { key: '/', label: 'Search' },
+    { key: ':', label: 'Cmd' },
+    { key: '?', label: 'Help' },
+    { key: 'q', label: 'Quit' },
+  ];
 
-  return <HintRow hints={hints} />;
+  return (
+    <Box flexDirection="column">
+      {actionHints.length > 0 && <HintRow hints={actionHints} />}
+      <HintRow hints={globalHints} dim />
+    </Box>
+  );
 }
 
-function HintRow({ hints }: { hints: KeyHint[] }) {
+function HintRow({ hints, dim }: { hints: KeyHint[]; dim?: boolean }) {
   return (
-    <Box>
+    <Box paddingX={1}>
       {hints.map((h, i) => (
-        <Box key={h.key} marginRight={1}>
-          <Text dimColor>{i > 0 ? '' : ''}</Text>
-          <Text color="yellow">{h.key}</Text>
-          <Text dimColor>: {h.label}</Text>
+        <Box key={`${h.key}-${i}`} marginRight={2}>
+          <Text color={dim ? 'gray' : 'yellow'}>{h.key}</Text>
+          <Text dimColor>:{h.label}</Text>
         </Box>
       ))}
     </Box>

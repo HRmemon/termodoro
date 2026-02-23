@@ -10,6 +10,7 @@ interface ZenModeProps {
   sessionType: SessionType;
   isPaused: boolean;
   isRunning: boolean;
+  timerFormat?: 'mm:ss' | 'hh:mm:ss' | 'minutes';
 }
 
 const COLORS: Record<SessionType, string> = {
@@ -24,9 +25,9 @@ const MODE_LABELS: Record<SessionType, string> = {
   'long-break': 'Long Break',
 };
 
-export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning }: ZenModeProps) {
+export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning, timerFormat }: ZenModeProps) {
   const { columns, rows } = useFullScreen();
-  const lines = renderBigTime(secondsLeft);
+  const lines = renderBigTime(secondsLeft, timerFormat ?? 'mm:ss');
   const color = COLORS[sessionType];
 
   // Center everything vertically

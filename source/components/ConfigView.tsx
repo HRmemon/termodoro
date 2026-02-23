@@ -13,8 +13,9 @@ interface ConfigViewProps {
 interface ConfigField {
   key: keyof Config;
   label: string;
-  type: 'number' | 'boolean';
+  type: 'number' | 'boolean' | 'cycle';
   unit?: string;
+  values?: string[]; // for cycle type
 }
 
 const FIELDS: ConfigField[] = [
@@ -30,6 +31,7 @@ const FIELDS: ConfigField[] = [
   { key: 'notificationDuration', label: 'Notif Duration', type: 'number', unit: 'sec' },
   { key: 'compactTime', label: 'Compact Time', type: 'boolean' },
   { key: 'vimKeys', label: 'Vim Keys', type: 'boolean' },
+  { key: 'timerFormat', label: 'Timer Format', type: 'cycle', values: ['mm:ss', 'hh:mm:ss', 'minutes'] },
 ];
 
 export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewProps) {
@@ -60,6 +62,11 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
       const field = FIELDS[selectedIdx]!;
       if (field.type === 'boolean') {
         const newConfig = { ...config, [field.key]: !config[field.key] };
+        onConfigChange(newConfig);
+      } else if (field.type === 'cycle' && field.values) {
+        const currentIdx = field.values.indexOf(String(config[field.key]));
+        const nextIdx = (currentIdx + 1) % field.values.length;
+        const newConfig = { ...config, [field.key]: field.values[nextIdx] };
         onConfigChange(newConfig);
       } else {
         setEditValue(String(config[field.key]));
@@ -93,12 +100,18 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
       {FIELDS.map((field, i) => {
         const isSelected = i === selectedIdx;
         const value = config[field.key];
-        const displayValue = field.type === 'boolean'
-          ? (value ? 'ON' : 'OFF')
-          : `${value}${field.unit ? ` ${field.unit}` : ''}`;
-        const valueColor = field.type === 'boolean'
-          ? (value ? 'green' : 'red')
-          : 'white';
+        let displayValue: string;
+        let valueColor: string;
+        if (field.type === 'boolean') {
+          displayValue = value ? 'ON' : 'OFF';
+          valueColor = value ? 'green' : 'red';
+        } else if (field.type === 'cycle') {
+          displayValue = String(value);
+          valueColor = 'cyan';
+        } else {
+          displayValue = `${value}${field.unit ? ` ${field.unit}` : ''}`;
+          valueColor = 'white';
+        }
 
         return (
           <Box key={field.key}>

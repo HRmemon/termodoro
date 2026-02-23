@@ -23,6 +23,7 @@ export interface EngineActions {
   applySequenceBlock: (block: SequenceBlock) => void;
   getDuration: (type: SessionType) => number;
   resetOverride: () => void;
+  setDurationOverride: (seconds: number) => void;
 }
 
 export function usePomodoroEngine(config: Config): [EngineState, EngineActions] {
@@ -115,6 +116,10 @@ export function usePomodoroEngine(config: Config): [EngineState, EngineActions] 
     setOverrideDuration(null);
   }, []);
 
+  const setDurationOverride = useCallback((seconds: number) => {
+    setOverrideDuration(seconds);
+  }, []);
+
   const state: EngineState = {
     sessionType,
     sessionNumber,
@@ -134,5 +139,6 @@ export function usePomodoroEngine(config: Config): [EngineState, EngineActions] 
     applySequenceBlock,
     getDuration,
     resetOverride,
+    setDurationOverride,
   }];
 }

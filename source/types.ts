@@ -26,6 +26,7 @@ export interface Config {
   notificationDuration: number;
   vimKeys: boolean;
   compactTime: boolean;
+  timerFormat: 'mm:ss' | 'hh:mm:ss' | 'minutes';
 }
 
 export interface TimeBlock {
