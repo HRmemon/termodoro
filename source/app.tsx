@@ -136,8 +136,8 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     }
 
     // Zen mode toggle
-    if (input === 'z' && (view === 'timer' || view === 'clock') && !isZen) {
-      setIsZen(true);
+    if (input === 'z' && (view === 'timer' || view === 'clock')) {
+      setIsZen(prev => !prev);
       return;
     }
     if (key.escape && isZen) {
