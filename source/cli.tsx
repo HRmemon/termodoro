@@ -76,6 +76,7 @@ const viewMap: Record<string, View> = {
   stats: 'stats',
   plan: 'plan',
   config: 'config',
+  clock: 'clock',
 };
 const initialView = viewMap[command] ?? 'timer';
 

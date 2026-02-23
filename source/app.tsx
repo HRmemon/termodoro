@@ -14,6 +14,7 @@ import { ZenMode } from './components/ZenMode.js';
 import { PlannerView } from './components/PlannerView.js';
 import { ReportsView } from './components/ReportsView.js';
 import { ConfigView } from './components/ConfigView.js';
+import { ClockView } from './components/ClockView.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { SearchView } from './components/SearchView.js';
 import { InsightsView } from './components/InsightsView.js';
@@ -149,6 +150,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       if (input === '2') { setView('plan'); return; }
       if (input === '3') { setView('stats'); return; }
       if (input === '4') { setView('config'); return; }
+      if (input === '5') { setView('clock'); return; }
     }
 
     // Command palette
@@ -263,6 +265,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       {view === 'config' && (
         <ConfigView config={config} onConfigChange={setConfig} setIsTyping={setIsTyping} />
       )}
+      {view === 'clock' && <ClockView />}
     </Layout>
   );
 }

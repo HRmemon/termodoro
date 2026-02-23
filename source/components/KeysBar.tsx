@@ -30,7 +30,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen }: KeysBa
     return <HintRow hints={hints} />;
   }
 
-  hints.push({ key: '1-4', label: 'Switch View' });
+  hints.push({ key: '1-5', label: 'Switch View' });
 
   if (view === 'timer') {
     if (isRunning && !isPaused && !strictMode) {

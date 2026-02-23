@@ -75,7 +75,7 @@ export type SessionStatus = Session['status'];
 export type EnergyLevel = NonNullable<Session['energyLevel']>;
 export type Priority = TimeBlock['priority'];
 
-export type View = 'timer' | 'plan' | 'stats' | 'config';
+export type View = 'timer' | 'plan' | 'stats' | 'config' | 'clock';
 
 export interface TagInfo {
   label?: string;

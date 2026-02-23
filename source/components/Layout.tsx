@@ -16,6 +16,7 @@ const VIEW_TITLES: Record<View, string> = {
   plan: 'Plan',
   stats: 'Stats',
   config: 'Config',
+  clock: 'Clock',
 };
 
 const VIEW_NUMS: Record<View, string> = {
@@ -23,6 +24,7 @@ const VIEW_NUMS: Record<View, string> = {
   plan: '2',
   stats: '3',
   config: '4',
+  clock: '5',
 };
 
 export function Layout({ activeView, statusLine, keysBar, children }: LayoutProps) {
