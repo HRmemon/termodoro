@@ -15,6 +15,7 @@ import { PlannerView } from './components/PlannerView.js';
 import { ReportsView } from './components/ReportsView.js';
 import { ConfigView } from './components/ConfigView.js';
 import { ClockView } from './components/ClockView.js';
+import { ZenClock } from './components/ZenClock.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { SearchView } from './components/SearchView.js';
 import { InsightsView } from './components/InsightsView.js';
@@ -135,7 +136,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     }
 
     // Zen mode toggle
-    if (input === 'z' && view === 'timer' && !isZen) {
+    if (input === 'z' && (view === 'timer' || view === 'clock') && !isZen) {
       setIsZen(true);
       return;
     }
@@ -209,6 +210,9 @@ export function App({ config: initialConfig, initialView }: AppProps) {
 
   // Zen mode
   if (isZen) {
+    if (view === 'clock') {
+      return <ZenClock />;
+    }
     return (
       <ZenMode
         secondsLeft={timer.secondsLeft}
