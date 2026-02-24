@@ -4,6 +4,7 @@ import TextInput from 'ink-text-input';
 import type { Task } from '../types.js';
 import { loadTasks, saveTasks, addTask, completeTask, deleteTask, setActiveTask, updateTask, getProjects } from '../lib/tasks.js';
 import { colors } from '../lib/theme.js';
+import { fuzzyMatchAny } from '../lib/fuzzy.js';
 
 interface TasksViewProps {
   setIsTyping: (v: boolean) => void;
@@ -11,7 +12,7 @@ interface TasksViewProps {
   onFocusConsumed?: () => void;
 }
 
-type InputMode = 'none' | 'add' | 'edit';
+type InputMode = 'none' | 'add' | 'edit' | 'filter' | 'filtered';
 
 /** Parse `text #project /N` from input string */
 function parseTaskInput(value: string): { text: string; project?: string; expectedPomodoros: number } {
@@ -43,9 +44,19 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
   const [inputValue, setInputValue] = useState('');
   const [suggestionIdx, setSuggestionIdx] = useState(0);
   const [inputKey, setInputKey] = useState(0);
+  const [filterQuery, setFilterQuery] = useState('');
 
-  const incompleteTasks = tasks.filter(t => !t.completed);
-  const completedTasks = tasks.filter(t => t.completed);
+  const isFiltering = inputMode === 'filter' || inputMode === 'filtered';
+  const allIncomplete = tasks.filter(t => !t.completed);
+  const allCompleted = tasks.filter(t => t.completed);
+
+  // Apply fuzzy filter when active
+  const incompleteTasks = isFiltering && filterQuery
+    ? allIncomplete.filter(t => fuzzyMatchAny(filterQuery, t.text, t.project) !== null)
+    : allIncomplete;
+  const completedTasks = isFiltering && filterQuery
+    ? allCompleted.filter(t => fuzzyMatchAny(filterQuery, t.text, t.project) !== null)
+    : allCompleted;
   const allNavItems = [...incompleteTasks, ...completedTasks];
 
   const refresh = useCallback(() => setTasks(loadTasks()), []);
@@ -96,7 +107,44 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
   }, [focusId, onFocusConsumed]);
 
   useInput((input, key) => {
-    if (inputMode !== 'none') {
+    // Filter input mode — typing in the filter bar
+    if (inputMode === 'filter') {
+      if (key.escape) {
+        setInputMode('none');
+        setIsTyping(false);
+        setFilterQuery('');
+        setSelectedIdx(0);
+        return;
+      }
+      if (key.return) {
+        // Lock the filter in, hide input, show indicator
+        setInputMode('filtered');
+        setIsTyping(false);
+        setSelectedIdx(0);
+        return;
+      }
+      return;
+    }
+
+    // Filtered mode — filter is locked, navigating results
+    if (inputMode === 'filtered') {
+      if (key.escape) {
+        // Clear filter entirely
+        setInputMode('none');
+        setFilterQuery('');
+        setSelectedIdx(0);
+        return;
+      }
+      if (input === '/') {
+        // Re-open filter input to refine
+        setInputMode('filter');
+        setIsTyping(true);
+        return;
+      }
+      // Fall through to normal navigation keys below
+    }
+
+    if (inputMode === 'add' || inputMode === 'edit') {
       if (key.escape) {
         setInputMode('none');
         setIsTyping(false);
@@ -130,14 +178,22 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
       return;
     }
 
-    if (input === 'a') {
+    if (input === '/') {
+      setFilterQuery('');
+      setInputMode('filter');
+      setIsTyping(true);
+      setSelectedIdx(0);
+      return;
+    }
+
+    if (input === 'a' && inputMode !== 'filtered') {
       setInputValue('');
       setInputMode('add');
       setIsTyping(true);
       return;
     }
 
-    if (input === 'e' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+    if (input === 'e' && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
       const task = incompleteTasks[selectedIdx];
       if (task) {
         // Reconstruct input with project if it exists
@@ -187,7 +243,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
       return;
     }
 
-    if (input === 'd' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+    if (input === 'd' && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
       const task = incompleteTasks[selectedIdx];
       if (task) {
         deleteTask(task.id);
@@ -256,8 +312,44 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {allNavItems.length === 0 && inputMode === 'none' && (
+      {/* Filter input bar */}
+      {inputMode === 'filter' && (
+        <Box marginBottom={1}>
+          <Text color="yellow">{'/ '}</Text>
+          <TextInput
+            value={filterQuery}
+            onChange={(v) => { setFilterQuery(v); setSelectedIdx(0); }}
+            onSubmit={() => {
+              if (filterQuery.trim()) {
+                setInputMode('filtered');
+              } else {
+                setInputMode('none');
+                setFilterQuery('');
+              }
+              setIsTyping(false);
+              setSelectedIdx(0);
+            }}
+            placeholder="Filter tasks..."
+          />
+          <Text dimColor>  Enter: apply  Esc: cancel</Text>
+        </Box>
+      )}
+
+      {/* Locked filter indicator */}
+      {inputMode === 'filtered' && (
+        <Box marginBottom={1}>
+          <Text color="yellow" bold>{'/ '}</Text>
+          <Text color="white">{filterQuery}</Text>
+          <Text dimColor>  Esc: clear  /: refine</Text>
+        </Box>
+      )}
+
+      {allNavItems.length === 0 && !isFiltering && inputMode === 'none' && (
         <Text dimColor>No tasks. Press 'a' to add one.</Text>
+      )}
+
+      {allNavItems.length === 0 && isFiltering && filterQuery && (
+        <Text dimColor>No matches for "{filterQuery}"</Text>
       )}
 
       {/* Incomplete tasks */}

@@ -102,7 +102,7 @@ export function usePomodoroEngine(config: Config, initialState?: EngineInitialSt
   }, []);
 
   const completeSession = useCallback(() => {
-    notifySessionEnd(sessionType, config.sound, config.notifications, config.notificationDuration);
+    notifySessionEnd(sessionType, config.sound, config.notifications, config.notificationDuration, config.sounds);
     saveSession('completed');
     advanceToNext();
   }, [sessionType, config, saveSession, advanceToNext]);

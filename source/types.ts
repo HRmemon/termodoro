@@ -27,6 +27,7 @@ export interface Config {
   vimKeys: boolean;
   compactTime: boolean;
   timerFormat: 'mm:ss' | 'hh:mm:ss' | 'minutes';
+  sounds: import('./lib/sounds.js').SoundConfig;
 }
 
 export interface TimeBlock {

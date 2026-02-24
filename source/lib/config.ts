@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { Config } from '../types.js';
+import { DEFAULT_SOUND_CONFIG } from './sounds.js';
 
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'pomodorocli');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
@@ -20,6 +21,7 @@ const DEFAULT_CONFIG: Config = {
   vimKeys: false,
   compactTime: false,
   timerFormat: 'mm:ss',
+  sounds: { ...DEFAULT_SOUND_CONFIG },
 };
 
 export function loadConfig(): Config {

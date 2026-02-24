@@ -8,7 +8,7 @@ import type { TimerInitialState } from './hooks/useTimer.js';
 import type { EngineInitialState } from './hooks/usePomodoroEngine.js';
 import { loadTasks, addTask } from './lib/tasks.js';
 import { loadReminders, updateReminder, addReminder } from './lib/reminders.js';
-import { sendReminderNotification } from './lib/notify.js';
+import { notifyReminder } from './lib/notify.js';
 import { useTimer } from './hooks/useTimer.js';
 import { usePomodoroEngine } from './hooks/usePomodoroEngine.js';
 import { useSequence, parseSequenceString, PRESET_SEQUENCES } from './hooks/useSequence.js';
@@ -223,7 +223,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
             const task = tasks.find(t => t.id === r.taskId);
             if (task) message = `${r.title}\nTask: ${task.text}`;
           }
-          sendReminderNotification(r.title, message, config.notificationDuration);
+          notifyReminder(r.title, message, config.sound, config.notificationDuration, config.sounds);
           // Disable non-recurring reminders after firing
           if (!r.recurring) {
             updateReminder(r.id, { enabled: false });
@@ -416,7 +416,10 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     }
 
     if (input === '/' && !isZen) {
-      setShowGlobalSearch(true);
+      // In tasks view, let TasksView handle / for in-view filtering
+      if (view !== 'tasks') {
+        setShowGlobalSearch(true);
+      }
       return;
     }
 

@@ -1,5 +1,7 @@
 import notifier from 'node-notifier';
 import type { SessionType } from '../types.js';
+import type { SoundConfig, SoundEvent } from './sounds.js';
+import { playSoundForEvent } from './sounds.js';
 
 const MESSAGES: Record<SessionType, { title: string; message: string }> = {
   'work': {
@@ -22,7 +24,7 @@ export function sendNotification(type: SessionType, durationSeconds = 5): void {
   (notifier as any).notify({
     title: msg.title,
     message: msg.message,
-    sound: true,
+    sound: false,
     expire: durationSeconds * 1000,
   });
 }
@@ -41,11 +43,30 @@ export function ringBell(): void {
   process.stdout.write('\x07');
 }
 
-export function notifySessionEnd(type: SessionType, soundEnabled: boolean, notificationsEnabled: boolean, durationSeconds = 5): void {
+function sessionTypeToSoundEvent(type: SessionType): SoundEvent {
+  return type === 'work' ? 'work-end' : 'break-end';
+}
+
+export function notifySessionEnd(type: SessionType, soundEnabled: boolean, notificationsEnabled: boolean, durationSeconds = 5, soundConfig?: SoundConfig): void {
   if (soundEnabled) {
-    ringBell();
+    if (soundConfig) {
+      playSoundForEvent(sessionTypeToSoundEvent(type), soundConfig);
+    } else {
+      ringBell();
+    }
   }
   if (notificationsEnabled) {
     sendNotification(type, durationSeconds);
   }
+}
+
+export function notifyReminder(title: string, message: string, soundEnabled: boolean, durationSeconds = 5, soundConfig?: SoundConfig): void {
+  if (soundEnabled) {
+    if (soundConfig) {
+      playSoundForEvent('reminder', soundConfig);
+    } else {
+      ringBell();
+    }
+  }
+  sendReminderNotification(title, message, durationSeconds);
 }

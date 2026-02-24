@@ -5,6 +5,7 @@ import { loadTasks } from '../lib/tasks.js';
 import { loadReminders } from '../lib/reminders.js';
 import { PRESET_SEQUENCES } from '../hooks/useSequence.js';
 import { loadCustomSequences } from '../lib/sequences.js';
+import { fuzzyMatch, fuzzyMatchAny } from '../lib/fuzzy.js';
 import type { View } from '../types.js';
 
 type ResultType = 'task' | 'sequence' | 'reminder';
@@ -15,11 +16,40 @@ interface SearchResult {
   label: string;
   sublabel: string;
   view: View;
+  score: number;
 }
 
 interface GlobalSearchProps {
   onNavigate: (view: View, focusId: string, type: ResultType) => void;
   onDismiss: () => void;
+}
+
+/** Parse prefix tokens from query: task:, seq:, rem:, #project */
+function parseQuery(raw: string): { text: string; typeFilter: ResultType | null; projectFilter: string | null } {
+  let text = raw.trim();
+  let typeFilter: ResultType | null = null;
+  let projectFilter: string | null = null;
+
+  // Extract type prefix
+  if (text.startsWith('task:')) {
+    typeFilter = 'task';
+    text = text.slice(5).trim();
+  } else if (text.startsWith('seq:')) {
+    typeFilter = 'sequence';
+    text = text.slice(4).trim();
+  } else if (text.startsWith('rem:')) {
+    typeFilter = 'reminder';
+    text = text.slice(4).trim();
+  }
+
+  // Extract #project filter
+  const hashMatch = text.match(/#(\S+)/);
+  if (hashMatch) {
+    projectFilter = hashMatch[1]!;
+    text = text.replace(/#\S+/, '').trim();
+  }
+
+  return { text, typeFilter, projectFilter };
 }
 
 export function GlobalSearch({ onNavigate, onDismiss }: GlobalSearchProps) {
@@ -28,41 +58,86 @@ export function GlobalSearch({ onNavigate, onDismiss }: GlobalSearchProps) {
 
   const results: SearchResult[] = (() => {
     if (!query.trim()) return [];
-    const q = query.toLowerCase();
+    const { text, typeFilter, projectFilter } = parseQuery(query);
     const out: SearchResult[] = [];
 
     // Tasks
-    const tasks = loadTasks().filter(t => !t.completed && t.text.toLowerCase().includes(q));
-    for (const t of tasks) {
-      out.push({
-        type: 'task',
-        id: t.id,
-        label: t.text,
-        sublabel: `Task [${t.completedPomodoros}/${t.expectedPomodoros}]${t.active ? ' ▶' : ''}`,
-        view: 'tasks',
-      });
+    if (!typeFilter || typeFilter === 'task') {
+      const tasks = loadTasks().filter(t => !t.completed);
+      for (const t of tasks) {
+        // If project filter, fuzzy match project
+        if (projectFilter) {
+          const projScore = fuzzyMatch(projectFilter, t.project ?? '');
+          if (projScore === null) continue;
+        }
+        // Fuzzy match text and project
+        if (text) {
+          const score = fuzzyMatchAny(text, t.text, t.project);
+          if (score === null) continue;
+          out.push({
+            type: 'task',
+            id: t.id,
+            label: t.text,
+            sublabel: `Task [${t.completedPomodoros}/${t.expectedPomodoros}]${t.active ? ' ▶' : ''}${t.project ? ` #${t.project}` : ''}`,
+            view: 'tasks',
+            score,
+          });
+        } else {
+          // No text query but has project filter — show all matching tasks
+          out.push({
+            type: 'task',
+            id: t.id,
+            label: t.text,
+            sublabel: `Task [${t.completedPomodoros}/${t.expectedPomodoros}]${t.active ? ' ▶' : ''}${t.project ? ` #${t.project}` : ''}`,
+            view: 'tasks',
+            score: 0,
+          });
+        }
+      }
     }
 
     // Sequences
-    const allSeqs = [...Object.values(PRESET_SEQUENCES), ...loadCustomSequences()];
-    for (const s of allSeqs) {
-      if (s.name.toLowerCase().includes(q)) {
-        out.push({ type: 'sequence', id: s.name, label: s.name, sublabel: 'Sequence', view: 'plan' });
+    if (!typeFilter || typeFilter === 'sequence') {
+      if (!projectFilter) {
+        const allSeqs = [...Object.values(PRESET_SEQUENCES), ...loadCustomSequences()];
+        for (const s of allSeqs) {
+          if (!text) {
+            out.push({ type: 'sequence', id: s.name, label: s.name, sublabel: 'Sequence', view: 'plan', score: 0 });
+          } else {
+            const score = fuzzyMatch(text, s.name);
+            if (score !== null) {
+              out.push({ type: 'sequence', id: s.name, label: s.name, sublabel: 'Sequence', view: 'plan', score });
+            }
+          }
+        }
       }
     }
 
     // Reminders
-    const reminders = loadReminders().filter(r => r.title.toLowerCase().includes(q) || r.time.includes(q));
-    for (const r of reminders) {
-      out.push({
-        type: 'reminder',
-        id: r.id,
-        label: `${r.time} ${r.title}`,
-        sublabel: r.enabled ? 'Reminder' : 'Reminder (off)',
-        view: 'reminders',
-      });
+    if (!typeFilter || typeFilter === 'reminder') {
+      if (!projectFilter) {
+        const reminders = loadReminders();
+        for (const r of reminders) {
+          if (!text) {
+            out.push({
+              type: 'reminder', id: r.id, label: `${r.time} ${r.title}`,
+              sublabel: r.enabled ? 'Reminder' : 'Reminder (off)', view: 'reminders', score: 0,
+            });
+          } else {
+            const score = fuzzyMatchAny(text, r.title, r.time);
+            if (score !== null) {
+              out.push({
+                type: 'reminder', id: r.id, label: `${r.time} ${r.title}`,
+                sublabel: r.enabled ? 'Reminder' : 'Reminder (off)', view: 'reminders', score,
+              });
+            }
+          }
+        }
+      }
     }
 
+    // Sort by score (lower = better)
+    out.sort((a, b) => a.score - b.score);
     return out;
   })();
 
@@ -98,7 +173,7 @@ export function GlobalSearch({ onNavigate, onDismiss }: GlobalSearchProps) {
           value={query}
           onChange={(v) => { setQuery(v); setSelectedIdx(0); }}
           onSubmit={handleNavigate}
-          placeholder="Search tasks, sequences, reminders..."
+          placeholder="task: seq: rem: #project — fuzzy search"
         />
       </Box>
 
