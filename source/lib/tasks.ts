@@ -82,6 +82,15 @@ export function updateTask(id: string, updates: Partial<Pick<Task, 'text' | 'exp
   }
 }
 
+export function getProjects(): string[] {
+  const tasks = loadTasks();
+  const projects = new Set<string>();
+  for (const t of tasks) {
+    if (t.project) projects.add(t.project);
+  }
+  return [...projects].sort();
+}
+
 export function setActiveTask(id: string | null): void {
   const tasks = loadTasks();
   for (const t of tasks) {
