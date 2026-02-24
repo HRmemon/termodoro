@@ -1,9 +1,13 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useInput, useApp } from 'ink';
+import { nanoid } from 'nanoid';
 import type { Config, View } from './types.js';
-import { loadSessions } from './lib/store.js';
-import { loadTasks } from './lib/tasks.js';
-import { loadReminders, updateReminder } from './lib/reminders.js';
+import { loadSessions, loadTimerState, saveTimerState, clearTimerState } from './lib/store.js';
+import type { TimerSnapshot } from './lib/store.js';
+import type { TimerInitialState } from './hooks/useTimer.js';
+import type { EngineInitialState } from './hooks/usePomodoroEngine.js';
+import { loadTasks, addTask } from './lib/tasks.js';
+import { loadReminders, updateReminder, addReminder } from './lib/reminders.js';
 import { sendReminderNotification } from './lib/notify.js';
 import { useTimer } from './hooks/useTimer.js';
 import { usePomodoroEngine } from './hooks/usePomodoroEngine.js';
@@ -52,14 +56,58 @@ export function App({ config: initialConfig, initialView }: AppProps) {
 
   const { exit } = useApp();
 
-  const [engine, engineActions] = usePomodoroEngine(config);
+  // Restore timer state from disk on mount
+  const [restoredState] = useState(() => {
+    const snapshot = loadTimerState();
+    if (!snapshot) return null;
+
+    let timerInit: TimerInitialState;
+    if (snapshot.isPaused) {
+      timerInit = {
+        secondsLeft: snapshot.pausedSecondsLeft ?? snapshot.totalSeconds,
+        isRunning: true,
+        isPaused: true,
+      };
+    } else {
+      const elapsed = Math.floor((Date.now() - new Date(snapshot.startedAt).getTime()) / 1000);
+      const remaining = snapshot.totalSeconds - elapsed;
+      if (remaining <= 0) {
+        // Timer expired while app was closed — clear and let fresh start
+        clearTimerState();
+        return null;
+      }
+      timerInit = {
+        secondsLeft: remaining,
+        isRunning: true,
+        isPaused: false,
+      };
+    }
+
+    const engineInit: EngineInitialState = {
+      sessionType: snapshot.sessionType,
+      sessionNumber: snapshot.sessionNumber,
+      totalWorkSessions: snapshot.totalWorkSessions,
+      label: snapshot.label,
+      project: snapshot.project,
+      overrideDuration: snapshot.overrideDuration,
+      startedAt: snapshot.startedAt,
+    };
+
+    return { timerInit, engineInit, snapshot };
+  });
+
+  const [engine, engineActions] = usePomodoroEngine(config, restoredState?.engineInit);
   const [seqState, seqActions] = useSequence();
+
+  // Wall-clock ref for timer persistence
+  const timerStartedAtRef = useRef<string>(restoredState?.snapshot.startedAt ?? '');
 
   // Track which reminder times have already fired (keyed by "HH:MM") each day
   const firedRemindersRef = useRef<Set<string>>(new Set());
 
   const onTimerComplete = useCallback(() => {
     engineActions.completeSession();
+    clearTimerState();
     if (seqState.isActive) {
       const nextBlock = seqActions.advance();
       if (nextBlock) {
@@ -68,7 +116,36 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     }
   }, [engineActions, seqState.isActive, seqActions]);
 
-  const [timer, timerActions] = useTimer(engine.durationSeconds, onTimerComplete);
+  const [timer, timerActions] = useTimer(engine.durationSeconds, onTimerComplete, restoredState?.timerInit);
+
+  // Use refs so persistence always reads fresh values (avoids stale closures)
+  const engineRef = useRef(engine);
+  engineRef.current = engine;
+  const engineActionsRef = useRef(engineActions);
+  engineActionsRef.current = engineActions;
+
+  // Helper to persist timer state to disk — uses refs, safe to call from any closure
+  const persistTimer = useCallback((opts: { isPaused: boolean; startedAt: string; pausedSecondsLeft?: number }) => {
+    try {
+      const eng = engineRef.current;
+      const defaultDuration = engineActionsRef.current.getDuration(eng.sessionType);
+      const snapshot: TimerSnapshot = {
+        sessionType: eng.sessionType,
+        totalSeconds: eng.durationSeconds,
+        startedAt: opts.startedAt,
+        isPaused: opts.isPaused,
+        pausedSecondsLeft: opts.pausedSecondsLeft,
+        sessionNumber: eng.sessionNumber,
+        totalWorkSessions: eng.totalWorkSessions,
+        label: eng.currentLabel,
+        project: eng.currentProject,
+        overrideDuration: eng.durationSeconds !== defaultDuration ? eng.durationSeconds : null,
+      };
+      saveTimerState(snapshot);
+    } catch {
+      // Don't let persistence errors break the timer
+    }
+  }, []);
 
   const todayStats = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -147,6 +224,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       }
     }
     timerActions.reset();
+    clearTimerState();
     setShowResetModal(false);
   }, [timer.elapsed, engineActions, timerActions]);
 
@@ -156,6 +234,9 @@ export function App({ config: initialConfig, initialView }: AppProps) {
     setTimeout(() => {
       timerActions.start();
       engineActions.startSession();
+      const now = new Date().toISOString();
+      timerStartedAtRef.current = now;
+      setTimeout(() => persistTimer({ isPaused: false, startedAt: now }), 0);
     }, 0);
   }
 
@@ -188,6 +269,43 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         } else {
           const seq = parseSequenceString(args);
           if (seq) handleActivateSequence(seq);
+        }
+        break;
+      }
+      case 'task': {
+        if (args.trim()) {
+          let text = args.trim();
+          let project: string | undefined;
+          let expectedPomodoros = 1;
+
+          const pomMatch = text.match(/^(.+?)\s*\/(\d+)\s*$/);
+          if (pomMatch) {
+            text = pomMatch[1]!.trim();
+            expectedPomodoros = parseInt(pomMatch[2]!, 10);
+          }
+          const projMatch = text.match(/^(.+?)\s+#(\S+)\s*$/);
+          if (projMatch) {
+            text = projMatch[1]!.trim();
+            project = projMatch[2]!;
+          }
+          addTask(text, expectedPomodoros, project);
+          setView('tasks');
+        }
+        break;
+      }
+      case 'reminder': {
+        const reminderMatch = args.trim().match(/^(\d{1,2}:\d{2})\s+(.+)$/);
+        if (reminderMatch) {
+          const time = reminderMatch[1]!;
+          const title = reminderMatch[2]!;
+          addReminder({
+            id: nanoid(),
+            time,
+            title,
+            enabled: true,
+            recurring: false,
+          });
+          setView('reminders');
         }
         break;
       }
@@ -274,16 +392,25 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         if (!timer.isRunning && !timer.isPaused) {
           timerActions.start();
           engineActions.startSession();
+          const now = new Date().toISOString();
+          timerStartedAtRef.current = now;
+          setTimeout(() => persistTimer({ isPaused: false, startedAt: now }), 0);
         } else if (timer.isPaused) {
           timerActions.resume();
+          const now = new Date();
+          const newStartedAt = new Date(now.getTime() - (timer.totalSeconds - timer.secondsLeft) * 1000).toISOString();
+          timerStartedAtRef.current = newStartedAt;
+          setTimeout(() => persistTimer({ isPaused: false, startedAt: newStartedAt }), 0);
         } else if (!config.strictMode) {
           timerActions.pause();
+          setTimeout(() => persistTimer({ isPaused: true, startedAt: timerStartedAtRef.current, pausedSecondsLeft: timer.secondsLeft }), 0);
         }
         return;
       }
       if (input === 's' && !config.strictMode && timer.isRunning && !isZen) {
         timerActions.skip();
         engineActions.skipSession();
+        clearTimerState();
         return;
       }
     }

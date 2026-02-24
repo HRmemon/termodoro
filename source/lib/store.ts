@@ -1,12 +1,26 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import type { Session, DayPlan } from '../types.js';
+import type { Session, DayPlan, SessionType } from '../types.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
 const PLANS_PATH = path.join(DATA_DIR, 'plans.json');
 const ACHIEVEMENTS_PATH = path.join(DATA_DIR, 'achievements.json');
+const TIMER_STATE_PATH = path.join(DATA_DIR, 'timer-state.json');
+
+export interface TimerSnapshot {
+  sessionType: SessionType;
+  totalSeconds: number;
+  startedAt: string;
+  pausedSecondsLeft?: number;
+  isPaused: boolean;
+  sessionNumber: number;
+  totalWorkSessions: number;
+  label?: string;
+  project?: string;
+  overrideDuration?: number | null;
+}
 
 function ensureDir(): void {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -77,6 +91,25 @@ export function loadUnlockedAchievements(): string[] {
 
 export function saveUnlockedAchievements(ids: string[]): void {
   atomicWrite(ACHIEVEMENTS_PATH, ids);
+}
+
+// Timer state persistence
+export function saveTimerState(snapshot: TimerSnapshot): void {
+  atomicWrite(TIMER_STATE_PATH, snapshot);
+}
+
+export function loadTimerState(): TimerSnapshot | null {
+  return readJSON<TimerSnapshot | null>(TIMER_STATE_PATH, null);
+}
+
+export function clearTimerState(): void {
+  try {
+    if (fs.existsSync(TIMER_STATE_PATH)) {
+      fs.unlinkSync(TIMER_STATE_PATH);
+    }
+  } catch {
+    // ignore errors
+  }
 }
 
 // Data dir path for export/backup

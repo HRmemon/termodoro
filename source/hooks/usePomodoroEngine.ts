@@ -26,15 +26,25 @@ export interface EngineActions {
   setDurationOverride: (seconds: number) => void;
 }
 
-export function usePomodoroEngine(config: Config): [EngineState, EngineActions] {
-  const [sessionType, setSessionType] = useState<SessionType>('work');
-  const [sessionNumber, setSessionNumber] = useState(1);
-  const [totalWorkSessions, setTotalWorkSessions] = useState(0);
-  const [currentLabel, setCurrentLabel] = useState<string | undefined>();
-  const [currentProject, setCurrentProject] = useState<string | undefined>();
-  const [overrideDuration, setOverrideDuration] = useState<number | null>(null);
+export interface EngineInitialState {
+  sessionType?: SessionType;
+  sessionNumber?: number;
+  totalWorkSessions?: number;
+  label?: string;
+  project?: string;
+  overrideDuration?: number | null;
+  startedAt?: string;
+}
 
-  const sessionStartRef = useRef<string | null>(null);
+export function usePomodoroEngine(config: Config, initialState?: EngineInitialState): [EngineState, EngineActions] {
+  const [sessionType, setSessionType] = useState<SessionType>(initialState?.sessionType ?? 'work');
+  const [sessionNumber, setSessionNumber] = useState(initialState?.sessionNumber ?? 1);
+  const [totalWorkSessions, setTotalWorkSessions] = useState(initialState?.totalWorkSessions ?? 0);
+  const [currentLabel, setCurrentLabel] = useState<string | undefined>(initialState?.label);
+  const [currentProject, setCurrentProject] = useState<string | undefined>(initialState?.project);
+  const [overrideDuration, setOverrideDuration] = useState<number | null>(initialState?.overrideDuration ?? null);
+
+  const sessionStartRef = useRef<string | null>(initialState?.startedAt ?? null);
 
   const getDuration = useCallback((type: SessionType): number => {
     switch (type) {

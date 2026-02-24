@@ -17,14 +17,21 @@ export interface TimerActions {
   reset: (newDuration?: number) => void;
 }
 
+export interface TimerInitialState {
+  secondsLeft: number;
+  isRunning: boolean;
+  isPaused: boolean;
+}
+
 export function useTimer(
   durationSeconds: number,
   onComplete: () => void,
+  initialState?: TimerInitialState,
 ): [TimerState, TimerActions] {
-  const [secondsLeft, setSecondsLeft] = useState(durationSeconds);
+  const [secondsLeft, setSecondsLeft] = useState(initialState?.secondsLeft ?? durationSeconds);
   const [totalSeconds, setTotalSeconds] = useState(durationSeconds);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isRunning, setIsRunning] = useState(initialState?.isRunning ?? false);
+  const [isPaused, setIsPaused] = useState(initialState?.isPaused ?? false);
   const [isComplete, setIsComplete] = useState(false);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
