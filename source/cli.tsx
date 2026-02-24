@@ -17,6 +17,7 @@ const cli = meow(`
     backup      Backup session data
     export      Export sessions to CSV
     import      Import sessions from file
+    track       Set up Firefox browser tracking
 
   Options
     --work, -w        Work duration in minutes (default: 25)
@@ -59,6 +60,11 @@ if (command === 'export') {
   handleExport(cli.flags.output);
   process.exit(0);
 }
+if (command === 'track') {
+  const { handleTrackSetup } = await import('./lib/track-setup.js');
+  handleTrackSetup();
+  process.exit(0);
+}
 if (command === 'import') {
   const file = cli.input[1];
   if (!file) {
@@ -77,6 +83,7 @@ const viewMap: Record<string, View> = {
   plan: 'plan',
   config: 'config',
   clock: 'clock',
+  web: 'web',
 };
 const initialView = viewMap[command] ?? 'timer';
 

@@ -22,6 +22,7 @@ const DEFAULT_CONFIG: Config = {
   compactTime: false,
   timerFormat: 'mm:ss',
   sounds: { ...DEFAULT_SOUND_CONFIG },
+  browserTracking: false,
 };
 
 export function loadConfig(): Config {

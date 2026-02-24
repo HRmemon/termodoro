@@ -42,6 +42,7 @@ const FIELDS: ConfigField[] = [
   { key: 'compactTime', label: 'Compact Time', type: 'boolean' },
   { key: 'vimKeys', label: 'Vim Keys', type: 'boolean' },
   { key: 'timerFormat', label: 'Timer Format', type: 'cycle', values: ['mm:ss', 'hh:mm:ss', 'minutes'] },
+  { key: 'browserTracking', label: 'Browser Tracking', type: 'boolean' },
 ];
 
 export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewProps) {

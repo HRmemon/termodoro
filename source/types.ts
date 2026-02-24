@@ -28,6 +28,7 @@ export interface Config {
   compactTime: boolean;
   timerFormat: 'mm:ss' | 'hh:mm:ss' | 'minutes';
   sounds: import('./lib/sounds.js').SoundConfig;
+  browserTracking: boolean;
 }
 
 export interface TimeBlock {
@@ -89,7 +90,7 @@ export type SessionStatus = Session['status'];
 export type EnergyLevel = NonNullable<Session['energyLevel']>;
 export type Priority = TimeBlock['priority'];
 
-export type View = 'timer' | 'plan' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks';
+export type View = 'timer' | 'plan' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks' | 'web';
 
 export interface TagInfo {
   label?: string;

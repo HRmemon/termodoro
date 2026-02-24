@@ -81,6 +81,11 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     actionHints.push({ key: 'j/k', label: 'Scroll' });
   }
 
+  if (view === 'web') {
+    actionHints.push({ key: 'j/k', label: 'Scroll' });
+    actionHints.push({ key: 'Tab', label: 'Domains/Pages' });
+  }
+
   if (view === 'config') {
     actionHints.push({ key: 'j/k', label: 'Navigate' });
     actionHints.push({ key: 'Enter', label: 'Edit/Toggle' });
@@ -89,7 +94,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
 
   // Global nav hints (bottom row)
   const globalHints: KeyHint[] = [
-    { key: '1-7', label: 'Views' },
+    { key: '1-8', label: 'Views' },
     { key: '/', label: 'Search' },
     { key: ':', label: 'Cmd' },
     { key: '?', label: 'Help' },

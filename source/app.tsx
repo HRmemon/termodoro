@@ -31,6 +31,7 @@ import { TasksView } from './components/TasksView.js';
 import { GlobalSearch } from './components/GlobalSearch.js';
 import { HelpView } from './components/HelpView.js';
 import { ResetModal } from './components/ResetModal.js';
+import { WebView } from './components/WebView.js';
 import { getStreaks } from './lib/stats.js';
 
 interface AppProps {
@@ -408,6 +409,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       if (input === '5') { setView('plan'); return; }
       if (input === '6') { setView('stats'); return; }
       if (input === '7') { setView('config'); return; }
+      if (input === '8') { setView('web'); return; }
     }
 
     if (input === ':' && !isZen) {
@@ -616,6 +618,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
           onFocusConsumed={() => setTaskFocusId(null)}
         />
       )}
+      {view === 'web' && <WebView />}
     </Layout>
   );
 }
