@@ -42,6 +42,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
   const [inputMode, setInputMode] = useState<InputMode>('none');
   const [inputValue, setInputValue] = useState('');
   const [suggestionIdx, setSuggestionIdx] = useState(0);
+  const [inputKey, setInputKey] = useState(0);
 
   const incompleteTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
@@ -80,6 +81,8 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
     const chosen = projectMenu.matches[suggestionIdx];
     if (!chosen) return;
     setInputValue(inputValue.slice(0, projectMenu.hashIdx + 1) + chosen + ' ');
+    // Force TextInput remount so cursor resets to end of new value
+    setInputKey(k => k + 1);
   }, [projectMenu, suggestionIdx, inputValue]);
 
   // Handle focusId from global search
@@ -231,7 +234,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
     <Box flexDirection="column" marginTop={1}>
       <Box>
         <Text color="yellow">{label}</Text>
-        <TextInput value={inputValue} onChange={setInputValue} onSubmit={onSubmit} placeholder={placeholder} />
+        <TextInput key={inputKey} value={inputValue} onChange={setInputValue} onSubmit={onSubmit} placeholder={placeholder} />
       </Box>
       {projectMenu && (
         <Box flexDirection="column" marginLeft={2} marginTop={0}>
