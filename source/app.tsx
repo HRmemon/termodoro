@@ -428,6 +428,13 @@ export function App({ config: initialConfig, initialView }: AppProps) {
 
     // CHANGE 8: reset modal from timer screen
     if (input === 'r' && view === 'timer') {
+      // If elapsed is 0 and it's a break, skip directly to next focus session
+      if (timer.elapsed === 0 && engine.sessionType !== 'work') {
+        engineActions.advanceToNext();
+        timerActions.reset();
+        clearTimerState();
+        return;
+      }
       setShowResetModal(true);
       return;
     }

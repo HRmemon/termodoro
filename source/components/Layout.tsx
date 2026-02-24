@@ -34,27 +34,47 @@ const VIEW_NUMS: Record<View, string> = {
 
 export function Layout({ activeView, statusLine, keysBar, children }: LayoutProps) {
   const { columns, rows } = useFullScreen();
-  const sidebarWidth = 22;
-  const mainWidth = columns - sidebarWidth - 2;
-  // Reserve 3 lines for status + 2-row keys at bottom
-  const contentHeight = rows - 5;
+
+  // Render 1 row less than terminal height to prevent tmux jitter
+  const safeRows = Math.max(10, rows - 1);
+  const sidebarWidth = 20;
+  const contentWidth = columns - sidebarWidth;
+
+  // Manual border strings with proper T-junctions
+  const topBorder = '┌' + '─'.repeat(sidebarWidth - 1) + '┬' + '─'.repeat(contentWidth - 2) + '┐';
+  const midDivider = '├' + '─'.repeat(sidebarWidth - 1) + '┴' + '─'.repeat(contentWidth - 2) + '┤';
+  const simpleDivider = '├' + '─'.repeat(columns - 2) + '┤';
 
   return (
-    <Box flexDirection="column" width={columns} height={rows}>
-      <Box flexDirection="row" height={contentHeight}>
-        <Sidebar activeView={activeView} height={contentHeight} />
+    <Box flexDirection="column" width={columns} height={safeRows} overflow="hidden">
+
+      {/* ┌──────────┬──────────────────┐ */}
+      <Text color="gray">{topBorder}</Text>
+
+      {/* Main area: sidebar │ content with side borders */}
+      <Box flexDirection="row" flexGrow={1}>
+        <Box
+          width={sidebarWidth}
+          borderStyle="single"
+          borderTop={false}
+          borderBottom={false}
+          borderRight={false}
+          borderColor="gray"
+          paddingX={1}
+        >
+          <Sidebar activeView={activeView} />
+        </Box>
         <Box
           flexDirection="column"
-          width={mainWidth}
-          height={contentHeight}
+          flexGrow={1}
           borderStyle="single"
+          borderTop={false}
+          borderBottom={false}
           borderColor="gray"
           paddingX={1}
         >
           <Box marginBottom={1}>
-            <Text dimColor>[</Text>
-            <Text color={colors.highlight}>{VIEW_NUMS[activeView]}</Text>
-            <Text color={colors.dim}>] </Text>
+            <Text dimColor>[{VIEW_NUMS[activeView]}] </Text>
             <Text bold color={colors.text}>{VIEW_TITLES[activeView]}</Text>
           </Box>
           <Box flexDirection="column" flexGrow={1}>
@@ -62,12 +82,34 @@ export function Layout({ activeView, statusLine, keysBar, children }: LayoutProp
           </Box>
         </Box>
       </Box>
-      <Box paddingX={1}>
+
+      {/* ├──────────┴──────────────────┤ */}
+      <Text color="gray">{midDivider}</Text>
+
+      {/* Status row: │ status │ */}
+      <Box
+        borderStyle="single"
+        borderTop={false}
+        borderBottom={false}
+        borderColor="gray"
+        paddingX={1}
+      >
         {statusLine}
       </Box>
-      <Box paddingX={1}>
+
+      {/* ├─────────────────────────────┤ */}
+      <Text color="gray">{simpleDivider}</Text>
+
+      {/* Keys bar: │ keys │ with └──┘ bottom */}
+      <Box
+        borderStyle="single"
+        borderTop={false}
+        borderColor="gray"
+        paddingX={1}
+      >
         {keysBar}
       </Box>
+
     </Box>
   );
 }

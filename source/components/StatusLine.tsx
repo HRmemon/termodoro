@@ -28,26 +28,30 @@ function formatDuration(minutes: number): string {
 }
 
 export function StatusLine({ sessionType, isRunning, isPaused, streak, todaySessions, todayFocusMinutes }: StatusLineProps) {
-  const status = isPaused ? 'Paused' : isRunning ? 'Running' : 'Ready';
+  const status = isPaused ? 'PAUSED' : isRunning ? 'RUNNING' : 'READY';
+  const statusIcon = isPaused ? '⏸ ' : isRunning ? '▶ ' : '⏹ ';
   const statusColor = isPaused ? colors.break : isRunning ? colors.focus : colors.dim;
 
   return (
-    <Box>
-      <Text color={statusColor}>{status}</Text>
-      <Text color={colors.dim}> | </Text>
-      <Text color={SESSION_COLORS[sessionType]}>{MODE_LABELS[sessionType]}</Text>
-      <Text color={colors.dim}> | </Text>
-      <Text color={colors.dim}>Focus </Text>
-      <Text color={colors.text}>{formatDuration(todayFocusMinutes)}</Text>
-      <Text color={colors.dim}> | </Text>
-      <Text color={colors.dim}>Sessions </Text>
-      <Text color={colors.text}>{todaySessions}</Text>
+    <Box flexDirection="row" gap={3}>
+      <Box>
+        <Text color={statusColor} bold>{statusIcon}</Text>
+        <Text color={statusColor} bold>{status}</Text>
+      </Box>
+      <Box>
+        <Text color={colors.dim}>● </Text>
+        <Text color={SESSION_COLORS[sessionType]}>{MODE_LABELS[sessionType]}</Text>
+      </Box>
+      <Box>
+        <Text color={colors.text}>{formatDuration(todayFocusMinutes)}</Text>
+      </Box>
+      <Box>
+        <Text color={colors.text}>{todaySessions} Sessions</Text>
+      </Box>
       {streak > 0 && (
-        <>
-          <Text color={colors.dim}> | </Text>
-          <Text color={colors.dim}>Streak </Text>
-          <Text color={colors.highlight}>{streak}</Text>
-        </>
+        <Box>
+          <Text color={colors.highlight}>{streak}d Streak</Text>
+        </Box>
       )}
     </Box>
   );

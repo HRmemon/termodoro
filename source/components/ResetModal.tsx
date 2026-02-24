@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useInput } from 'ink';
 import { Box, Text } from 'ink';
 import type { SessionType } from '../types.js';
@@ -27,17 +27,19 @@ export function ResetModal({ elapsed, sessionType, onConfirm, onCancel }: ResetM
   const [selectedOpt, setSelectedOpt] = useState(0);
   const { columns, rows } = useFullScreen();
 
-  useInput((input, key) => {
+  const handleConfirm = useCallback(() => {
+    const choice = options[selectedOpt];
+    if (choice === 'Cancel') { onCancel(); return; }
+    if (choice === 'Productive' || choice === 'Log break') { onConfirm(true); return; }
+    if (choice === 'Unproductive') { onConfirm(false); return; }
+  }, [options, selectedOpt, onCancel, onConfirm]);
+
+  useInput(useCallback((input: string, key: any) => {
     if (key.escape) { onCancel(); return; }
     if (input === 'j' || key.downArrow) { setSelectedOpt(i => Math.min(i + 1, options.length - 1)); return; }
     if (input === 'k' || key.upArrow) { setSelectedOpt(i => Math.max(i - 1, 0)); return; }
-    if (key.return) {
-      const choice = options[selectedOpt];
-      if (choice === 'Cancel') { onCancel(); return; }
-      if (choice === 'Productive' || choice === 'Log break') { onConfirm(true); return; }
-      if (choice === 'Unproductive') { onConfirm(false); return; }
-    }
-  });
+    if (key.return) { handleConfirm(); return; }
+  }, [options, onCancel, handleConfirm]));
 
   const boxWidth = Math.min(40, columns - 4);
   const boxHeight = Math.min(14, rows - 4);

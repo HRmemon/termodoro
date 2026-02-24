@@ -24,6 +24,7 @@ export interface EngineActions {
   getDuration: (type: SessionType) => number;
   resetOverride: () => void;
   setDurationOverride: (seconds: number) => void;
+  advanceToNext: () => void;
 }
 
 export interface EngineInitialState {
@@ -150,5 +151,6 @@ export function usePomodoroEngine(config: Config, initialState?: EngineInitialSt
     getDuration,
     resetOverride,
     setDurationOverride,
+    advanceToNext,
   }];
 }

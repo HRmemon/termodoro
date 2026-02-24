@@ -106,7 +106,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
 
 function HintRow({ hints, dim }: { hints: KeyHint[]; dim?: boolean }) {
   return (
-    <Box paddingX={1}>
+    <Box>
       {hints.map((h, i) => (
         <Box key={`${h.key}-${i}`} marginRight={2}>
           <Text color={dim ? colors.dim : colors.highlight}>{h.key}</Text>

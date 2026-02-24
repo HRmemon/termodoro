@@ -5,7 +5,6 @@ import { colors } from '../lib/theme.js';
 
 interface SidebarProps {
   activeView: View;
-  height: number;
 }
 
 const VIEWS: { key: View; num: string; label: string }[] = [
@@ -18,25 +17,18 @@ const VIEWS: { key: View; num: string; label: string }[] = [
   { key: 'config',    num: '7', label: 'Config' },
 ];
 
-export function Sidebar({ activeView, height }: SidebarProps) {
+export function Sidebar({ activeView }: SidebarProps) {
   return (
-    <Box
-      flexDirection="column"
-      width={20}
-      height={height}
-      borderStyle="single"
-      borderColor="gray"
-      paddingX={1}
-    >
+    <Box flexDirection="column">
       <Box marginBottom={1}>
-        <Text bold color={colors.text}>Views</Text>
+        <Text bold color={colors.text}>VIEWS</Text>
       </Box>
       {VIEWS.map(v => {
         const active = v.key === activeView;
         return (
           <Box key={v.key}>
             <Text color={active ? colors.highlight : colors.dim} bold={active}>
-              {active ? '> ' : '  '}[{v.num}] {v.label}
+              {active ? '█ ' : '  '}{v.num} {v.label}
             </Text>
           </Box>
         );
