@@ -22,9 +22,9 @@ function formatDuration(seconds: number): string {
 }
 
 const TYPE_COLORS: Record<Session['type'], string> = {
-  'work': 'red',
-  'short-break': 'green',
-  'long-break': 'blue',
+  'work': '#00C853',
+  'short-break': '#FFB300',
+  'long-break': '#FFB300',
 };
 
 const STATUS_COLORS: Record<Session['status'], string> = {

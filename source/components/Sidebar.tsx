@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { View } from '../types.js';
+import { colors } from '../lib/theme.js';
 
 interface SidebarProps {
   activeView: View;
@@ -28,13 +29,13 @@ export function Sidebar({ activeView, height }: SidebarProps) {
       paddingX={1}
     >
       <Box marginBottom={1}>
-        <Text bold color="white">Views</Text>
+        <Text bold color={colors.text}>Views</Text>
       </Box>
       {VIEWS.map(v => {
         const active = v.key === activeView;
         return (
           <Box key={v.key}>
-            <Text color={active ? 'white' : 'gray'} bold={active}>
+            <Text color={active ? colors.highlight : colors.dim} bold={active}>
               {active ? '> ' : '  '}[{v.num}] {v.label}
             </Text>
           </Box>

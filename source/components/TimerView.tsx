@@ -4,6 +4,7 @@ import TextInput from 'ink-text-input';
 import type { Task, SessionType, SequenceBlock } from '../types.js';
 import { BigTimer } from './BigTimer.js';
 import { loadTasks, completeTask, setActiveTask } from '../lib/tasks.js';
+import { colors } from '../lib/theme.js';
 
 interface TimerViewProps {
   secondsLeft: number;
@@ -111,17 +112,17 @@ export function TimerView({
           {sequenceBlocks.map((block, i) => {
             const isCurrent = i === currentBlockIndex;
             const isDone = i < (currentBlockIndex ?? 0);
+            const blockColor = block.type === 'work' ? colors.focus : colors.break;
             const label = `${block.durationMinutes}m ${block.type === 'work' ? 'W' : 'B'}`;
             return (
               <Box key={i} marginRight={1}>
                 <Text
-                  color={isCurrent ? 'yellow' : isDone ? 'green' : 'gray'}
+                  color={isCurrent ? colors.highlight : isDone ? blockColor : colors.dim}
                   bold={isCurrent}
-                  dimColor={!isCurrent && !isDone}
                 >
                   {isDone ? '[x]' : isCurrent ? '[>]' : '[ ]'} {label}
                 </Text>
-                {i < sequenceBlocks.length - 1 && <Text dimColor> {'->'} </Text>}
+                {i < sequenceBlocks.length - 1 && <Text color={colors.dim}> → </Text>}
               </Box>
             );
           })}
@@ -131,7 +132,7 @@ export function TimerView({
       {/* Duration input */}
       {isSettingDuration && (
         <Box marginBottom={1}>
-          <Text color="yellow">Duration (min): </Text>
+          <Text color={colors.highlight}>Duration (min): </Text>
           <TextInput value={durationInput} onChange={setDurationInput} onSubmit={handleDurationSubmit} placeholder="45" />
         </Box>
       )}
@@ -143,8 +144,8 @@ export function TimerView({
             const isSelected = i === selectedTask;
             return (
               <Box key={task.id}>
-                <Text color={isSelected ? 'yellow' : 'green'} bold>{'▶ '}</Text>
-                <Text color={isSelected ? 'white' : 'gray'} bold={isSelected}>{task.text}</Text>
+                <Text color={isSelected ? colors.highlight : colors.focus} bold>{'▶ '}</Text>
+                <Text color={isSelected ? colors.text : colors.dim} bold={isSelected}>{task.text}</Text>
                 <Text dimColor>{'  '}[{task.completedPomodoros}/{task.expectedPomodoros}]</Text>
               </Box>
             );
@@ -154,7 +155,7 @@ export function TimerView({
       {activeTasks.length === 0 && (
         <Box marginBottom={1}>
           <Text dimColor>No active task. Go to </Text>
-          <Text color="yellow">[2] Tasks</Text>
+          <Text color={colors.highlight}>[2] Tasks</Text>
           <Text dimColor> to activate one.</Text>
         </Box>
       )}

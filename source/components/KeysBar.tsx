@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { View } from '../types.js';
+import { colors } from '../lib/theme.js';
 
 interface KeysBarProps {
   view: View;
@@ -22,7 +23,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     const hint = isRunning && !isPaused ? 'Pause' : isPaused ? 'Resume' : 'Start';
     return (
       <Box paddingX={1}>
-        <Text color="yellow">Space</Text><Text dimColor>: {hint}</Text>
+        <Text color={colors.highlight}>Space</Text><Text color={colors.dim}>: {hint}</Text>
       </Box>
     );
   }
@@ -108,8 +109,8 @@ function HintRow({ hints, dim }: { hints: KeyHint[]; dim?: boolean }) {
     <Box paddingX={1}>
       {hints.map((h, i) => (
         <Box key={`${h.key}-${i}`} marginRight={2}>
-          <Text color={dim ? 'gray' : 'yellow'}>{h.key}</Text>
-          <Text dimColor>:{h.label}</Text>
+          <Text color={dim ? colors.dim : colors.highlight}>{h.key}</Text>
+          <Text color={colors.dim}>:{h.label}</Text>
         </Box>
       ))}
     </Box>

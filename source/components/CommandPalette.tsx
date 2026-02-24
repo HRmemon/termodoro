@@ -13,14 +13,18 @@ interface CommandDef {
 }
 
 const COMMANDS: CommandDef[] = [
-  { name: 'stats',    args: false, description: 'View session statistics' },
-  { name: 'plan',     args: false, description: 'Open day planner' },
-  { name: 'search',   args: true,  description: 'Search sessions (e.g. :search project:myapp)' },
-  { name: 'export',   args: false, description: 'Export sessions to CSV' },
-  { name: 'backup',   args: false, description: 'Backup session data' },
-  { name: 'insights', args: false, description: 'Show energy patterns and focus score' },
-  { name: 'config',   args: false, description: 'Open configuration' },
-  { name: 'quit',     args: false, description: 'Quit pomodorocli' },
+  { name: 'stats',     args: false, description: 'View session statistics' },
+  { name: 'plan',      args: false, description: 'Open day planner' },
+  { name: 'tasks',     args: false, description: 'Navigate to tasks view' },
+  { name: 'task',      args: true,  description: 'Create a task (e.g. :task Fix bug #work /3)' },
+  { name: 'reminders', args: false, description: 'Navigate to reminders view' },
+  { name: 'reminder',  args: true,  description: 'Create a reminder (e.g. :reminder 09:30 Standup)' },
+  { name: 'search',    args: true,  description: 'Search sessions (e.g. :search project:myapp)' },
+  { name: 'export',    args: false, description: 'Export sessions to CSV' },
+  { name: 'backup',    args: false, description: 'Backup session data' },
+  { name: 'insights',  args: false, description: 'Show energy patterns and focus score' },
+  { name: 'config',    args: false, description: 'Open configuration' },
+  { name: 'quit',      args: false, description: 'Quit pomodorocli' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -38,6 +42,7 @@ interface CommandPaletteProps {
 
 export function CommandPalette({ onCommand, onDismiss }: CommandPaletteProps) {
   const [input, setInput] = useState('');
+  const [inputKey, setInputKey] = useState(0);
 
   // Derive which commands match the current input
   const trimmed = input.trimStart();
@@ -62,6 +67,7 @@ export function CommandPalette({ onCommand, onDismiss }: CommandPaletteProps) {
     if (key.tab && highlighted) {
       const completed = highlighted.args ? highlighted.name + ' ' : highlighted.name;
       setInput(completed);
+      setInputKey(k => k + 1);
     }
   });
 
@@ -94,6 +100,7 @@ export function CommandPalette({ onCommand, onDismiss }: CommandPaletteProps) {
       <Box marginTop={1}>
         <Text bold color="yellow">:</Text>
         <TextInput
+          key={inputKey}
           value={input}
           onChange={setInput}
           onSubmit={handleSubmit}

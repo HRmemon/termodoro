@@ -3,6 +3,7 @@ import { Box, Text } from 'ink';
 import type { SessionType } from '../types.js';
 import { renderBigTime } from '../lib/bigDigits.js';
 import { useFullScreen } from '../hooks/useFullScreen.js';
+import { SESSION_COLORS, colors } from '../lib/theme.js';
 
 interface ZenModeProps {
   secondsLeft: number;
@@ -13,12 +14,6 @@ interface ZenModeProps {
   timerFormat?: 'mm:ss' | 'hh:mm:ss' | 'minutes';
 }
 
-const COLORS: Record<SessionType, string> = {
-  'work': 'red',
-  'short-break': 'green',
-  'long-break': 'blue',
-};
-
 const MODE_LABELS: Record<SessionType, string> = {
   'work': 'Focus',
   'short-break': 'Short Break',
@@ -28,7 +23,7 @@ const MODE_LABELS: Record<SessionType, string> = {
 export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning, timerFormat }: ZenModeProps) {
   const { columns, rows } = useFullScreen();
   const lines = renderBigTime(secondsLeft, timerFormat ?? 'mm:ss');
-  const color = COLORS[sessionType];
+  const color = SESSION_COLORS[sessionType];
 
   // Center everything vertically
   const contentHeight = 5 + 1 + 3; // digits + mode label + space hint
@@ -49,7 +44,7 @@ export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRu
       ))}
       {isPaused && (
         <Box marginTop={1} justifyContent="center">
-          <Text color="yellow" bold>PAUSED</Text>
+          <Text color={colors.break} bold>PAUSED</Text>
         </Box>
       )}
       <Box marginTop={2} justifyContent="center">

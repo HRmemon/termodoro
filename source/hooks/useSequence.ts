@@ -9,6 +9,11 @@ export interface SequenceState {
   isComplete: boolean;
 }
 
+export interface SequenceInitialState {
+  sequence: SessionSequence;
+  blockIndex: number;
+}
+
 export interface SequenceActions {
   setSequence: (seq: SessionSequence) => void;
   advance: () => SequenceBlock | null;
@@ -75,9 +80,9 @@ export const PRESET_SEQUENCES: Record<string, SessionSequence> = {
   },
 };
 
-export function useSequence(): [SequenceState, SequenceActions] {
-  const [sequence, setSequenceState] = useState<SessionSequence | null>(null);
-  const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
+export function useSequence(initialState?: SequenceInitialState): [SequenceState, SequenceActions] {
+  const [sequence, setSequenceState] = useState<SessionSequence | null>(initialState?.sequence ?? null);
+  const [currentBlockIndex, setCurrentBlockIndex] = useState(initialState?.blockIndex ?? 0);
   const [isComplete, setIsComplete] = useState(false);
 
   const currentBlock = sequence && currentBlockIndex < sequence.blocks.length

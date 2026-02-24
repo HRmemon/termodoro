@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useInput } from 'ink';
 import { Box, Text } from 'ink';
 import type { SessionType } from '../types.js';
+import { useFullScreen } from '../hooks/useFullScreen.js';
+import { colors } from '../lib/theme.js';
 
 interface ResetModalProps {
   elapsed: number;
@@ -23,6 +25,7 @@ export function ResetModal({ elapsed, sessionType, onConfirm, onCancel }: ResetM
     : ['Log break', 'Cancel'];
 
   const [selectedOpt, setSelectedOpt] = useState(0);
+  const { columns, rows } = useFullScreen();
 
   useInput((input, key) => {
     if (key.escape) { onCancel(); return; }
@@ -36,30 +39,49 @@ export function ResetModal({ elapsed, sessionType, onConfirm, onCancel }: ResetM
     }
   });
 
+  const boxWidth = Math.min(40, columns - 4);
+  const boxHeight = Math.min(14, rows - 4);
+  const padTop = Math.max(0, Math.floor((rows - boxHeight) / 2));
+
   return (
-    <Box flexDirection="column" padding={2} borderStyle="round" borderColor="yellow">
-      <Box marginBottom={1}>
-        <Text bold color="white">Reset Timer</Text>
-      </Box>
-      <Box marginBottom={1}>
-        <Text dimColor>Elapsed: </Text>
-        <Text color="yellow" bold>{formatElapsed(elapsed)}</Text>
-        {elapsed < 10 && <Text dimColor>  (nothing to log)</Text>}
-      </Box>
-      {isWork && elapsed >= 10 && (
-        <Box marginBottom={1}>
-          <Text dimColor>How should this time be logged?</Text>
+    <Box flexDirection="column" height={rows}>
+      {padTop > 0 && <Box height={padTop} />}
+      <Box justifyContent="center">
+        <Box
+          flexDirection="column"
+          width={boxWidth}
+          height={boxHeight}
+          borderStyle="round"
+          borderColor={colors.highlight}
+          paddingX={2}
+          paddingY={1}
+          overflow="hidden"
+        >
+          <Box marginBottom={1} justifyContent="space-between">
+            <Text bold color={colors.text}>Reset Timer</Text>
+            <Text color={colors.dim}>Esc to cancel</Text>
+          </Box>
+          <Box marginBottom={1}>
+            <Text color={colors.dim}>Elapsed: </Text>
+            <Text color={colors.highlight} bold>{formatElapsed(elapsed)}</Text>
+            {elapsed < 10 && <Text color={colors.dim}>  (nothing to log)</Text>}
+          </Box>
+          {isWork && elapsed >= 10 && (
+            <Box marginBottom={1}>
+              <Text color={colors.dim}>How should this time be logged?</Text>
+            </Box>
+          )}
+          {options.map((opt, i) => (
+            <Box key={opt}>
+              <Text color={i === selectedOpt ? colors.highlight : colors.dim} bold={i === selectedOpt}>
+                {i === selectedOpt ? '> ' : '  '}{opt}
+              </Text>
+            </Box>
+          ))}
+          <Box marginTop={1}>
+            <Text color={colors.dim}>j/k: select  Enter: confirm  Esc: cancel</Text>
+          </Box>
         </Box>
-      )}
-      {options.map((opt, i) => (
-        <Box key={opt}>
-          <Text color={i === selectedOpt ? 'yellow' : 'gray'} bold={i === selectedOpt}>
-            {i === selectedOpt ? '> ' : '  '}{opt}
-          </Text>
-        </Box>
-      ))}
-      <Box marginTop={1}>
-        <Text dimColor>j/k: select  Enter: confirm  Esc: cancel</Text>
       </Box>
     </Box>
   );

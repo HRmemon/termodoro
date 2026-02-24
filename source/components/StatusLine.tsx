@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { SessionType } from '../types.js';
+import { SESSION_COLORS, colors } from '../lib/theme.js';
 
 interface StatusLineProps {
   sessionType: SessionType;
@@ -17,32 +18,37 @@ const MODE_LABELS: Record<SessionType, string> = {
   'long-break': 'Long Break',
 };
 
-const MODE_COLORS: Record<SessionType, string> = {
-  'work': 'red',
-  'short-break': 'green',
-  'long-break': 'blue',
-};
+function formatDuration(minutes: number): string {
+  if (minutes >= 60) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  return `${minutes}m`;
+}
 
 export function StatusLine({ sessionType, isRunning, isPaused, streak, todaySessions, todayFocusMinutes }: StatusLineProps) {
   const status = isPaused ? 'Paused' : isRunning ? 'Running' : 'Ready';
-  const statusColor = isPaused ? 'yellow' : isRunning ? 'green' : 'gray';
+  const statusColor = isPaused ? colors.break : isRunning ? colors.focus : colors.dim;
 
   return (
     <Box>
-      <Text dimColor>[</Text>
       <Text color={statusColor}>{status}</Text>
-      <Text dimColor>] </Text>
-      <Text dimColor>Mode: </Text>
-      <Text color={MODE_COLORS[sessionType]}>{MODE_LABELS[sessionType]}</Text>
-      <Text dimColor> | </Text>
-      <Text dimColor>Streak: </Text>
-      <Text color="yellow">{streak}</Text>
-      <Text dimColor> | </Text>
-      <Text dimColor>Today: </Text>
-      <Text>{todaySessions}</Text>
-      <Text dimColor> sessions, </Text>
-      <Text>{todayFocusMinutes}</Text>
-      <Text dimColor>m focus</Text>
+      <Text color={colors.dim}> | </Text>
+      <Text color={SESSION_COLORS[sessionType]}>{MODE_LABELS[sessionType]}</Text>
+      <Text color={colors.dim}> | </Text>
+      <Text color={colors.dim}>Focus </Text>
+      <Text color={colors.text}>{formatDuration(todayFocusMinutes)}</Text>
+      <Text color={colors.dim}> | </Text>
+      <Text color={colors.dim}>Sessions </Text>
+      <Text color={colors.text}>{todaySessions}</Text>
+      {streak > 0 && (
+        <>
+          <Text color={colors.dim}> | </Text>
+          <Text color={colors.dim}>Streak </Text>
+          <Text color={colors.highlight}>{streak}</Text>
+        </>
+      )}
     </Box>
   );
 }

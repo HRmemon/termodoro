@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { SessionSequence } from '../types.js';
 import { PRESET_SEQUENCES, parseSequenceString } from '../hooks/useSequence.js';
+import { colors } from '../lib/theme.js';
 import { loadCustomSequences, addCustomSequence, deleteCustomSequence } from '../lib/sequences.js';
 
 interface PlannerViewProps {
@@ -147,7 +148,7 @@ export function PlannerView({ activeSequence, onActivateSequence, onClearSequenc
             <Box width={14}><Text color={isSelected ? 'white' : 'gray'} bold={isSelected}>{seq.name}</Text></Box>
             <Box width={36}><Text dimColor>{formatBlocks(seq)}</Text></Box>
             <Text dimColor>{totalMinutes(seq)}m</Text>
-            {isActive && <Text color="green" bold>  [ACTIVE]</Text>}
+            {isActive && <Text color={colors.focus} bold>  [ACTIVE]</Text>}
           </Box>
         );
       })}
@@ -166,34 +167,34 @@ export function PlannerView({ activeSequence, onActivateSequence, onClearSequenc
             <Box width={14}><Text color={isSelected ? 'white' : 'gray'} bold={isSelected}>{seq.name}</Text></Box>
             <Box width={36}><Text dimColor>{formatBlocks(seq)}</Text></Box>
             <Text dimColor>{totalMinutes(seq)}m</Text>
-            {isActive && <Text color="green" bold>  [ACTIVE]</Text>}
+            {isActive && <Text color={colors.focus} bold>  [ACTIVE]</Text>}
           </Box>
         );
       })}
 
       {inputMode === 'new-name' && (
         <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Sequence name:</Text>
+          <Text color={colors.highlight}>Sequence name:</Text>
           <Box>
-            <Text color="yellow">{'> '}</Text>
+            <Text color={colors.highlight}>{'> '}</Text>
             <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleNameSubmit} placeholder="my-flow" />
           </Box>
         </Box>
       )}
       {inputMode === 'new-blocks' && (
         <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Blocks for "{pendingName}" (e.g. 45w 15b 45w):</Text>
+          <Text color={colors.highlight}>Blocks for "{pendingName}" (e.g. 45w 15b 45w):</Text>
           <Box>
-            <Text color="yellow">{'> '}</Text>
+            <Text color={colors.highlight}>{'> '}</Text>
             <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleBlocksSubmit} placeholder="25w 5b 25w 5b" />
           </Box>
         </Box>
       )}
       {inputMode === 'edit-blocks' && (
         <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Edit blocks:</Text>
+          <Text color={colors.highlight}>Edit blocks:</Text>
           <Box>
-            <Text color="yellow">{'> '}</Text>
+            <Text color={colors.highlight}>{'> '}</Text>
             <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleBlocksSubmit} />
           </Box>
         </Box>
@@ -206,7 +207,7 @@ export function PlannerView({ activeSequence, onActivateSequence, onClearSequenc
       {activeSequence && (
         <Box marginTop={1}>
           <Text dimColor>Active: </Text>
-          <Text color="green">{activeSequence.name}</Text>
+          <Text color={colors.focus}>{activeSequence.name}</Text>
           <Text dimColor>  c: clear</Text>
         </Box>
       )}

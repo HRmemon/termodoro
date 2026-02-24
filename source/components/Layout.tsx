@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { View } from '../types.js';
 import { Sidebar } from './Sidebar.js';
+import { colors } from '../lib/theme.js';
 import { useFullScreen } from '../hooks/useFullScreen.js';
 
 interface LayoutProps {
@@ -52,9 +53,9 @@ export function Layout({ activeView, statusLine, keysBar, children }: LayoutProp
         >
           <Box marginBottom={1}>
             <Text dimColor>[</Text>
-            <Text color="yellow">{VIEW_NUMS[activeView]}</Text>
-            <Text dimColor>] </Text>
-            <Text bold color="white">{VIEW_TITLES[activeView]}</Text>
+            <Text color={colors.highlight}>{VIEW_NUMS[activeView]}</Text>
+            <Text color={colors.dim}>] </Text>
+            <Text bold color={colors.text}>{VIEW_TITLES[activeView]}</Text>
           </Box>
           <Box flexDirection="column" flexGrow={1}>
             {children}

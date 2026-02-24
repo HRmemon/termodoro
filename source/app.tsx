@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useInput, useApp } from 'ink';
 import { nanoid } from 'nanoid';
-import type { Config, View } from './types.js';
-import { loadSessions, loadTimerState, saveTimerState, clearTimerState } from './lib/store.js';
+import type { Config, View, SessionType } from './types.js';
+import { loadSessions, appendSession, loadTimerState, saveTimerState, clearTimerState } from './lib/store.js';
 import type { TimerSnapshot } from './lib/store.js';
 import type { TimerInitialState } from './hooks/useTimer.js';
 import type { EngineInitialState } from './hooks/usePomodoroEngine.js';
@@ -12,6 +12,7 @@ import { sendReminderNotification } from './lib/notify.js';
 import { useTimer } from './hooks/useTimer.js';
 import { usePomodoroEngine } from './hooks/usePomodoroEngine.js';
 import { useSequence, parseSequenceString, PRESET_SEQUENCES } from './hooks/useSequence.js';
+import type { SequenceInitialState } from './hooks/useSequence.js';
 import { Layout } from './components/Layout.js';
 import { StatusLine } from './components/StatusLine.js';
 import { KeysBar } from './components/KeysBar.js';
@@ -72,9 +73,39 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       const elapsed = Math.floor((Date.now() - new Date(snapshot.startedAt).getTime()) / 1000);
       const remaining = snapshot.totalSeconds - elapsed;
       if (remaining <= 0) {
-        // Timer expired while app was closed — clear and let fresh start
+        // Timer expired while app was closed — auto-complete and advance to next session
+        appendSession({
+          id: nanoid(),
+          type: snapshot.sessionType,
+          status: 'completed',
+          label: snapshot.label,
+          project: snapshot.project,
+          startedAt: snapshot.startedAt,
+          endedAt: new Date(new Date(snapshot.startedAt).getTime() + snapshot.totalSeconds * 1000).toISOString(),
+          durationPlanned: snapshot.totalSeconds,
+          durationActual: snapshot.totalSeconds,
+        });
         clearTimerState();
-        return null;
+
+        // Compute next session type
+        let nextSessionType: SessionType;
+        let nextSessionNumber = snapshot.sessionNumber;
+        let nextTotalWork = snapshot.totalWorkSessions;
+        if (snapshot.sessionType === 'work') {
+          nextTotalWork += 1;
+          nextSessionType = nextTotalWork % initialConfig.longBreakInterval === 0 ? 'long-break' : 'short-break';
+        } else {
+          nextSessionNumber += 1;
+          nextSessionType = 'work';
+        }
+
+        const engineInit: EngineInitialState = {
+          sessionType: nextSessionType,
+          sessionNumber: nextSessionNumber,
+          totalWorkSessions: nextTotalWork,
+        };
+        // No timerInit — timer starts idle for the next session
+        return { timerInit: undefined, engineInit, snapshot: undefined };
       }
       timerInit = {
         secondsLeft: remaining,
@@ -93,14 +124,23 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       startedAt: snapshot.startedAt,
     };
 
-    return { timerInit, engineInit, snapshot };
+    // Restore sequence state if present and timer not expired
+    let sequenceInit: SequenceInitialState | undefined;
+    if (snapshot.sequenceName && snapshot.sequenceBlocks && snapshot.sequenceBlockIndex !== undefined) {
+      sequenceInit = {
+        sequence: { name: snapshot.sequenceName, blocks: snapshot.sequenceBlocks },
+        blockIndex: snapshot.sequenceBlockIndex,
+      };
+    }
+
+    return { timerInit, engineInit, snapshot, sequenceInit };
   });
 
   const [engine, engineActions] = usePomodoroEngine(config, restoredState?.engineInit);
-  const [seqState, seqActions] = useSequence();
+  const [seqState, seqActions] = useSequence(restoredState?.sequenceInit);
 
   // Wall-clock ref for timer persistence
-  const timerStartedAtRef = useRef<string>(restoredState?.snapshot.startedAt ?? '');
+  const timerStartedAtRef = useRef<string>(restoredState?.snapshot?.startedAt ?? '');
 
   // Track which reminder times have already fired (keyed by "HH:MM") each day
   const firedRemindersRef = useRef<Set<string>>(new Set());
@@ -123,6 +163,8 @@ export function App({ config: initialConfig, initialView }: AppProps) {
   engineRef.current = engine;
   const engineActionsRef = useRef(engineActions);
   engineActionsRef.current = engineActions;
+  const seqStateRef = useRef(seqState);
+  seqStateRef.current = seqState;
 
   // Helper to persist timer state to disk — uses refs, safe to call from any closure
   const persistTimer = useCallback((opts: { isPaused: boolean; startedAt: string; pausedSecondsLeft?: number }) => {
@@ -140,6 +182,9 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         label: eng.currentLabel,
         project: eng.currentProject,
         overrideDuration: eng.durationSeconds !== defaultDuration ? eng.durationSeconds : null,
+        sequenceName: seqStateRef.current.sequence?.name,
+        sequenceBlocks: seqStateRef.current.sequence?.blocks,
+        sequenceBlockIndex: seqStateRef.current.isActive ? seqStateRef.current.currentBlockIndex : undefined,
       };
       saveTimerState(snapshot);
     } catch {
@@ -154,9 +199,9 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       count: sessions.length,
       focusMinutes: Math.round(sessions.reduce((sum, s) => sum + s.durationActual, 0) / 60),
     };
-  }, [timer.isComplete]);
+  }, [timer.isComplete, engine.sessionNumber]);
 
-  const streak = useMemo(() => getStreaks().currentStreak, [timer.isComplete]);
+  const streak = useMemo(() => getStreaks().currentStreak, [timer.isComplete, engine.sessionNumber]);
 
   // Reminder checker — runs every 30s
   useEffect(() => {
@@ -411,6 +456,13 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         timerActions.skip();
         engineActions.skipSession();
         clearTimerState();
+        if (seqState.isActive) {
+          const nextBlock = seqActions.advance();
+          if (nextBlock) {
+            engineActions.applySequenceBlock(nextBlock);
+            timerActions.reset(nextBlock.durationMinutes * 60);
+          }
+        }
         return;
       }
     }

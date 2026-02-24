@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import type { Session, DayPlan, SessionType } from '../types.js';
+import type { Session, DayPlan, SessionType, SequenceBlock } from '../types.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
@@ -20,6 +20,9 @@ export interface TimerSnapshot {
   label?: string;
   project?: string;
   overrideDuration?: number | null;
+  sequenceName?: string;
+  sequenceBlocks?: SequenceBlock[];
+  sequenceBlockIndex?: number;
 }
 
 function ensureDir(): void {
