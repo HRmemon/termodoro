@@ -14,7 +14,6 @@ import {
 } from '../lib/stats.js';
 import { loadSessions } from '../lib/store.js';
 import { loadTasks } from '../lib/tasks.js';
-import { useFullScreen } from '../hooks/useFullScreen.js';
 
 function formatMinutes(minutes: number): string {
   if (minutes < 1) return '0m';
@@ -46,9 +45,11 @@ function getTodayString(): string {
   return `${y}-${m}-${d}`;
 }
 
+const SECTION_NAMES = ['Today', 'Week', 'Deep Work', 'Streaks', 'Projects', 'Tasks', 'Recent', 'Achievements'];
+
 export function ReportsView() {
   const [selectedSection, setSelectedSection] = useState(0);
-  const { rows } = useFullScreen();
+  const totalSections = SECTION_NAMES.length;
 
   const data = useMemo(() => {
     const today = getTodayString();
@@ -56,7 +57,6 @@ export function ReportsView() {
     const allSessions = loadSessions();
     const tasks = loadTasks();
 
-    // Task-based project breakdown
     const projectMap = new Map<string, { total: number; completed: number; pomodoros: number }>();
     for (const task of tasks) {
       const proj = task.project ?? '(none)';
@@ -83,12 +83,13 @@ export function ReportsView() {
     };
   }, []);
 
-  const sectionNames = ['Today', 'This Week', 'Deep Work', 'Streaks', 'By Project', 'Task Projects', 'Recent Sessions', 'Achievements'];
-  const totalSections = sectionNames.length;
-  // Show a window of sections based on terminal height
-  const maxVisible = Math.max(3, Math.floor((rows - 4) / 6));
-
   useInput((input, key) => {
+    if (input === 'l' || key.rightArrow) {
+      setSelectedSection(prev => Math.min(prev + 1, totalSections - 1));
+    }
+    if (input === 'h' || key.leftArrow) {
+      setSelectedSection(prev => Math.max(0, prev - 1));
+    }
     if (input === 'j' || key.downArrow) {
       setSelectedSection(prev => Math.min(prev + 1, totalSections - 1));
     }
@@ -98,173 +99,200 @@ export function ReportsView() {
   });
 
   const { daily, weekly, deepWork, breakdown, streaks, recentSessions, taskProjects } = data;
-  const trendArrow = deepWork.trend === 'up' ? '↑' : deepWork.trend === 'down' ? '↓' : '→';
-  const trendColor = deepWork.trend === 'up' ? 'green' : deepWork.trend === 'down' ? 'red' : 'yellow';
 
-  const projectItems = breakdown.byProject
-    .filter(p => p.label !== '(untagged)')
-    .slice(0, 5)
-    .map(p => ({ label: p.label, value: p.minutes }));
-
-  // Windowed view
-  const windowStart = Math.max(0, Math.min(selectedSection - Math.floor(maxVisible / 2), totalSections - maxVisible));
-  const visibleRange = { start: windowStart, end: Math.min(windowStart + maxVisible, totalSections) };
-
-  const renderSectionHeader = (idx: number, title: string) => {
-    const isActive = idx === selectedSection;
-    return (
-      <Box key={`hdr-${idx}`}>
-        <Text bold color={isActive ? 'yellow' : 'cyan'}>{isActive ? '▸ ' : '  '}{title}</Text>
-      </Box>
-    );
+  const renderSection = (): React.ReactNode => {
+    switch (selectedSection) {
+      case 0: return <TodaySection daily={daily} />;
+      case 1: return <WeekSection weekly={weekly} />;
+      case 2: return <DeepWorkSection deepWork={deepWork} />;
+      case 3: return <StreaksSection streaks={streaks} />;
+      case 4: return <ProjectsSection breakdown={breakdown} />;
+      case 5: return <TaskProjectsSection taskProjects={taskProjects} />;
+      case 6: return <RecentSection sessions={recentSessions} />;
+      case 7: return <Achievements />;
+      default: return null;
+    }
   };
-
-  const sections: React.ReactNode[] = [];
-
-  // 0: Today
-  if (visibleRange.start <= 0 && visibleRange.end > 0) {
-    sections.push(
-      <Box key="today" flexDirection="column" marginBottom={1} borderStyle={selectedSection === 0 ? 'single' : undefined} borderColor="gray" paddingX={selectedSection === 0 ? 1 : 0}>
-        {renderSectionHeader(0, 'Today')}
-        <Box marginLeft={1} flexDirection="column">
-          <Box>
-            <Text dimColor>Focus    </Text>
-            <Text bold color={colors.focus}>{formatMinutes(daily.focusMinutes)}</Text>
-            <Text dimColor>  Break  </Text>
-            <Text color={colors.break}>{formatMinutes(daily.breakMinutes)}</Text>
-            <Text dimColor>  Sessions  </Text>
-            <Text>{daily.sessionsCompleted}/{daily.sessionsTotal}</Text>
-          </Box>
-        </Box>
-      </Box>
-    );
-  }
-
-  // 1: This Week
-  if (visibleRange.start <= 1 && visibleRange.end > 1) {
-    sections.push(
-      <Box key="week" flexDirection="column" marginBottom={1} borderStyle={selectedSection === 1 ? 'single' : undefined} borderColor="gray" paddingX={selectedSection === 1 ? 1 : 0}>
-        {renderSectionHeader(1, 'This Week')}
-        <Box marginLeft={1} flexDirection="column">
-          <Heatmap days={weekly.heatmap} />
-          <Box marginTop={1}>
-            <Text dimColor>Total </Text>
-            <Text bold>{formatMinutes(weekly.totalFocusMinutes)}</Text>
-            <Text dimColor>  Avg </Text>
-            <Text>{formatMinutes(weekly.avgSessionLength)}</Text>
-            <Text dimColor>  Streak </Text>
-            <Text color={colors.highlight}>{weekly.longestStreak}d</Text>
-          </Box>
-        </Box>
-      </Box>
-    );
-  }
-
-  // 2: Deep Work
-  if (visibleRange.start <= 2 && visibleRange.end > 2) {
-    sections.push(
-      <Box key="deep" flexDirection="column" marginBottom={1} borderStyle={selectedSection === 2 ? 'single' : undefined} borderColor="gray" paddingX={selectedSection === 2 ? 1 : 0}>
-        {renderSectionHeader(2, 'Deep Work')}
-        <Box marginLeft={1}>
-          <Text bold>{Math.round(deepWork.ratio * 100)}%</Text>
-          <Text dimColor> focus  </Text>
-          <Text color={trendColor}>{trendArrow}</Text>
-          <Text dimColor>  7d: </Text>
-          <Sparkline values={deepWork.trendValues} color="cyan" showTrend={false} />
-        </Box>
-      </Box>
-    );
-  }
-
-  // 3: Streaks
-  if (visibleRange.start <= 3 && visibleRange.end > 3) {
-    sections.push(
-      <Box key="streaks" flexDirection="column" marginBottom={1} borderStyle={selectedSection === 3 ? 'single' : undefined} borderColor="gray" paddingX={selectedSection === 3 ? 1 : 0}>
-        {renderSectionHeader(3, 'Streaks')}
-        <Box marginLeft={1}>
-          <Text dimColor>Current </Text>
-          <Text bold color={colors.highlight}>{streaks.currentStreak}d</Text>
-          <Text dimColor>  Best </Text>
-          <Text>{streaks.personalBest}d</Text>
-          <Text dimColor>  Deep work/wk </Text>
-          <Text>{formatMinutes(streaks.deepWorkHoursThisWeek * 60)}</Text>
-        </Box>
-      </Box>
-    );
-  }
-
-  // 4: By Project (session-based)
-  if (visibleRange.start <= 4 && visibleRange.end > 4 && projectItems.length > 0) {
-    sections.push(
-      <Box key="projects" flexDirection="column" marginBottom={1} borderStyle={selectedSection === 4 ? 'single' : undefined} borderColor="gray" paddingX={selectedSection === 4 ? 1 : 0}>
-        {renderSectionHeader(4, 'By Project (Sessions)')}
-        <Box marginLeft={1}>
-          <BarChart items={projectItems} unit="min" color="cyan" maxBarWidth={24} />
-        </Box>
-      </Box>
-    );
-  }
-
-  // 5: Task Projects
-  if (visibleRange.start <= 5 && visibleRange.end > 5) {
-    sections.push(
-      <Box key="taskproj" flexDirection="column" marginBottom={1} borderStyle={selectedSection === 5 ? 'single' : undefined} borderColor="gray" paddingX={selectedSection === 5 ? 1 : 0}>
-        {renderSectionHeader(5, 'By Project (Tasks)')}
-        {taskProjects.length === 0 ? (
-          <Box marginLeft={1}><Text dimColor>No projects yet. Add #project to tasks.</Text></Box>
-        ) : (
-          taskProjects.map(([name, stats]) => (
-            <Box key={name} marginLeft={1}>
-              <Text color="cyan">#{name}</Text>
-              <Text dimColor>  {stats.completed}/{stats.total} tasks  </Text>
-              <Text>{stats.pomodoros} pom</Text>
-            </Box>
-          ))
-        )}
-      </Box>
-    );
-  }
-
-  // 6: Recent Sessions
-  if (visibleRange.start <= 6 && visibleRange.end > 6) {
-    sections.push(
-      <Box key="recent" flexDirection="column" marginBottom={1} borderStyle={selectedSection === 6 ? 'single' : undefined} borderColor="gray" paddingX={selectedSection === 6 ? 1 : 0}>
-        {renderSectionHeader(6, 'Recent Sessions')}
-        {recentSessions.length === 0 ? (
-          <Box marginLeft={1}><Text dimColor>No sessions yet.</Text></Box>
-        ) : (
-          recentSessions.map(s => (
-            <Box key={s.id} marginLeft={1}>
-              <Text dimColor>{s.startedAt.slice(0, 10)} </Text>
-              <Text dimColor>{s.startedAt.slice(11, 16)} </Text>
-              <Text>{formatMinutes(s.durationActual / 60)}</Text>
-              {s.label && <Text color="white"> {s.label}</Text>}
-              {s.project && <Text color="cyan"> #{s.project}</Text>}
-            </Box>
-          ))
-        )}
-      </Box>
-    );
-  }
-
-  // 7: Achievements
-  if (visibleRange.start <= 7 && visibleRange.end > 7) {
-    sections.push(
-      <Box key="achieve" flexDirection="column" borderStyle={selectedSection === 7 ? 'single' : undefined} borderColor="gray" paddingX={selectedSection === 7 ? 1 : 0}>
-        {renderSectionHeader(7, 'Achievements')}
-        <Box marginLeft={1}>
-          <Achievements />
-        </Box>
-      </Box>
-    );
-  }
 
   return (
     <Box flexDirection="column" flexGrow={1}>
+      {/* Tab bar */}
       <Box marginBottom={1}>
-        <Text dimColor>j/k to navigate sections ({selectedSection + 1}/{totalSections})</Text>
+        {SECTION_NAMES.map((name, i) => (
+          <React.Fragment key={name}>
+            {i > 0 && <Text dimColor> </Text>}
+            <Text
+              bold={i === selectedSection}
+              color={i === selectedSection ? 'yellow' : 'gray'}
+              underline={i === selectedSection}
+            >
+              {name}
+            </Text>
+          </React.Fragment>
+        ))}
       </Box>
-      {sections}
+
+      {/* Active section content */}
+      <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
+        {renderSection()}
+      </Box>
+    </Box>
+  );
+}
+
+// --- Section components ---
+
+function TodaySection({ daily }: { daily: ReturnType<typeof getDailyStats> }) {
+  return (
+    <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text bold color={colors.focus}>{formatMinutes(daily.focusMinutes)}</Text>
+        <Text dimColor> focus</Text>
+      </Box>
+      <Box>
+        <Box width={20}>
+          <Text dimColor>Break time</Text>
+        </Box>
+        <Text color={colors.break}>{formatMinutes(daily.breakMinutes)}</Text>
+      </Box>
+      <Box>
+        <Box width={20}>
+          <Text dimColor>Sessions</Text>
+        </Box>
+        <Text>{daily.sessionsCompleted}</Text>
+        <Text dimColor>/{daily.sessionsTotal}</Text>
+      </Box>
+    </Box>
+  );
+}
+
+function WeekSection({ weekly }: { weekly: ReturnType<typeof getWeeklyStats> }) {
+  return (
+    <Box flexDirection="column">
+      <Heatmap days={weekly.heatmap} />
+      <Box marginTop={1}>
+        <Box width={20}>
+          <Text dimColor>Total focus</Text>
+        </Box>
+        <Text bold>{formatMinutes(weekly.totalFocusMinutes)}</Text>
+      </Box>
+      <Box>
+        <Box width={20}>
+          <Text dimColor>Avg session</Text>
+        </Box>
+        <Text>{formatMinutes(weekly.avgSessionLength)}</Text>
+      </Box>
+      <Box>
+        <Box width={20}>
+          <Text dimColor>Longest streak</Text>
+        </Box>
+        <Text color={colors.highlight}>{weekly.longestStreak}d</Text>
+      </Box>
+    </Box>
+  );
+}
+
+function DeepWorkSection({ deepWork }: { deepWork: ReturnType<typeof getDeepWorkRatio> }) {
+  const trendArrow = deepWork.trend === 'up' ? '↑' : deepWork.trend === 'down' ? '↓' : '→';
+  const trendColor = deepWork.trend === 'up' ? 'green' : deepWork.trend === 'down' ? 'red' : 'yellow';
+
+  return (
+    <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text bold>{Math.round(deepWork.ratio * 100)}%</Text>
+        <Text dimColor> focus ratio </Text>
+        <Text color={trendColor}>{trendArrow}</Text>
+      </Box>
+      <Box>
+        <Text dimColor>7-day trend  </Text>
+        <Sparkline values={deepWork.trendValues} color="cyan" showTrend={false} />
+      </Box>
+    </Box>
+  );
+}
+
+function StreaksSection({ streaks }: { streaks: ReturnType<typeof getStreaks> }) {
+  return (
+    <Box flexDirection="column">
+      <Box>
+        <Box width={20}>
+          <Text dimColor>Current streak</Text>
+        </Box>
+        <Text bold color={colors.highlight}>{streaks.currentStreak}d</Text>
+      </Box>
+      <Box>
+        <Box width={20}>
+          <Text dimColor>Personal best</Text>
+        </Box>
+        <Text>{streaks.personalBest}d</Text>
+      </Box>
+      <Box>
+        <Box width={20}>
+          <Text dimColor>Deep work/wk</Text>
+        </Box>
+        <Text>{formatMinutes(streaks.deepWorkHoursThisWeek * 60)}</Text>
+      </Box>
+    </Box>
+  );
+}
+
+function ProjectsSection({ breakdown }: { breakdown: ReturnType<typeof getTaskBreakdown> }) {
+  const projectItems = breakdown.byProject
+    .filter(p => p.label !== '(untagged)')
+    .slice(0, 8)
+    .map(p => ({ label: p.label, value: p.minutes }));
+
+  if (projectItems.length === 0) {
+    return <Text dimColor>No project data yet. Tag sessions with #project.</Text>;
+  }
+
+  return <BarChart items={projectItems} unit="min" color="cyan" maxBarWidth={24} />;
+}
+
+function TaskProjectsSection({ taskProjects }: { taskProjects: [string, { total: number; completed: number; pomodoros: number }][] }) {
+  if (taskProjects.length === 0) {
+    return <Text dimColor>No projects yet. Add #project to tasks.</Text>;
+  }
+
+  return (
+    <Box flexDirection="column">
+      {taskProjects.map(([name, stats]) => (
+        <Box key={name}>
+          <Box width={16}>
+            <Text color="cyan">#{name}</Text>
+          </Box>
+          <Box width={14}>
+            <Text>{stats.completed}/{stats.total} tasks</Text>
+          </Box>
+          <Text dimColor>{stats.pomodoros} pom</Text>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+function RecentSection({ sessions }: { sessions: ReturnType<typeof loadSessions> }) {
+  if (sessions.length === 0) {
+    return <Text dimColor>No sessions yet.</Text>;
+  }
+
+  return (
+    <Box flexDirection="column">
+      {sessions.map(s => (
+        <Box key={s.id}>
+          <Box width={12}>
+            <Text dimColor>{s.startedAt.slice(0, 10)}</Text>
+          </Box>
+          <Box width={7}>
+            <Text dimColor>{s.startedAt.slice(11, 16)}</Text>
+          </Box>
+          <Box width={7}>
+            <Text bold>{formatMinutes(s.durationActual / 60)}</Text>
+          </Box>
+          {s.label && <Text> {s.label}</Text>}
+          {s.project && <Text color="cyan"> #{s.project}</Text>}
+        </Box>
+      ))}
     </Box>
   );
 }

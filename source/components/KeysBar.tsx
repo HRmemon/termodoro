@@ -78,7 +78,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
   }
 
   if (view === 'stats') {
-    actionHints.push({ key: 'j/k', label: 'Scroll' });
+    actionHints.push({ key: 'h/l', label: 'Sections' });
   }
 
   if (view === 'web') {
