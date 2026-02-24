@@ -97,8 +97,8 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
   ];
 
   return (
-    <Box flexDirection="column">
-      {actionHints.length > 0 && <HintRow hints={actionHints} />}
+    <Box flexDirection="column" height={2}>
+      {actionHints.length > 0 ? <HintRow hints={actionHints} /> : <Text> </Text>}
       <HintRow hints={globalHints} dim />
     </Box>
   );
