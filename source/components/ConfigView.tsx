@@ -63,11 +63,13 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
       if (field.type === 'boolean') {
         const newConfig = { ...config, [field.key]: !config[field.key] };
         onConfigChange(newConfig);
+        saveConfig(newConfig);
       } else if (field.type === 'cycle' && field.values) {
         const currentIdx = field.values.indexOf(String(config[field.key]));
         const nextIdx = (currentIdx + 1) % field.values.length;
         const newConfig = { ...config, [field.key]: field.values[nextIdx] };
         onConfigChange(newConfig);
+        saveConfig(newConfig);
       } else {
         setEditValue(String(config[field.key]));
         setIsEditing(true);
@@ -90,6 +92,7 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
     if (!isNaN(num) && num > 0) {
       const newConfig = { ...config, [field.key]: num };
       onConfigChange(newConfig);
+      saveConfig(newConfig);
     }
     setIsEditing(false);
     setIsTyping(false);
