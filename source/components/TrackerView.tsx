@@ -1,10 +1,13 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import {
   ALL_SLOTS, DAY_NAMES, WeekData,
   getCategoryByCode, getCategories, getISOWeekStr, getMondayOfWeek, getWeekDates,
   dateToString, loadWeek, createWeek, listWeeks, setSlot, computeDayStats,
+  expirePending, getPendingCount, acceptPending, rejectPending, acceptAllPending,
+  PendingSuggestion, loadTrackerConfigFull, addPendingSuggestions, generateWebSuggestions,
 } from '../lib/tracker.js';
+import { getSlotDomainBreakdown } from '../lib/browser-stats.js';
 
 const COL_WIDTH = 5; // characters per day column
 
@@ -27,8 +30,17 @@ function formatHours(h: number): string {
 }
 
 function SlotCell({
-  code, isActive, isCursor
-}: { code: string | undefined; isActive: boolean; isCursor: boolean }) {
+  code, isActive, isCursor, pending
+}: { code: string | undefined; isActive: boolean; isCursor: boolean; pending?: PendingSuggestion }) {
+  // Show pending suggestion if no confirmed code
+  if (!code && pending) {
+    const pDisplay = pending.suggested === 'hD' ? '?½D' : `?${pending.suggested}`;
+    if (isCursor) {
+      return <Text backgroundColor="white" color="black">{` ${pDisplay.padEnd(3)}`}</Text>;
+    }
+    return <Text dimColor color="yellow">{` ${pDisplay.padEnd(3)}`}</Text>;
+  }
+
   const cat = code ? getCategoryByCode(code) : undefined;
   const display = code ? (code === 'hD' ? '\u00bdD' : code.padEnd(2)) : ' \u00b7';
   const color = cat?.color as any ?? 'gray';
@@ -42,7 +54,7 @@ function SlotCell({
   return <Text dimColor>{`  \u00b7  `}</Text>;
 }
 
-type Mode = 'grid' | 'pick' | 'day' | 'week' | 'browse';
+type Mode = 'grid' | 'pick' | 'day' | 'week' | 'browse' | 'review';
 
 export function TrackerView() {
   const { stdout } = useStdout();
@@ -84,6 +96,47 @@ export function TrackerView() {
   const [browseList] = useState<string[]>(() => listWeeks());
   const [browseCursor, setBrowseCursor] = useState(0);
 
+  // Expire stale pending suggestions on mount, then generate web suggestions
+  useEffect(() => {
+    let current = week;
+    if (current && getPendingCount(current) > 0) {
+      current = expirePending(current);
+      if (current !== week) setWeek(current);
+    }
+
+    // Generate web domain suggestions if rules exist
+    try {
+      const fullConfig = loadTrackerConfigFull();
+      if (fullConfig.domainRules.length > 0 && current) {
+        const breakdown = getSlotDomainBreakdown(todayStr);
+        if (breakdown.length > 0) {
+          const webSugs = generateWebSuggestions(breakdown, fullConfig.domainRules);
+          if (webSugs.length > 0) {
+            const withDate = webSugs.map(s => ({ ...s, date: todayStr }));
+            const updated = addPendingSuggestions(current, withDate, 'web');
+            setWeek(updated);
+          }
+        }
+      }
+    } catch { /* browser DB may not exist */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pendingCount = week ? getPendingCount(week) : 0;
+
+  // Get sorted list of pending slot positions for review navigation
+  const pendingSlots = useMemo(() => {
+    if (!week) return [];
+    const slots: { date: string; time: string; suggestion: PendingSuggestion }[] = [];
+    for (const date of Object.keys(week.pending)) {
+      for (const time of Object.keys(week.pending[date]!)) {
+        slots.push({ date, time, suggestion: week.pending[date]![time]! });
+      }
+    }
+    return slots.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  }, [week]);
+
+  const [reviewIdx, setReviewIdx] = useState(0);
+
   const currentDate = weekDates[cursorCol] ?? null;
   const currentTime = ALL_SLOTS[cursorRow] ?? null;
   const handleSetSlot = useCallback((code: string | null) => {
@@ -102,6 +155,40 @@ export function TrackerView() {
         if (w) { setWeek(w); setWeekStr(ws); }
         setMode('grid');
       } else if (key.escape) setMode('grid');
+      return;
+    }
+
+    if (mode === 'review') {
+      if (key.escape) { setMode('grid'); return; }
+      const ps = pendingSlots[reviewIdx];
+      if (!ps || !week) { setMode('grid'); return; }
+
+      if (input === 'y' || input === 'Y') {
+        setWeek(prev => prev ? acceptPending(prev, ps.date, ps.time) : prev);
+        // Move to next or exit if done
+        if (reviewIdx >= pendingSlots.length - 1) setMode('grid');
+      } else if (input === 'n' || input === 'N') {
+        setWeek(prev => prev ? rejectPending(prev, ps.date, ps.time) : prev);
+        if (reviewIdx >= pendingSlots.length - 1) setMode('grid');
+      } else if (input === 'A') {
+        setWeek(prev => prev ? acceptAllPending(prev) : prev);
+        setMode('grid');
+      } else if (key.tab) {
+        setReviewIdx(i => Math.min(i + 1, pendingSlots.length - 1));
+      } else {
+        // Category key: change suggestion category & accept
+        const cat = categories.find(c => c.key && (c.key === input || c.key === input.toUpperCase()));
+        if (cat && week) {
+          // Change the suggestion's code before accepting
+          const updated = { ...week, pending: { ...week.pending } };
+          if (updated.pending[ps.date]) {
+            updated.pending[ps.date] = { ...updated.pending[ps.date] };
+            updated.pending[ps.date]![ps.time] = { ...ps.suggestion, suggested: cat.code };
+          }
+          setWeek(acceptPending(updated, ps.date, ps.time));
+          if (reviewIdx >= pendingSlots.length - 1) setMode('grid');
+        }
+      }
       return;
     }
 
@@ -148,7 +235,12 @@ export function TrackerView() {
     else {
       const cat = categories.find(c => c.key && (c.key === input || c.key === input.toUpperCase()));
       if (cat) handleSetSlot(cat.code);
-      else if (input === 'n') {
+      else if (input === 'r' && pendingCount > 0) {
+        setReviewIdx(0);
+        setMode('review');
+      } else if (input === 'A' && pendingCount > 0) {
+        setWeek(prev => prev ? acceptAllPending(prev) : prev);
+      } else if (input === 'n') {
         const existing = loadWeek(currentWeekStr);
         if (existing) {
           setWeek(existing);
@@ -239,9 +331,10 @@ export function TrackerView() {
           {weekDates.map((date, colIdx) => {
             const slotCode = week.slots[date]?.[time];
             const isCursor = rowIdx === cursorRow && colIdx === cursorCol;
+            const pend = week.pending[date]?.[time];
             return (
               <Box key={date} width={COL_WIDTH}>
-                <SlotCell code={slotCode} isActive={!!slotCode} isCursor={isCursor} />
+                <SlotCell code={slotCode} isActive={!!slotCode} isCursor={isCursor} pending={pend} />
               </Box>
             );
           })}
@@ -340,9 +433,10 @@ export function TrackerView() {
               {weekDates.map((date, colIdx) => {
                 const slotCode = week.slots[date]?.[time];
                 const isCursor = rowIdx === cursorRow && colIdx === cursorCol;
+                const pend = week.pending[date]?.[time];
                 return (
                   <Box key={date} width={COL_WIDTH}>
-                    <SlotCell code={slotCode} isActive={!!slotCode} isCursor={isCursor} />
+                    <SlotCell code={slotCode} isActive={!!slotCode} isCursor={isCursor} pending={pend} />
                   </Box>
                 );
               })}
@@ -404,6 +498,27 @@ export function TrackerView() {
         </Box>
       )}
 
+      {/* Pending banner */}
+      {pendingCount > 0 && mode === 'grid' && (
+        <Box marginTop={1}>
+          <Text color="yellow" bold>{pendingCount} pending</Text>
+          <Text dimColor>{'  '}r:Review  A:Accept all</Text>
+        </Box>
+      )}
+
+      {/* Review mode panel */}
+      {mode === 'review' && pendingSlots[reviewIdx] && (
+        <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1} marginTop={1}>
+          <Text bold color="yellow">Review Pending ({reviewIdx + 1}/{pendingSlots.length})</Text>
+          <Text>
+            Slot: <Text bold>{pendingSlots[reviewIdx]!.date} {pendingSlots[reviewIdx]!.time}</Text>
+            {'  '}Suggested: <Text bold color="cyan">{pendingSlots[reviewIdx]!.suggestion.suggested}</Text>
+            {'  '}Source: <Text dimColor>{pendingSlots[reviewIdx]!.suggestion.source}</Text>
+          </Text>
+          <Text dimColor>y:accept  n:reject  A:accept all  Tab:next  category key:change & accept  Esc:exit</Text>
+        </Box>
+      )}
+
       {/* Status bar (only in grid mode) */}
       {mode === 'grid' && (
         <Box marginTop={1} flexWrap="wrap">
@@ -417,6 +532,11 @@ export function TrackerView() {
             );
           })}
           {Object.keys(dayStats).length === 0 && <Text dimColor>No data for {DAY_NAMES[cursorCol]}</Text>}
+          {pendingCount > 0 && (
+            <Box marginLeft={2}>
+              <Text dimColor>[{pendingCount} pending]</Text>
+            </Box>
+          )}
         </Box>
       )}
     </Box>

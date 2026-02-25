@@ -40,7 +40,10 @@ export function loadTrackerConfig(): TrackerConfig {
 
 export function saveTrackerConfig(config: TrackerConfig): void {
   fs.mkdirSync(path.dirname(TRACKER_CONFIG_PATH), { recursive: true });
-  fs.writeFileSync(TRACKER_CONFIG_PATH, JSON.stringify(config, null, 2));
+  // Preserve other fields (like domainRules) when saving just categories
+  const existing = loadTrackerConfigFull();
+  const full = { ...existing, categories: config.categories };
+  fs.writeFileSync(TRACKER_CONFIG_PATH, JSON.stringify(full, null, 2));
 }
 
 export function getCategories(): SlotCategory[] {
@@ -60,11 +63,20 @@ for (let h = 0; h < 24; h++) {
 
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+export interface PendingSuggestion {
+  suggested: string;       // "D" or "hD"
+  source: 'pomodoro' | 'web';
+  pomoStart?: string;      // ISO timestamp
+  pomoDuration?: number;   // seconds
+  createdAt: string;       // for 24h expiry
+}
+
 export interface WeekData {
   week: string;   // "2026-W09"
   start: string;  // "2026-02-24" (the Monday)
   slots: Record<string, Record<string, string>>; // date -> time -> code
   notes: Record<string, string>; // date -> note
+  pending: Record<string, Record<string, PendingSuggestion>>; // date -> time -> suggestion
 }
 
 function getWeeksDir(): string {
@@ -114,7 +126,11 @@ export function getWeekDates(mondayStr: string): string[] {
 export function loadWeek(weekStr: string): WeekData | null {
   const fp = weekFilePath(weekStr);
   if (!fs.existsSync(fp)) return null;
-  try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
+  try {
+    const raw = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    if (!raw.pending) raw.pending = {};
+    return raw;
+  } catch { return null; }
 }
 
 export function saveWeek(data: WeekData): void {
@@ -134,7 +150,7 @@ export function createWeek(date: Date): WeekData {
   const monday = getMondayOfWeek(date);
   const weekStr = getISOWeekStr(monday);
   const start = dateToString(monday);
-  const data: WeekData = { week: weekStr, start, slots: {}, notes: {} };
+  const data: WeekData = { week: weekStr, start, slots: {}, notes: {}, pending: {} };
   saveWeek(data);
   return data;
 }
@@ -183,4 +199,219 @@ export function buildDailyEntries(weeks: WeekData[]): Map<string, DayEntry> {
     }
   }
   return map;
+}
+
+// ─── Pending Suggestions ─────────────────────────────────────────────────────
+
+export function generatePomodoroSuggestions(
+  startedAt: string,
+  durationActual: number
+): { date: string; time: string; code: string }[] {
+  const start = new Date(startedAt);
+  const endMs = start.getTime() + durationActual * 1000;
+  const suggestions: { date: string; time: string; code: string }[] = [];
+
+  // Find first 30-min slot boundary at or before start
+  const startSlot = new Date(start);
+  startSlot.setMinutes(start.getMinutes() < 30 ? 0 : 30, 0, 0);
+
+  for (let slotMs = startSlot.getTime(); slotMs < endMs; slotMs += 30 * 60 * 1000) {
+    const slotStart = Math.max(slotMs, start.getTime());
+    const slotEnd = Math.min(slotMs + 30 * 60 * 1000, endMs);
+    const overlapMinutes = (slotEnd - slotStart) / 60000;
+
+    if (overlapMinutes < 1) continue;
+
+    const slotDate = new Date(slotMs);
+    const date = dateToString(slotDate);
+    const h = String(slotDate.getHours()).padStart(2, '0');
+    const m = slotDate.getMinutes() < 30 ? '00' : '30';
+    const time = `${h}:${m}`;
+    const code = overlapMinutes >= 15 ? 'D' : 'hD';
+
+    suggestions.push({ date, time, code });
+  }
+
+  return suggestions;
+}
+
+export function addPendingSuggestions(
+  weekData: WeekData,
+  suggestions: { date: string; time: string; code: string }[],
+  source: 'pomodoro' | 'web' = 'pomodoro',
+  pomoStart?: string,
+  pomoDuration?: number,
+): WeekData {
+  const updated = { ...weekData, pending: { ...weekData.pending } };
+  const now = new Date().toISOString();
+
+  for (const s of suggestions) {
+    // Skip slots with existing confirmed entries
+    if (updated.slots[s.date]?.[s.time]) continue;
+    // Skip if already pending
+    if (updated.pending[s.date]?.[s.time]) continue;
+
+    if (!updated.pending[s.date]) updated.pending[s.date] = {};
+    updated.pending[s.date]![s.time] = {
+      suggested: s.code,
+      source,
+      ...(pomoStart ? { pomoStart } : {}),
+      ...(pomoDuration ? { pomoDuration } : {}),
+      createdAt: now,
+    };
+  }
+
+  saveWeek(updated);
+  return updated;
+}
+
+export function acceptPending(weekData: WeekData, date: string, time: string): WeekData {
+  const pending = weekData.pending[date]?.[time];
+  if (!pending) return weekData;
+
+  const updated = { ...weekData, slots: { ...weekData.slots }, pending: { ...weekData.pending } };
+  // Move pending → slot
+  if (!updated.slots[date]) updated.slots[date] = {};
+  updated.slots[date]![time] = pending.suggested;
+
+  // Remove from pending
+  updated.pending[date] = { ...updated.pending[date] };
+  delete updated.pending[date]![time];
+  if (Object.keys(updated.pending[date]!).length === 0) delete updated.pending[date];
+
+  saveWeek(updated);
+  return updated;
+}
+
+export function rejectPending(weekData: WeekData, date: string, time: string): WeekData {
+  if (!weekData.pending[date]?.[time]) return weekData;
+
+  const updated = { ...weekData, pending: { ...weekData.pending } };
+  updated.pending[date] = { ...updated.pending[date] };
+  delete updated.pending[date]![time];
+  if (Object.keys(updated.pending[date]!).length === 0) delete updated.pending[date];
+
+  saveWeek(updated);
+  return updated;
+}
+
+export function acceptAllPending(weekData: WeekData, date?: string): WeekData {
+  let updated = { ...weekData };
+  const dates = date ? [date] : Object.keys(updated.pending);
+  for (const d of dates) {
+    const times = Object.keys(updated.pending[d] ?? {});
+    for (const t of times) {
+      updated = acceptPending(updated, d, t);
+    }
+  }
+  return updated;
+}
+
+export function getPendingCount(weekData: WeekData, date?: string): number {
+  let count = 0;
+  const dates = date ? [date] : Object.keys(weekData.pending);
+  for (const d of dates) {
+    count += Object.keys(weekData.pending[d] ?? {}).length;
+  }
+  return count;
+}
+
+export function expirePending(weekData: WeekData): WeekData {
+  const now = Date.now();
+  const maxAge = 24 * 60 * 60 * 1000; // 24h
+  let changed = false;
+  const updated = { ...weekData, pending: { ...weekData.pending } };
+
+  for (const date of Object.keys(updated.pending)) {
+    updated.pending[date] = { ...updated.pending[date] };
+    for (const time of Object.keys(updated.pending[date]!)) {
+      const p = updated.pending[date]![time]!;
+      if (now - new Date(p.createdAt).getTime() > maxAge) {
+        delete updated.pending[date]![time];
+        changed = true;
+      }
+    }
+    if (Object.keys(updated.pending[date]!).length === 0) {
+      delete updated.pending[date];
+    }
+  }
+
+  if (changed) saveWeek(updated);
+  return changed ? updated : weekData;
+}
+
+export function generateAndStoreSuggestions(startedAt: string, durationActual: number): void {
+  const suggestions = generatePomodoroSuggestions(startedAt, durationActual);
+  if (suggestions.length === 0) return;
+
+  // Group by week
+  const byWeek = new Map<string, typeof suggestions>();
+  for (const s of suggestions) {
+    const d = new Date(s.date + 'T00:00:00');
+    const ws = getISOWeekStr(getMondayOfWeek(d));
+    if (!byWeek.has(ws)) byWeek.set(ws, []);
+    byWeek.get(ws)!.push(s);
+  }
+
+  for (const [ws, weekSuggestions] of byWeek) {
+    let week = loadWeek(ws);
+    if (!week) {
+      const monday = new Date(weekSuggestions[0]!.date + 'T00:00:00');
+      week = createWeek(monday);
+    }
+    addPendingSuggestions(week, weekSuggestions, 'pomodoro', startedAt, durationActual);
+  }
+}
+
+// ─── Domain Rules ────────────────────────────────────────────────────────────
+
+export interface DomainRule {
+  pattern: string;    // "youtube.com", "9anime.*"
+  category: string;   // "W", "D"
+}
+
+export interface TrackerConfigFull {
+  categories: SlotCategory[];
+  domainRules: DomainRule[];
+}
+
+export function loadTrackerConfigFull(): TrackerConfigFull {
+  try {
+    if (fs.existsSync(TRACKER_CONFIG_PATH)) {
+      const raw = JSON.parse(fs.readFileSync(TRACKER_CONFIG_PATH, 'utf8'));
+      return {
+        categories: raw.categories ?? CATEGORIES,
+        domainRules: raw.domainRules ?? [],
+      };
+    }
+  } catch { /* ignore */ }
+  return { categories: CATEGORIES, domainRules: [] };
+}
+
+export function saveTrackerConfigFull(config: TrackerConfigFull): void {
+  fs.mkdirSync(path.dirname(TRACKER_CONFIG_PATH), { recursive: true });
+  fs.writeFileSync(TRACKER_CONFIG_PATH, JSON.stringify(config, null, 2));
+}
+
+export function matchDomain(domain: string, rules: DomainRule[]): string | null {
+  for (const rule of rules) {
+    // Convert glob pattern to regex
+    const escaped = rule.pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+    const regex = new RegExp(`^${escaped}$`, 'i');
+    if (regex.test(domain)) return rule.category;
+  }
+  return null;
+}
+
+export function generateWebSuggestions(
+  slotBreakdown: { time: string; domain: string; activeMinutes: number }[],
+  rules: DomainRule[],
+): { time: string; code: string }[] {
+  const suggestions: { time: string; code: string }[] = [];
+  for (const slot of slotBreakdown) {
+    if (slot.activeMinutes < 15) continue;
+    const cat = matchDomain(slot.domain, rules);
+    if (cat) suggestions.push({ time: slot.time, code: cat });
+  }
+  return suggestions;
 }

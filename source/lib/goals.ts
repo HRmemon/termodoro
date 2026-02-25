@@ -8,14 +8,16 @@ export interface TrackedGoal {
   id: string;
   name: string;
   color: string;
-  type: 'manual' | 'auto';
+  type: 'manual' | 'auto' | 'rate';
   autoProject?: string;
+  rateMax?: number;  // for rate type, default 5
 }
 
 export interface GoalsData {
   goals: TrackedGoal[];
   completions: Record<string, string[]>;  // goalId -> ["2026-02-25", ...]
   overrides: Record<string, string[]>;    // goalId -> dates toggled OFF despite auto
+  ratings: Record<string, Record<string, number>>;  // goalId -> date -> value (for rate type)
 }
 
 const GOALS_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'goals.json');
@@ -27,10 +29,13 @@ function ensureDir() {
 export function loadGoals(): GoalsData {
   try {
     if (fs.existsSync(GOALS_PATH)) {
-      return JSON.parse(fs.readFileSync(GOALS_PATH, 'utf8'));
+      const raw = JSON.parse(fs.readFileSync(GOALS_PATH, 'utf8'));
+      // Backward compat: old files may lack ratings
+      if (!raw.ratings) raw.ratings = {};
+      return raw;
     }
   } catch { /* ignore */ }
-  return { goals: [], completions: {}, overrides: {} };
+  return { goals: [], completions: {}, overrides: {}, ratings: {} };
 }
 
 export function saveGoals(data: GoalsData): void {
@@ -43,6 +48,7 @@ export function addGoal(goal: TrackedGoal): GoalsData {
   data.goals.push(goal);
   data.completions[goal.id] = [];
   data.overrides[goal.id] = [];
+  if (goal.type === 'rate') data.ratings[goal.id] = {};
   saveGoals(data);
   return data;
 }
@@ -62,6 +68,7 @@ export function removeGoal(id: string): GoalsData {
   data.goals = data.goals.filter(g => g.id !== id);
   delete data.completions[id];
   delete data.overrides[id];
+  delete data.ratings[id];
   saveGoals(data);
   return data;
 }
@@ -128,7 +135,25 @@ function checkAutoComplete(goal: TrackedGoal, date: string): boolean {
   );
 }
 
+export function setRating(goalId: string, date: string, value: number, data: GoalsData): GoalsData {
+  if (!data.ratings[goalId]) data.ratings[goalId] = {};
+  if (value <= 0) {
+    delete data.ratings[goalId]![date];
+  } else {
+    data.ratings[goalId]![date] = value;
+  }
+  saveGoals(data);
+  return data;
+}
+
+export function getRating(goal: TrackedGoal, date: string, data: GoalsData): number {
+  return data.ratings[goal.id]?.[date] ?? 0;
+}
+
 export function isGoalComplete(goal: TrackedGoal, date: string, data: GoalsData): boolean {
+  if (goal.type === 'rate') {
+    return (data.ratings[goal.id]?.[date] ?? 0) > 0;
+  }
   if (goal.type === 'auto') {
     const overrides = data.overrides[goal.id] ?? [];
     if (overrides.includes(date)) return false;

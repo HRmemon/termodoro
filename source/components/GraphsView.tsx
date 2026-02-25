@@ -6,15 +6,16 @@ import {
   loadGoals, addGoal, removeGoal, updateGoal, toggleCompletion,
   isGoalComplete, computeStreak, getTodayStr, getRecentWeeks,
   getAllProjects, GOAL_COLORS, GoalsData, TrackedGoal,
+  setRating, getRating,
 } from '../lib/goals.js';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKS_TO_SHOW = 8;
 
 type ViewMode = 'main' | 'add' | 'edit' | 'delete-confirm';
-type AddStep = 'name' | 'type' | 'project' | 'color';
+type AddStep = 'name' | 'type' | 'project' | 'rateMax' | 'color';
 
-export function GraphsView() {
+export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void }) {
   const [data, setData] = useState<GoalsData>(() => loadGoals());
   const [activeTab, setActiveTab] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('main');
@@ -26,8 +27,9 @@ export function GraphsView() {
   // Add goal state
   const [addStep, setAddStep] = useState<AddStep>('name');
   const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<'manual' | 'auto'>('manual');
+  const [newType, setNewType] = useState<'manual' | 'auto' | 'rate'>('manual');
   const [newProject, setNewProject] = useState('');
+  const [newRateMax, setNewRateMax] = useState('5');
   const [newColorIdx, setNewColorIdx] = useState(0);
 
   // Project autocomplete (Part 5)
@@ -71,7 +73,9 @@ export function GraphsView() {
     setNewName('');
     setNewType('manual');
     setNewProject('');
+    setNewRateMax('5');
     setNewColorIdx(data.goals.length % GOAL_COLORS.length);
+    setIsTyping(true);
   }, [data.goals.length]);
 
   // Part 8: Start edit
@@ -82,27 +86,31 @@ export function GraphsView() {
     setNewName(activeGoal.name);
     setNewType(activeGoal.type);
     setNewProject(activeGoal.autoProject ?? '');
+    setNewRateMax(String(activeGoal.rateMax ?? 5));
     setNewColorIdx(Math.max(0, GOAL_COLORS.indexOf(activeGoal.color)));
+    setIsTyping(true);
   }, [activeGoal]);
 
   const handleFinishAdd = useCallback(() => {
-    if (!newName.trim()) { setViewMode('main'); return; }
+    if (!newName.trim()) { setViewMode('main'); setIsTyping(false); return; }
     const goal: TrackedGoal = {
       id: nanoid(),
       name: newName.trim(),
       color: GOAL_COLORS[newColorIdx]!,
       type: newType,
       ...(newType === 'auto' && newProject.trim() ? { autoProject: newProject.trim() } : {}),
+      ...(newType === 'rate' ? { rateMax: Math.max(1, parseInt(newRateMax, 10) || 5) } : {}),
     };
     const updated = addGoal(goal);
     setData(updated);
     setActiveTab(updated.goals.length - 1);
     setViewMode('main');
-  }, [newName, newType, newProject, newColorIdx]);
+    setIsTyping(false);
+  }, [newName, newType, newProject, newRateMax, newColorIdx]);
 
   // Part 8: Finish edit
   const handleFinishEdit = useCallback(() => {
-    if (!activeGoal || !newName.trim()) { setViewMode('main'); return; }
+    if (!activeGoal || !newName.trim()) { setViewMode('main'); setIsTyping(false); return; }
     const updates: Partial<Omit<TrackedGoal, 'id'>> = {
       name: newName.trim(),
       color: GOAL_COLORS[newColorIdx]!,
@@ -113,10 +121,16 @@ export function GraphsView() {
     } else {
       updates.autoProject = undefined;
     }
+    if (newType === 'rate') {
+      updates.rateMax = Math.max(1, parseInt(newRateMax, 10) || 5);
+    } else {
+      updates.rateMax = undefined;
+    }
     const updated = updateGoal(activeGoal.id, updates);
     setData(updated);
     setViewMode('main');
-  }, [activeGoal, newName, newType, newProject, newColorIdx]);
+    setIsTyping(false);
+  }, [activeGoal, newName, newType, newProject, newRateMax, newColorIdx]);
 
   const handleConfirmDelete = useCallback(() => {
     if (!deleteTarget) return;
@@ -145,19 +159,25 @@ export function GraphsView() {
     }
 
     if (viewMode === 'add' || viewMode === 'edit') {
-      if (key.escape) { setViewMode('main'); return; }
+      if (key.escape) { setViewMode('main'); setIsTyping(false); return; }
 
       if (addStep === 'name') {
         return;
       }
       if (addStep === 'type') {
         if (input === 'm' || input === 'M') { setNewType('manual'); setAddStep('color'); }
-        else if (input === 'a' || input === 'A') { setNewType('auto'); setAddStep('project'); }
+        else if (input === 'a' || input === 'A') { setNewType('auto'); setAddStep('project'); setIsTyping(true); }
+        else if (input === 'r' || input === 'R') { setNewType('rate'); setAddStep('rateMax'); setIsTyping(true); }
         else if (key.return) {
-          if (newType === 'auto') setAddStep('project');
+          if (newType === 'auto') { setAddStep('project'); setIsTyping(true); }
+          else if (newType === 'rate') { setAddStep('rateMax'); setIsTyping(true); }
           else setAddStep('color');
         }
-        else if (key.tab) setNewType(t => t === 'manual' ? 'auto' : 'manual');
+        else if (key.tab) setNewType(t => t === 'manual' ? 'auto' : t === 'auto' ? 'rate' : 'manual');
+        return;
+      }
+      if (addStep === 'rateMax') {
+        // TextInput handles input
         return;
       }
       if (addStep === 'project') {
@@ -198,6 +218,14 @@ export function GraphsView() {
     } else if (key.rightArrow) {
       moveDateBy(1);
     }
+    else if (activeGoal?.type === 'rate' && /^[0-9]$/.test(input)) {
+      const value = parseInt(input, 10);
+      const max = activeGoal.rateMax ?? 5;
+      if (value <= max) {
+        const updated = setRating(activeGoal.id, selectedDate, value, { ...data });
+        setData(updated);
+      }
+    }
     else if (key.return || input === 'x') {
       handleToggleDate();
     } else if (input === 'a') {
@@ -235,7 +263,7 @@ export function GraphsView() {
                 value={newName}
                 onChange={setNewName}
                 onSubmit={() => {
-                  if (newName.trim()) setAddStep('type');
+                  if (newName.trim()) { setAddStep('type'); setIsTyping(false); }
                 }}
               />
             </Box>
@@ -248,8 +276,23 @@ export function GraphsView() {
                 <Text color={newType === 'manual' ? 'cyan' : 'gray'} bold={newType === 'manual'}>[m] manual</Text>
                 <Text>  </Text>
                 <Text color={newType === 'auto' ? 'cyan' : 'gray'} bold={newType === 'auto'}>[a] auto</Text>
+                <Text>  </Text>
+                <Text color={newType === 'rate' ? 'cyan' : 'gray'} bold={newType === 'rate'}>[r] rate</Text>
               </Box>
               <Text dimColor>Tab to toggle, Enter to confirm</Text>
+            </Box>
+          )}
+          {addStep === 'rateMax' && (
+            <Box flexDirection="column">
+              <Text>Name: <Text bold>{newName}</Text>  Type: <Text bold>rate</Text></Text>
+              <Box marginTop={1}>
+                <Text>Max rating (1-9, default 5): </Text>
+                <TextInput
+                  value={newRateMax}
+                  onChange={setNewRateMax}
+                  onSubmit={() => { setAddStep('color'); setIsTyping(false); }}
+                />
+              </Box>
             </Box>
           )}
           {addStep === 'project' && (
@@ -260,7 +303,7 @@ export function GraphsView() {
                 <TextInput
                   value={newProject}
                   onChange={setNewProject}
-                  onSubmit={() => setAddStep('color')}
+                  onSubmit={() => { setAddStep('color'); setIsTyping(false); }}
                 />
               </Box>
               {/* Project suggestions */}
@@ -372,6 +415,15 @@ export function GraphsView() {
 
 // ─── Goal Section Component ──────────────────────────────────────────────────
 
+const SHADE_CHARS = ['·', '░', '▒', '▓', '█'];
+
+function ratingToShade(rating: number, max: number): string {
+  if (rating <= 0) return SHADE_CHARS[0]!;
+  const ratio = Math.min(rating / max, 1);
+  const idx = Math.min(Math.round(ratio * (SHADE_CHARS.length - 1)), SHADE_CHARS.length - 1);
+  return SHADE_CHARS[idx]!;
+}
+
 function GoalSection({
   goal, data, weeks, today, selectedDate, compact
 }: {
@@ -382,6 +434,8 @@ function GoalSection({
   selectedDate: string;
   compact?: boolean;
 }) {
+  const isRate = goal.type === 'rate';
+  const rateMax = goal.rateMax ?? 5;
   const streak = useMemo(() => computeStreak(goal.id, data), [goal.id, data]);
 
   const totalDays = useMemo(() => {
@@ -394,14 +448,22 @@ function GoalSection({
     return count;
   }, [goal, data, weeks]);
 
+  const avgRating = useMemo(() => {
+    if (!isRate) return 0;
+    const ratings = data.ratings[goal.id] ?? {};
+    const values = Object.values(ratings).filter(v => v > 0);
+    if (values.length === 0) return 0;
+    return values.reduce((s, v) => s + v, 0) / values.length;
+  }, [goal, data, isRate]);
+
   const thisWeek = weeks[weeks.length - 1] ?? [];
   const thisWeekDone = thisWeek.filter(d => isGoalComplete(goal, d, data)).length;
 
   return (
     <Box flexDirection="column" marginBottom={compact ? 1 : 0}>
       <Box>
-        <Text bold color={goal.color as any}>{'\u2500\u2500 '}{goal.name}</Text>
-        <Text dimColor> ({goal.type}){compact ? `  ${totalDays}d  streak:${streak.current}d  best:${streak.best}d` : ''}</Text>
+        <Text bold color={goal.color as any}>{'── '}{goal.name}</Text>
+        <Text dimColor> ({goal.type}{isRate ? ` 0-${rateMax}` : ''}){compact ? `  ${totalDays}d  streak:${streak.current}d  best:${streak.best}d${isRate ? `  avg:${avgRating.toFixed(1)}` : ''}` : ''}</Text>
       </Box>
 
       {/* Heatmap grid */}
@@ -421,17 +483,30 @@ function GoalSection({
             {weeks.map((weekDates, wi) => {
               const date = weekDates[dayIdx]!;
               const isFuture = date > today;
-              const done = !isFuture && isGoalComplete(goal, date, data);
               const isToday = date === today;
               const isSelected = date === selectedDate;
+              const suffix = isSelected ? '◄ ' : isToday ? '* ' : '  ';
 
               if (isFuture) {
-                return <Text key={wi} dimColor>{isSelected ? '\u2591\u25c4 ' : '\u2591  '}</Text>;
+                return <Text key={wi} dimColor>{isSelected ? '░◄ ' : '░  '}</Text>;
               }
+
+              if (isRate) {
+                const rating = getRating(goal, date, data);
+                const shade = ratingToShade(rating, rateMax);
+                const hasRating = rating > 0;
+                return (
+                  <Text key={wi} color={hasRating ? goal.color as any : undefined} dimColor={!hasRating} bold={isSelected}>
+                    {shade}{suffix}
+                  </Text>
+                );
+              }
+
+              const done = isGoalComplete(goal, date, data);
               if (done) {
-                return <Text key={wi} color={goal.color as any} bold={isSelected}>{isSelected ? '\u2588\u25c4 ' : isToday ? '\u2588* ' : '\u2588  '}</Text>;
+                return <Text key={wi} color={goal.color as any} bold={isSelected}>{'█'}{suffix}</Text>;
               }
-              return <Text key={wi} color={isSelected ? 'white' : undefined} dimColor={!isSelected} bold={isSelected}>{isSelected ? '\u00b7\u25c4 ' : isToday ? '\u00b7* ' : '\u00b7  '}</Text>;
+              return <Text key={wi} color={isSelected ? 'white' : undefined} dimColor={!isSelected} bold={isSelected}>{'·'}{suffix}</Text>;
             })}
           </Box>
         ))}
@@ -439,13 +514,21 @@ function GoalSection({
 
       {!compact && (
         <Box flexDirection="column" marginTop={1}>
-          <Text dimColor>{'\u00b7'} = not done  {'\u2588'} = done  * = today  {'\u25c4'} = selected  {'\u2591'} = future</Text>
+          {isRate ? (
+            <Text dimColor>{'·'} = none  {'░▒▓█'} = rating intensity  * = today  {'◄'} = selected</Text>
+          ) : (
+            <Text dimColor>{'·'} = not done  {'█'} = done  * = today  {'◄'} = selected  {'░'} = future</Text>
+          )}
           <Box marginTop={1}>
             <Text>Total: <Text bold>{totalDays}d</Text></Text>
             <Text>{'  '}Streak: <Text bold color={streak.current > 0 ? 'green' : undefined}>{streak.current}d</Text></Text>
             <Text>{'  '}Best: <Text bold>{streak.best}d</Text></Text>
+            {isRate && <Text>{'  '}Avg: <Text bold color="yellow">{avgRating.toFixed(1)}/{rateMax}</Text></Text>}
           </Box>
           <Text>This week: <Text bold>{thisWeekDone}/7</Text></Text>
+          {isRate && selectedDate && (
+            <Text dimColor>Selected: {getRating(goal, selectedDate, data)}/{rateMax}  (press 0-{rateMax} to rate)</Text>
+          )}
         </Box>
       )}
     </Box>

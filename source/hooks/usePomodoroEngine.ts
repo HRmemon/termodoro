@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import type { Config, Session, SessionType, SequenceBlock } from '../types.js';
 import { appendSession } from '../lib/store.js';
 import { notifySessionEnd } from '../lib/notify.js';
+import { generateAndStoreSuggestions } from '../lib/tracker.js';
 
 export interface EngineState {
   sessionType: SessionType;
@@ -103,7 +104,13 @@ export function usePomodoroEngine(config: Config, initialState?: EngineInitialSt
 
   const completeSession = useCallback(() => {
     notifySessionEnd(sessionType, config.sound, config.notifications, config.notificationDuration, config.sounds);
-    saveSession('completed');
+    const session = saveSession('completed');
+    // Generate tracker suggestions for completed work sessions
+    if (sessionType === 'work' && sessionStartRef.current) {
+      try {
+        generateAndStoreSuggestions(sessionStartRef.current, session.durationActual);
+      } catch { /* don't let tracker errors break the timer */ }
+    }
     advanceToNext();
   }, [sessionType, config, saveSession, advanceToNext]);
 

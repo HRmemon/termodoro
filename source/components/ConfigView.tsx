@@ -5,7 +5,7 @@ import type { Config } from '../types.js';
 import { saveConfig } from '../lib/config.js';
 import { ALL_SOUND_CHOICES, SOUND_LABELS, previewSound } from '../lib/sounds.js';
 import type { SoundEvent } from '../lib/sounds.js';
-import { loadTrackerConfig, saveTrackerConfig, SlotCategory } from '../lib/tracker.js';
+import { loadTrackerConfig, saveTrackerConfig, SlotCategory, DomainRule, loadTrackerConfigFull, saveTrackerConfigFull, getCategoryByCode } from '../lib/tracker.js';
 
 interface ConfigViewProps {
   config: Config;
@@ -64,6 +64,21 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
   const [catEditLabel, setCatEditLabel] = useState('');
   const [catEditColor, setCatEditColor] = useState('cyan');
   const [catEditKey, setCatEditKey] = useState('');
+
+  // Domain rules sub-mode
+  const [ruleMode, setRuleMode] = useState(false);
+  const [ruleList, setRuleList] = useState<DomainRule[]>(() => loadTrackerConfigFull().domainRules);
+  const [ruleCursor, setRuleCursor] = useState(0);
+  const [ruleEditing, setRuleEditing] = useState<'add' | 'edit' | null>(null);
+  const [ruleEditStep, setRuleEditStep] = useState<'pattern' | 'category'>('pattern');
+  const [ruleEditPattern, setRuleEditPattern] = useState('');
+  const [ruleEditCatIdx, setRuleEditCatIdx] = useState(0);
+
+  const saveRules = useCallback((rules: DomainRule[]) => {
+    setRuleList(rules);
+    const full = loadTrackerConfigFull();
+    saveTrackerConfigFull({ ...full, domainRules: rules });
+  }, []);
 
   const CAT_COLORS = ['cyan', 'blueBright', 'green', 'yellow', 'blue', 'gray', 'red', 'redBright', 'magenta', 'white'];
 
@@ -141,6 +156,64 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
       return;
     }
 
+    // Domain rule edit sub-flow
+    if (ruleEditing) {
+      if (key.escape) { setRuleEditing(null); setIsTyping(false); return; }
+      if (ruleEditStep === 'pattern') return; // TextInput handles
+      if (ruleEditStep === 'category') {
+        if (input === 'h' || key.leftArrow) {
+          setRuleEditCatIdx(i => (i - 1 + catList.length) % catList.length);
+        } else if (input === 'l' || key.rightArrow) {
+          setRuleEditCatIdx(i => (i + 1) % catList.length);
+        } else if (key.return) {
+          // Finish
+          if (ruleEditPattern.trim()) {
+            const rule: DomainRule = {
+              pattern: ruleEditPattern.trim(),
+              category: catList[ruleEditCatIdx]?.code ?? 'D',
+            };
+            if (ruleEditing === 'add') {
+              saveRules([...ruleList, rule]);
+            } else {
+              const newList = [...ruleList];
+              newList[ruleCursor] = rule;
+              saveRules(newList);
+            }
+          }
+          setRuleEditing(null);
+          setIsTyping(false);
+        }
+        return;
+      }
+      return;
+    }
+
+    // Domain rule list mode
+    if (ruleMode) {
+      if (key.escape) { setRuleMode(false); return; }
+      if (input === 'j' || key.downArrow) setRuleCursor(p => Math.min(p + 1, ruleList.length - 1));
+      else if (input === 'k' || key.upArrow) setRuleCursor(p => Math.max(0, p - 1));
+      else if (input === 'a') {
+        setRuleEditing('add');
+        setRuleEditStep('pattern');
+        setRuleEditPattern('');
+        setRuleEditCatIdx(0);
+        setIsTyping(true);
+      } else if (input === 'e' && ruleList.length > 0) {
+        const rule = ruleList[ruleCursor]!;
+        setRuleEditing('edit');
+        setRuleEditStep('pattern');
+        setRuleEditPattern(rule.pattern);
+        setRuleEditCatIdx(Math.max(0, catList.findIndex(c => c.code === rule.category)));
+        setIsTyping(true);
+      } else if (input === 'd' && ruleList.length > 0) {
+        const newList = ruleList.filter((_, i) => i !== ruleCursor);
+        saveRules(newList);
+        setRuleCursor(p => Math.min(p, newList.length - 1));
+      }
+      return;
+    }
+
     // Category list mode
     if (catMode) {
       if (key.escape) { setCatMode(false); return; }
@@ -179,8 +252,8 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
       return;
     }
 
-    // Total items = FIELDS.length + 1 (for "Tracker Categories" entry)
-    const totalItems = FIELDS.length + 1;
+    // Total items = FIELDS.length + 2 (for "Tracker Categories" and "Domain Rules")
+    const totalItems = FIELDS.length + 2;
 
     if (input === 'j' || key.downArrow) {
       setSelectedIdx(i => Math.min(i + 1, totalItems - 1));
@@ -197,6 +270,13 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
         setCatMode(true);
         setCatCursor(0);
         setCatList(loadTrackerConfig().categories);
+        return;
+      }
+      // Check if on the "Domain Rules" row
+      if (selectedIdx === FIELDS.length + 1) {
+        setRuleMode(true);
+        setRuleCursor(0);
+        setRuleList(loadTrackerConfigFull().domainRules);
         return;
       }
 
@@ -291,6 +371,67 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
     setCatEditing(null);
     setIsTyping(false);
   }, [catEditing, catEditCode, catEditLabel, catEditColor, catEditKey, catList, catCursor, saveCats, setIsTyping]);
+
+  // ─── Domain Rule Editor Sub-mode ─────────────────────────────────────────────
+
+  if (ruleEditing) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <Text bold color="cyan">{ruleEditing === 'add' ? 'Add' : 'Edit'} Domain Rule</Text>
+        <Text dimColor>Esc to cancel</Text>
+        <Box marginTop={1} flexDirection="column">
+          {ruleEditStep === 'pattern' && (
+            <Box>
+              <Text>Domain pattern: </Text>
+              <TextInput
+                value={ruleEditPattern}
+                onChange={setRuleEditPattern}
+                onSubmit={() => { if (ruleEditPattern.trim()) { setRuleEditStep('category'); setIsTyping(false); } }}
+              />
+            </Box>
+          )}
+          {ruleEditStep === 'category' && (
+            <Box flexDirection="column">
+              <Text>Pattern: <Text bold>{ruleEditPattern}</Text></Text>
+              <Box marginTop={1}>
+                <Text>Category: </Text>
+                {catList.map((cat, i) => (
+                  <Text key={cat.code} color={i === ruleEditCatIdx ? 'cyan' : 'gray'} bold={i === ruleEditCatIdx}>
+                    {i === ruleEditCatIdx ? '[' : ' '}{cat.code}{i === ruleEditCatIdx ? ']' : ' '}
+                  </Text>
+                ))}
+              </Box>
+              <Text dimColor>h/l to select, Enter to save</Text>
+            </Box>
+          )}
+        </Box>
+      </Box>
+    );
+  }
+
+  // ─── Domain Rule List Sub-mode ─────────────────────────────────────────────
+
+  if (ruleMode) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <Text bold color="cyan">Domain Rules</Text>
+        <Text dimColor>a:add  e:edit  d:delete  Esc:back</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {ruleList.map((rule, i) => (
+            <Box key={`${rule.pattern}-${i}`}>
+              <Text color={i === ruleCursor ? 'yellow' : 'gray'} bold={i === ruleCursor}>
+                {i === ruleCursor ? '> ' : '  '}
+              </Text>
+              <Box width={25}><Text>{rule.pattern}</Text></Box>
+              <Text color="cyan">{' → '}</Text>
+              <Text color={getCategoryByCode(rule.category)?.color as any ?? 'white'}>{rule.category}</Text>
+            </Box>
+          ))}
+          {ruleList.length === 0 && <Text dimColor>No domain rules. Press a to add one.</Text>}
+        </Box>
+      </Box>
+    );
+  }
 
   // ─── Category Editor Sub-mode ───────────────────────────────────────────────
 
@@ -445,6 +586,18 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
         </Box>
         <Text color="cyan" bold={selectedIdx === FIELDS.length}>{catList.length} categories</Text>
         {selectedIdx === FIELDS.length && <Text dimColor>  Enter to manage</Text>}
+      </Box>
+
+      {/* Domain Rules entry */}
+      <Box>
+        <Text color={selectedIdx === FIELDS.length + 1 ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length + 1}>
+          {selectedIdx === FIELDS.length + 1 ? '> ' : '  '}
+        </Text>
+        <Box width={22}>
+          <Text color={selectedIdx === FIELDS.length + 1 ? 'white' : 'gray'}>Domain Rules</Text>
+        </Box>
+        <Text color="cyan" bold={selectedIdx === FIELDS.length + 1}>{ruleList.length} rules</Text>
+        {selectedIdx === FIELDS.length + 1 && <Text dimColor>  Enter to manage</Text>}
       </Box>
 
       {saved && (

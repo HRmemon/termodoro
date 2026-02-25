@@ -3,6 +3,7 @@ import { useInput, useApp } from 'ink';
 import { nanoid } from 'nanoid';
 import type { Config, View, SessionType } from './types.js';
 import { loadSessions, appendSession, loadTimerState, saveTimerState, clearTimerState } from './lib/store.js';
+import { generateAndStoreSuggestions } from './lib/tracker.js';
 import type { TimerSnapshot } from './lib/store.js';
 import type { TimerInitialState } from './hooks/useTimer.js';
 import type { EngineInitialState } from './hooks/usePomodoroEngine.js';
@@ -88,6 +89,12 @@ export function App({ config: initialConfig, initialView }: AppProps) {
           durationPlanned: snapshot.totalSeconds,
           durationActual: snapshot.totalSeconds,
         });
+        // Generate tracker suggestions for off-app completed work sessions
+        if (snapshot.sessionType === 'work') {
+          try {
+            generateAndStoreSuggestions(snapshot.startedAt, snapshot.totalSeconds);
+          } catch { /* ignore */ }
+        }
         clearTimerState();
 
         // Compute next session type
@@ -659,7 +666,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       )}
       {view === 'web' && <WebView />}
       {view === 'tracker' && <TrackerView />}
-      {view === 'graphs' && <GraphsView />}
+      {view === 'graphs' && <GraphsView setIsTyping={setIsTyping} />}
     </Layout>
   );
 }

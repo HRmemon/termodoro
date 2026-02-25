@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { View } from '../types.js';
 import { colors } from '../lib/theme.js';
+import { getCategories } from '../lib/tracker.js';
 
 interface KeysBarProps {
   view: View;
@@ -90,8 +91,10 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     actionHints.push({ key: 'j/k', label: 'Scroll' });
     actionHints.push({ key: 'h/l', label: 'Days' });
     actionHints.push({ key: 'e', label: 'Picker' });
-    actionHints.push({ key: '[key]', label: 'Quick set' });
+    const quickKeys = getCategories().filter(c => c.key).map(c => c.key).join('/');
+    if (quickKeys) actionHints.push({ key: quickKeys, label: 'Quick set' });
     actionHints.push({ key: '.', label: 'Clear' });
+    actionHints.push({ key: 'r', label: 'Review' });
     actionHints.push({ key: 'd/w', label: 'Summary' });
     actionHints.push({ key: 'n', label: 'New week' });
     actionHints.push({ key: 'b', label: 'Browse' });
@@ -101,6 +104,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     actionHints.push({ key: 'h/l', label: 'Switch' });
     actionHints.push({ key: '\u2190\u2192', label: 'Select date' });
     actionHints.push({ key: 'Enter', label: 'Toggle date' });
+    actionHints.push({ key: '0-N', label: 'Rate' });
     actionHints.push({ key: 'a', label: 'Add' });
     actionHints.push({ key: 'e', label: 'Edit' });
     actionHints.push({ key: 'd', label: 'Delete' });
