@@ -185,9 +185,11 @@ if (command === 'daemon') {
     const serviceDir = path.join(os.default.homedir(), '.config', 'systemd', 'user');
     fs.mkdirSync(serviceDir, { recursive: true });
 
-    // Resolve the actual binary path
-    const binPath = process.argv[1]!;
+    // Always use compiled dist/cli.js for systemd (not tsx source)
     const nodeExec = process.execPath;
+    const resolvedScript = path.resolve(process.argv[1]!);
+    const distCli = resolvedScript.replace(/\/source\/cli\.tsx$/, '/dist/cli.js')
+      .replace(/\/source\/cli\.ts$/, '/dist/cli.js');
 
     const serviceContent = `[Unit]
 Description=pomodorocli Timer Daemon
@@ -195,7 +197,7 @@ After=default.target
 
 [Service]
 Type=simple
-ExecStart=${nodeExec} ${path.resolve(binPath)} daemon start
+ExecStart=${nodeExec} ${distCli} daemon start
 Restart=on-failure
 RestartSec=3
 Environment=NODE_ENV=production
