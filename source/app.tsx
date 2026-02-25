@@ -355,6 +355,41 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         }
         break;
       }
+      case 'remind': {
+        const remindMatch = args.trim().match(/^(\d+)\s*(s|m|h)(?:\s+(.+))?$/i);
+        if (remindMatch) {
+          const amount = parseInt(remindMatch[1]!, 10);
+          const unit = remindMatch[2]!.toLowerCase();
+          let ms = 0;
+          if (unit === 's') ms = amount * 1000;
+          else if (unit === 'm') ms = amount * 60 * 1000;
+          else if (unit === 'h') ms = amount * 60 * 60 * 1000;
+
+          const label = remindMatch[3]?.trim() || `${amount}${unit} timer`;
+
+          // Store as a real reminder so it shows in the list
+          const fireAt = new Date(Date.now() + ms);
+          const fireTime = `${String(fireAt.getHours()).padStart(2, '0')}:${String(fireAt.getMinutes()).padStart(2, '0')}`;
+          const reminderId = nanoid();
+          addReminder({
+            id: reminderId,
+            time: fireTime,
+            title: label,
+            enabled: true,
+            recurring: false,
+          });
+
+          // Use setTimeout for accurate firing (don't rely on 30s polling)
+          setTimeout(() => {
+            notifyReminder(label, `Timer: ${label}`, config.sound, config.notificationDuration, config.sounds);
+            // Disable after firing
+            updateReminder(reminderId, { enabled: false });
+          }, ms);
+
+          setView('reminders');
+        }
+        break;
+      }
       case 'quit':
         engineActions.abandonSession();
         exit();

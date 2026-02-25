@@ -3,14 +3,10 @@ import { Box, Text, useInput } from 'ink';
 import { Heatmap } from './Heatmap.js';
 import { colors } from '../lib/theme.js';
 import { BarChart } from './BarChart.js';
-import { Sparkline } from './Sparkline.js';
-import { Achievements } from './Achievements.js';
 import {
   getDailyStats,
   getWeeklyStats,
-  getDeepWorkRatio,
   getTaskBreakdown,
-  getStreaks,
 } from '../lib/stats.js';
 import { loadSessions } from '../lib/store.js';
 import { loadTasks } from '../lib/tasks.js';
@@ -45,7 +41,7 @@ function getTodayString(): string {
   return `${y}-${m}-${d}`;
 }
 
-const SECTION_NAMES = ['Today', 'Week', 'Deep Work', 'Streaks', 'Projects', 'Tasks', 'Recent', 'Achievements'];
+const SECTION_NAMES = ['Today', 'Week', 'Projects', 'Tasks', 'Recent'];
 
 export function ReportsView() {
   const [selectedSection, setSelectedSection] = useState(0);
@@ -70,9 +66,7 @@ export function ReportsView() {
     return {
       daily: getDailyStats(today),
       weekly: getWeeklyStats(weekStart),
-      deepWork: getDeepWorkRatio(allSessions),
       breakdown: getTaskBreakdown(allSessions),
-      streaks: getStreaks(),
       recentSessions: allSessions
         .filter(s => s.type === 'work' && s.status === 'completed')
         .slice(-10)
@@ -98,18 +92,15 @@ export function ReportsView() {
     }
   });
 
-  const { daily, weekly, deepWork, breakdown, streaks, recentSessions, taskProjects } = data;
+  const { daily, weekly, breakdown, recentSessions, taskProjects } = data;
 
   const renderSection = (): React.ReactNode => {
     switch (selectedSection) {
       case 0: return <TodaySection daily={daily} />;
       case 1: return <WeekSection weekly={weekly} />;
-      case 2: return <DeepWorkSection deepWork={deepWork} />;
-      case 3: return <StreaksSection streaks={streaks} />;
-      case 4: return <ProjectsSection breakdown={breakdown} />;
-      case 5: return <TaskProjectsSection taskProjects={taskProjects} />;
-      case 6: return <RecentSection sessions={recentSessions} />;
-      case 7: return <Achievements />;
+      case 2: return <ProjectsSection breakdown={breakdown} />;
+      case 3: return <TaskProjectsSection taskProjects={taskProjects} />;
+      case 4: return <RecentSection sessions={recentSessions} />;
       default: return null;
     }
   };
@@ -181,56 +172,6 @@ function WeekSection({ weekly }: { weekly: ReturnType<typeof getWeeklyStats> }) 
           <Text dimColor>Avg session</Text>
         </Box>
         <Text>{formatMinutes(weekly.avgSessionLength)}</Text>
-      </Box>
-      <Box>
-        <Box width={20}>
-          <Text dimColor>Longest streak</Text>
-        </Box>
-        <Text color={colors.highlight}>{weekly.longestStreak}d</Text>
-      </Box>
-    </Box>
-  );
-}
-
-function DeepWorkSection({ deepWork }: { deepWork: ReturnType<typeof getDeepWorkRatio> }) {
-  const trendArrow = deepWork.trend === 'up' ? '↑' : deepWork.trend === 'down' ? '↓' : '→';
-  const trendColor = deepWork.trend === 'up' ? 'green' : deepWork.trend === 'down' ? 'red' : 'yellow';
-
-  return (
-    <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text bold>{Math.round(deepWork.ratio * 100)}%</Text>
-        <Text dimColor> focus ratio </Text>
-        <Text color={trendColor}>{trendArrow}</Text>
-      </Box>
-      <Box>
-        <Text dimColor>7-day trend  </Text>
-        <Sparkline values={deepWork.trendValues} color="cyan" showTrend={false} />
-      </Box>
-    </Box>
-  );
-}
-
-function StreaksSection({ streaks }: { streaks: ReturnType<typeof getStreaks> }) {
-  return (
-    <Box flexDirection="column">
-      <Box>
-        <Box width={20}>
-          <Text dimColor>Current streak</Text>
-        </Box>
-        <Text bold color={colors.highlight}>{streaks.currentStreak}d</Text>
-      </Box>
-      <Box>
-        <Box width={20}>
-          <Text dimColor>Personal best</Text>
-        </Box>
-        <Text>{streaks.personalBest}d</Text>
-      </Box>
-      <Box>
-        <Box width={20}>
-          <Text dimColor>Deep work/wk</Text>
-        </Box>
-        <Text>{formatMinutes(streaks.deepWorkHoursThisWeek * 60)}</Text>
       </Box>
     </Box>
   );

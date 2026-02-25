@@ -19,6 +19,7 @@ const COMMANDS: CommandDef[] = [
   { name: 'task',      args: true,  description: 'Create a task (e.g. :task Fix bug #work /3)' },
   { name: 'reminders', args: false, description: 'Navigate to reminders view' },
   { name: 'reminder',  args: true,  description: 'Create a reminder (e.g. :reminder 09:30 Standup)' },
+  { name: 'remind',   args: true,  description: 'Quick timer (e.g. :remind 3m, :remind 30s, :remind 1h coffee)' },
   { name: 'search',    args: true,  description: 'Search sessions (e.g. :search project:myapp)' },
   { name: 'export',    args: false, description: 'Export sessions to CSV' },
   { name: 'backup',    args: false, description: 'Backup session data' },
