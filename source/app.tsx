@@ -41,24 +41,10 @@ interface AppProps {
   initialSequence?: string;
 }
 
-function DaemonNotRunning() {
-  return (
-    <Box flexDirection="column" padding={2}>
-      <Text bold color="red">Daemon not running</Text>
-      <Text> </Text>
-      <Text>Start the daemon first:</Text>
-      <Text color="cyan">  pomodorocli daemon start</Text>
-      <Text> </Text>
-      <Text dimColor>Or run as a systemd service:</Text>
-      <Text color="cyan">  systemctl --user start pomodorocli</Text>
-    </Box>
-  );
-}
-
-function Connecting() {
+function Connecting({ status }: { status: 'connecting' | 'disconnected' }) {
   return (
     <Box padding={2}>
-      <Text color="yellow">Connecting to daemon...</Text>
+      <Text color="yellow">{status === 'connecting' ? 'Connecting to daemon...' : 'Reconnecting to daemon...'}</Text>
     </Box>
   );
 }
@@ -393,12 +379,8 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   });
 
   // Show connection status screens
-  if (connectionStatus === 'connecting') {
-    return <Connecting />;
-  }
-
-  if (connectionStatus === 'disconnected') {
-    return <DaemonNotRunning />;
+  if (connectionStatus !== 'connected') {
+    return <Connecting status={connectionStatus} />;
   }
 
   // Full-screen overlays
