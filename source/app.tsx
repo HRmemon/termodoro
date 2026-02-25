@@ -444,8 +444,8 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       return;
     }
 
-    if (!isZen && view !== 'graphs') {
-      // CHANGE 1: updated view numbers (skip on graphs — digits used for rating)
+    if (!isZen) {
+      // CHANGE 1: updated view numbers
       if (input === '1') { setView('timer'); return; }
       if (input === '2') { setView('tasks'); return; }
       if (input === '3') { setView('reminders'); return; }

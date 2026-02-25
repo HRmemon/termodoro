@@ -12,7 +12,7 @@ import {
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKS_TO_SHOW = 8;
 
-type ViewMode = 'main' | 'add' | 'edit' | 'delete-confirm';
+type ViewMode = 'main' | 'add' | 'edit' | 'delete-confirm' | 'rate-picker';
 type AddStep = 'name' | 'type' | 'project' | 'rateMax' | 'color';
 
 export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void }) {
@@ -159,6 +159,22 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
       return;
     }
 
+    // Rate picker mode — scoped digit input
+    if (viewMode === 'rate-picker') {
+      if (key.escape) { setViewMode('main'); setIsTyping(false); return; }
+      if (activeGoal?.type === 'rate' && /^[0-9]$/.test(input)) {
+        const value = parseInt(input, 10);
+        const max = activeGoal.rateMax ?? 5;
+        if (value <= max) {
+          const updated = setRating(activeGoal.id, selectedDate, value, { ...data });
+          setData(updated);
+        }
+        setViewMode('main');
+        setIsTyping(false);
+      }
+      return;
+    }
+
     if (viewMode === 'add' || viewMode === 'edit') {
       if (key.escape) { setViewMode('main'); setIsTyping(false); return; }
 
@@ -207,32 +223,34 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     if (key.tab) {
       setActiveTab(t => (t + 1) % tabs.length);
     }
-    // Part 6: h/l tab switching
+    // h/l tab switching
     else if (input === 'h') {
       setActiveTab(t => Math.max(0, t - 1));
     } else if (input === 'l') {
       setActiveTab(t => Math.min(tabs.length - 1, t + 1));
     }
-    // Part 4: date navigation with arrow keys
+    // Date navigation with arrow keys (all 4 directions)
     else if (key.leftArrow) {
       moveDateBy(-1);
     } else if (key.rightArrow) {
       moveDateBy(1);
-    }
-    else if (activeGoal?.type === 'rate' && /^[0-9]$/.test(input)) {
-      const value = parseInt(input, 10);
-      const max = activeGoal.rateMax ?? 5;
-      if (value <= max) {
-        const updated = setRating(activeGoal.id, selectedDate, value, { ...data });
-        setData(updated);
-      }
+    } else if (key.upArrow) {
+      moveDateBy(-7);
+    } else if (key.downArrow) {
+      moveDateBy(7);
     }
     else if (key.return || input === 'x') {
-      handleToggleDate();
+      if (activeGoal?.type === 'rate') {
+        // Open inline rate picker
+        setViewMode('rate-picker');
+        setIsTyping(true);
+      } else {
+        handleToggleDate();
+      }
     } else if (input === 'a') {
       handleStartAdd();
     }
-    // Part 8: edit goal
+    // edit goal
     else if (input === 'e') {
       if (activeGoal) handleStartEdit();
     }
@@ -241,9 +259,9 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
         setDeleteTarget(activeGoal.id);
         setViewMode('delete-confirm');
       }
-    } else if (input === 'j' || key.downArrow) {
+    } else if (input === 'j') {
       setWeekOffset(o => o + 1);
-    } else if (input === 'k' || key.upArrow) {
+    } else if (input === 'k') {
       setWeekOffset(o => Math.max(0, o - 1));
     }
   });
@@ -395,6 +413,33 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     </Box>
   );
 
+  // Inline rate picker
+  const ratePicker = viewMode === 'rate-picker' && activeGoal?.type === 'rate' ? (() => {
+    const max = activeGoal.rateMax ?? 5;
+    const current = getRating(activeGoal, selectedDate, data);
+    const shades = Array.from({ length: max }, (_, i) => ratingToShade(i + 1, max));
+    return (
+      <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginTop={1}>
+        <Text bold color="cyan">{activeGoal.name} — {selDateLabel}</Text>
+        <Box marginTop={1}>
+          {shades.map((sh, i) => (
+            <Text key={i} color={i + 1 <= current ? activeGoal.color as any : 'gray'} bold={i + 1 === current}>
+              {' '}{sh}{' '}
+            </Text>
+          ))}
+        </Box>
+        <Box>
+          {Array.from({ length: max }, (_, i) => (
+            <Text key={i} color={i + 1 <= current ? 'cyan' : 'gray'} bold={i + 1 === current}>
+              {' '}{i + 1}{' '}
+            </Text>
+          ))}
+        </Box>
+        <Text dimColor>1-{max}:rate  0:clear  Esc:cancel</Text>
+      </Box>
+    );
+  })() : null;
+
   if (isAllTab) {
     return (
       <Box flexDirection="column" flexGrow={1}>
@@ -410,6 +455,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     <Box flexDirection="column" flexGrow={1}>
       {tabBar}
       {activeGoal && <GoalSection goal={activeGoal} data={data} weeks={weeks} today={today} selectedDate={selectedDate} />}
+      {ratePicker}
     </Box>
   );
 }
@@ -528,7 +574,7 @@ function GoalSection({
           </Box>
           <Text>This week: <Text bold>{thisWeekDone}/7</Text></Text>
           {isRate && selectedDate && (
-            <Text dimColor>Selected: {getRating(goal, selectedDate, data)}/{rateMax}  (press 0-{rateMax} to rate)</Text>
+            <Text dimColor>Selected: {getRating(goal, selectedDate, data)}/{rateMax}  (Enter to rate)</Text>
           )}
         </Box>
       )}

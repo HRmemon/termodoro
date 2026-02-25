@@ -102,9 +102,8 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
 
   if (view === 'graphs') {
     actionHints.push({ key: 'h/l', label: 'Switch' });
-    actionHints.push({ key: '\u2190\u2192', label: 'Select date' });
-    actionHints.push({ key: 'Enter', label: 'Toggle date' });
-    actionHints.push({ key: '0-N', label: 'Rate' });
+    actionHints.push({ key: '\u2190\u2192\u2191\u2193', label: 'Select date' });
+    actionHints.push({ key: 'Enter', label: 'Toggle/Rate' });
     actionHints.push({ key: 'a', label: 'Add' });
     actionHints.push({ key: 'e', label: 'Edit' });
     actionHints.push({ key: 'd', label: 'Delete' });
