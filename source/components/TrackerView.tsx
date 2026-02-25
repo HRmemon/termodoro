@@ -177,7 +177,7 @@ export function TrackerView() {
         setReviewIdx(i => Math.min(i + 1, pendingSlots.length - 1));
       } else {
         // Category key: change suggestion category & accept
-        const cat = categories.find(c => c.key && (c.key === input || c.key === input.toUpperCase()));
+        const cat = categories.find(c => c.key && c.key === input);
         if (cat && week) {
           // Change the suggestion's code before accepting
           const updated = { ...week, pending: { ...week.pending } };
@@ -200,7 +200,7 @@ export function TrackerView() {
       else if (input === '.') handleSetSlot(null);
       else {
         // Quick type by shortcut key
-        const cat = categories.find(c => c.key && (c.key === input || c.key === input.toUpperCase()));
+        const cat = categories.find(c => c.key && c.key === input);
         if (cat) { handleSetSlot(cat.code); }
       }
       return;
@@ -233,7 +233,7 @@ export function TrackerView() {
     }
     // Dynamic quick-set by shortcut key
     else {
-      const cat = categories.find(c => c.key && (c.key === input || c.key === input.toUpperCase()));
+      const cat = categories.find(c => c.key && c.key === input);
       if (cat) handleSetSlot(cat.code);
       else if (input === 'r' && pendingCount > 0) {
         setReviewIdx(0);
