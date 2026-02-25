@@ -6,7 +6,7 @@ import { saveConfig } from '../lib/config.js';
 import { ALL_SOUND_CHOICES, SOUND_LABELS, previewSound } from '../lib/sounds.js';
 import type { SoundEvent } from '../lib/sounds.js';
 import { loadTrackerConfig, saveTrackerConfig, SlotCategory, DomainRule, loadTrackerConfigFull, saveTrackerConfigFull, getCategoryByCode } from '../lib/tracker.js';
-import { getAllDomains } from '../lib/browser-stats.js';
+import { getAllDomains, getAllDomainPaths } from '../lib/browser-stats.js';
 
 interface ConfigViewProps {
   config: Config;
@@ -74,7 +74,7 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
   const [ruleEditStep, setRuleEditStep] = useState<'pattern' | 'category'>('pattern');
   const [ruleEditPattern, setRuleEditPattern] = useState('');
   const [ruleEditCatIdx, setRuleEditCatIdx] = useState(0);
-  const [knownDomains] = useState<string[]>(() => getAllDomains());
+  const [knownDomains] = useState<string[]>(() => [...getAllDomains(), ...getAllDomainPaths()]);
   const [domainSugIdx, setDomainSugIdx] = useState(0);
 
   const saveRules = useCallback((rules: DomainRule[]) => {

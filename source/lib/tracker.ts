@@ -395,6 +395,7 @@ export function saveTrackerConfigFull(config: TrackerConfigFull): void {
 
 export function matchDomain(domain: string, rules: DomainRule[]): string | null {
   for (const rule of rules) {
+    if (rule.pattern.includes('/')) continue; // skip path rules for domain-only matching
     // Convert glob pattern to regex
     const escaped = rule.pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
     const regex = new RegExp(`^${escaped}$`, 'i');
@@ -403,14 +404,37 @@ export function matchDomain(domain: string, rules: DomainRule[]): string | null 
   return null;
 }
 
+export function matchUrl(domain: string, urlPath: string, rules: DomainRule[]): string | null {
+  for (const rule of rules) {
+    if (rule.pattern.includes('/')) {
+      // Path-aware rule: split on first /
+      const slashIdx = rule.pattern.indexOf('/');
+      const domainPattern = rule.pattern.slice(0, slashIdx);
+      const pathPattern = rule.pattern.slice(slashIdx);
+      const domainEscaped = domainPattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+      const pathEscaped = pathPattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+      const domainRegex = new RegExp(`^${domainEscaped}$`, 'i');
+      const pathRegex = new RegExp(`^${pathEscaped}`, 'i'); // prefix match on path
+      if (domainRegex.test(domain) && pathRegex.test(urlPath)) return rule.category;
+    } else {
+      const escaped = rule.pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+      const regex = new RegExp(`^${escaped}$`, 'i');
+      if (regex.test(domain)) return rule.category;
+    }
+  }
+  return null;
+}
+
 export function generateWebSuggestions(
-  slotBreakdown: { time: string; domain: string; activeMinutes: number }[],
+  slotBreakdown: { time: string; domain: string; path?: string; activeMinutes: number }[],
   rules: DomainRule[],
 ): { time: string; code: string }[] {
   const suggestions: { time: string; code: string }[] = [];
   for (const slot of slotBreakdown) {
     if (slot.activeMinutes < 15) continue;
-    const cat = matchDomain(slot.domain, rules);
+    const cat = slot.path
+      ? matchUrl(slot.domain, slot.path, rules)
+      : matchDomain(slot.domain, rules);
     if (cat) suggestions.push({ time: slot.time, code: cat });
   }
   return suggestions;

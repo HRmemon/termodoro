@@ -288,9 +288,13 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
       }
     }
     else if (input === 'j') {
-      setWeekOffset(o => o + 1);
+      moveDateBy(-1);
     } else if (input === 'k') {
-      setWeekOffset(o => Math.max(0, o - 1));
+      // Don't go past today
+      const next = new Date(selectedDate + 'T00:00:00');
+      next.setDate(next.getDate() + 1);
+      const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+      if (nextStr <= today) setSelectedDate(nextStr);
     }
     else if (key.return || input === 'x') {
       if (activeGoal?.type === 'rate') {

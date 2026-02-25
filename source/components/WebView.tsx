@@ -1,8 +1,13 @@
 import { useState, useMemo } from 'react';
+import { spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { Box, Text, useInput } from 'ink';
 import { BarChart } from './BarChart.js';
-import { getBrowserStatsForDate } from '../lib/browser-stats.js';
-import type { BrowserStats } from '../lib/browser-stats.js';
+import { getBrowserStatsForDate, getBrowserStatsForRange, getPathPatternStats, generateHtmlReport } from '../lib/browser-stats.js';
+import type { BrowserStats, DomainStats } from '../lib/browser-stats.js';
+import { loadTrackerConfigFull } from '../lib/tracker.js';
 import { useFullScreen } from '../hooks/useFullScreen.js';
 
 function formatMinutes(minutes: number): string {
@@ -20,21 +25,116 @@ function getTodayString(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function dateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 type Tab = 'domains' | 'pages';
+type Range = 'day' | 'week' | 'month' | 'all';
+const RANGES: Range[] = ['day', 'week', 'month', 'all'];
+
+function getRangeDates(range: Range): { start: string; end: string; label: string } {
+  const today = new Date();
+  const end = dateStr(today);
+  switch (range) {
+    case 'day':
+      return { start: end, end, label: 'Today' };
+    case 'week': {
+      const d = new Date(today);
+      const day = d.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      d.setDate(d.getDate() + diff);
+      return { start: dateStr(d), end, label: 'This Week' };
+    }
+    case 'month': {
+      const d = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { start: dateStr(d), end, label: 'This Month' };
+    }
+    case 'all':
+      return { start: '2000-01-01', end, label: 'All Time' };
+  }
+}
 
 export function WebView() {
   const [tab, setTab] = useState<Tab>('domains');
   const [scrollOffset, setScrollOffset] = useState(0);
+  const [range, setRange] = useState<Range>('day');
   const { rows } = useFullScreen();
 
+  const { start, end } = useMemo(() => getRangeDates(range), [range]);
+
   const stats: BrowserStats | null = useMemo(() => {
-    return getBrowserStatsForDate(getTodayString());
-  }, []);
+    if (range === 'day') {
+      return getBrowserStatsForDate(getTodayString());
+    }
+    return getBrowserStatsForRange(start, end);
+  }, [range, start, end]);
+
+  // Merge path-pattern entries into domains for non-day ranges
+  const mergedStats: BrowserStats | null = useMemo(() => {
+    if (!stats) return null;
+    const config = loadTrackerConfigFull();
+    const pathPatterns = config.domainRules
+      .filter(r => r.pattern.includes('/'))
+      .map(r => r.pattern);
+    if (pathPatterns.length === 0) return stats;
+
+    const pathStats = getPathPatternStats(start, end, pathPatterns);
+    if (pathStats.length === 0) return stats;
+
+    // Merge path stats after the whole-domain entries
+    const merged: DomainStats[] = [...stats.domains];
+    for (const ps of pathStats) {
+      // Only add if not already represented as a domain
+      if (!merged.find(d => d.domain === ps.domain)) {
+        merged.push(ps);
+      }
+    }
+    merged.sort((a, b) => b.totalMinutes - a.totalMinutes);
+
+    return { ...stats, domains: merged };
+  }, [stats, start, end]);
+
+  // For TUI display, limit domains/pages
+  const displayStats: BrowserStats | null = useMemo(() => {
+    if (!mergedStats) return null;
+    return {
+      ...mergedStats,
+      domains: mergedStats.domains.slice(0, 15),
+      topPaths: mergedStats.topPaths.slice(0, 10),
+    };
+  }, [mergedStats]);
 
   useInput((input, key) => {
     if (key.tab || input === '\t') {
       setTab(prev => prev === 'domains' ? 'pages' : 'domains');
       setScrollOffset(0);
+      return;
+    }
+    if (input === 'h') {
+      setRange(prev => {
+        const idx = RANGES.indexOf(prev);
+        return RANGES[Math.max(0, idx - 1)]!;
+      });
+      setScrollOffset(0);
+      return;
+    }
+    if (input === 'l') {
+      setRange(prev => {
+        const idx = RANGES.indexOf(prev);
+        return RANGES[Math.min(RANGES.length - 1, idx + 1)]!;
+      });
+      setScrollOffset(0);
+      return;
+    }
+    if (input === 'R') {
+      const config = loadTrackerConfigFull();
+      const html = generateHtmlReport(start, end, config.domainRules);
+      if (html) {
+        const tmpPath = path.join(os.tmpdir(), `pomodorocli-web-report-${Date.now()}.html`);
+        fs.writeFileSync(tmpPath, html);
+        spawnSync('xdg-open', [tmpPath], { stdio: 'ignore' });
+      }
       return;
     }
     if (input === 'j' || key.downArrow) {
@@ -45,11 +145,12 @@ export function WebView() {
     }
   });
 
-  if (!stats || stats.totalMinutes === 0) {
+  if (!displayStats || displayStats.totalMinutes === 0) {
     return (
       <Box flexDirection="column" flexGrow={1}>
+        <RangeBar range={range} />
         <Box marginBottom={1}>
-          <Text dimColor>No browser data for today.</Text>
+          <Text dimColor>No browser data for this period.</Text>
         </Box>
         <Text dimColor>Make sure the Firefox extension is loaded and the native host is running.</Text>
         <Text dimColor>Run `pomodorocli track` to set up, then reload the extension.</Text>
@@ -57,18 +158,21 @@ export function WebView() {
     );
   }
 
-  const maxRows = Math.max(5, rows - 10);
+  const maxRows = Math.max(5, rows - 12);
 
   return (
     <Box flexDirection="column" flexGrow={1}>
+      {/* Range selector */}
+      <RangeBar range={range} />
+
       {/* Summary bar */}
       <Box marginBottom={1}>
         <Text dimColor>Active </Text>
-        <Text bold color="magenta">{formatMinutes(stats.activeMinutes)}</Text>
+        <Text bold color="magenta">{formatMinutes(displayStats.activeMinutes)}</Text>
         <Text dimColor>  Audible </Text>
-        <Text bold color="yellow">{formatMinutes(stats.audibleMinutes)}</Text>
+        <Text bold color="yellow">{formatMinutes(displayStats.audibleMinutes)}</Text>
         <Text dimColor>  Total </Text>
-        <Text bold>{formatMinutes(stats.totalMinutes)}</Text>
+        <Text bold>{formatMinutes(displayStats.totalMinutes)}</Text>
       </Box>
 
       {/* Tab selector */}
@@ -88,15 +192,37 @@ export function WebView() {
         >
           Top Pages
         </Text>
-        <Text dimColor>    Tab to switch</Text>
+        <Text dimColor>    Tab:switch  R:report</Text>
       </Box>
 
       {tab === 'domains' && (
-        <DomainsTab stats={stats} scrollOffset={scrollOffset} maxRows={maxRows} />
+        <DomainsTab stats={displayStats} scrollOffset={scrollOffset} maxRows={maxRows} />
       )}
       {tab === 'pages' && (
-        <PagesTab stats={stats} scrollOffset={scrollOffset} maxRows={maxRows} />
+        <PagesTab stats={displayStats} scrollOffset={scrollOffset} maxRows={maxRows} />
       )}
+    </Box>
+  );
+}
+
+function RangeBar({ range }: { range: Range }) {
+  const labels: { key: Range; label: string }[] = [
+    { key: 'day', label: 'Today' },
+    { key: 'week', label: 'Week' },
+    { key: 'month', label: 'Month' },
+    { key: 'all', label: 'All' },
+  ];
+  return (
+    <Box marginBottom={1}>
+      {labels.map((item, i) => (
+        <Text key={item.key}>
+          {i > 0 ? '  ' : ''}
+          <Text bold={range === item.key} color={range === item.key ? 'magenta' : 'gray'}>
+            {range === item.key ? `[${item.label}]` : ` ${item.label} `}
+          </Text>
+        </Text>
+      ))}
+      <Text dimColor>    h/l:range</Text>
     </Box>
   );
 }
@@ -126,7 +252,7 @@ function DomainsTab({ stats, scrollOffset, maxRows }: { stats: BrowserStats; scr
               </Box>
               <Box width={10}>
                 {d.audibleMinutes > 0 ? (
-                  <Text color="yellow">{formatMinutes(d.audibleMinutes)} ♪</Text>
+                  <Text color="yellow">{formatMinutes(d.audibleMinutes)} &#9834;</Text>
                 ) : (
                   <Text dimColor>-</Text>
                 )}
