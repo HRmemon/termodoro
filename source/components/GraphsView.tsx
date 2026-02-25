@@ -32,6 +32,9 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
   const [newRateMax, setNewRateMax] = useState('5');
   const [newColorIdx, setNewColorIdx] = useState(0);
 
+  // Rate picker state
+  const [pickerValue, setPickerValue] = useState(0);
+
   // Project autocomplete (Part 5)
   const allProjects = useMemo(() => getAllProjects(), [data]);
   const [projSuggIdx, setProjSuggIdx] = useState(0);
@@ -159,12 +162,30 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
       return;
     }
 
-    // Rate picker mode — scoped digit input
+    // Rate picker mode — up/down to adjust, Enter to confirm, digits as shortcut
     if (viewMode === 'rate-picker') {
+      const max = activeGoal?.rateMax ?? 5;
       if (key.escape) { setViewMode('main'); setIsTyping(false); return; }
+      if (key.upArrow || input === 'k') {
+        setPickerValue(v => Math.min(v + 1, max));
+        return;
+      }
+      if (key.downArrow || input === 'j') {
+        setPickerValue(v => Math.max(v - 1, 0));
+        return;
+      }
+      if (key.return) {
+        if (activeGoal) {
+          const updated = setRating(activeGoal.id, selectedDate, pickerValue, { ...data });
+          setData(updated);
+        }
+        setViewMode('main');
+        setIsTyping(false);
+        return;
+      }
+      // Digit shortcut — set and confirm immediately
       if (activeGoal?.type === 'rate' && /^[0-9]$/.test(input)) {
         const value = parseInt(input, 10);
-        const max = activeGoal.rateMax ?? 5;
         if (value <= max) {
           const updated = setRating(activeGoal.id, selectedDate, value, { ...data });
           setData(updated);
@@ -229,19 +250,21 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     } else if (input === 'l') {
       setActiveTab(t => Math.min(tabs.length - 1, t + 1));
     }
-    // Date navigation with arrow keys (all 4 directions)
+    // Date navigation with arrow keys
     else if (key.leftArrow) {
       moveDateBy(-1);
     } else if (key.rightArrow) {
       moveDateBy(1);
-    } else if (key.upArrow) {
-      moveDateBy(-7);
-    } else if (key.downArrow) {
-      moveDateBy(7);
+    }
+    else if (input === 'j' || key.downArrow) {
+      setWeekOffset(o => o + 1);
+    } else if (input === 'k' || key.upArrow) {
+      setWeekOffset(o => Math.max(0, o - 1));
     }
     else if (key.return || input === 'x') {
       if (activeGoal?.type === 'rate') {
-        // Open inline rate picker
+        // Open inline rate picker, start at current value
+        setPickerValue(getRating(activeGoal, selectedDate, data));
         setViewMode('rate-picker');
         setIsTyping(true);
       } else {
@@ -259,10 +282,6 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
         setDeleteTarget(activeGoal.id);
         setViewMode('delete-confirm');
       }
-    } else if (input === 'j') {
-      setWeekOffset(o => o + 1);
-    } else if (input === 'k') {
-      setWeekOffset(o => Math.max(0, o - 1));
     }
   });
 
@@ -416,26 +435,25 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
   // Inline rate picker
   const ratePicker = viewMode === 'rate-picker' && activeGoal?.type === 'rate' ? (() => {
     const max = activeGoal.rateMax ?? 5;
-    const current = getRating(activeGoal, selectedDate, data);
     const shades = Array.from({ length: max }, (_, i) => ratingToShade(i + 1, max));
     return (
       <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginTop={1}>
         <Text bold color="cyan">{activeGoal.name} — {selDateLabel}</Text>
         <Box marginTop={1}>
           {shades.map((sh, i) => (
-            <Text key={i} color={i + 1 <= current ? activeGoal.color as any : 'gray'} bold={i + 1 === current}>
+            <Text key={i} color={i + 1 <= pickerValue ? activeGoal.color as any : 'gray'} bold={i + 1 === pickerValue}>
               {' '}{sh}{' '}
             </Text>
           ))}
         </Box>
         <Box>
           {Array.from({ length: max }, (_, i) => (
-            <Text key={i} color={i + 1 <= current ? 'cyan' : 'gray'} bold={i + 1 === current}>
+            <Text key={i} color={i + 1 <= pickerValue ? 'cyan' : 'gray'} bold={i + 1 === pickerValue}>
               {' '}{i + 1}{' '}
             </Text>
           ))}
         </Box>
-        <Text dimColor>1-{max}:rate  0:clear  Esc:cancel</Text>
+        <Text dimColor>↑↓:adjust  Enter:confirm  1-{max}:set  0:clear  Esc:cancel</Text>
       </Box>
     );
   })() : null;
