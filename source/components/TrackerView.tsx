@@ -156,9 +156,16 @@ export function TrackerView() {
     else if (input === 'O') handleSetSlot('O');
     else if (input === '/') handleSetSlot('hD'); // / for ½D
     else if (input === 'n') {
-      // New week (always current week)
-      const w = createWeek(new Date());
-      setWeek(w); setWeekStr(w.week);
+      // Fix 1E: Only create if current week doesn't already exist
+      const existing = loadWeek(currentWeekStr);
+      if (existing) {
+        setWeek(existing);
+        setWeekStr(currentWeekStr);
+      } else {
+        const w = createWeek(new Date());
+        setWeek(w);
+        setWeekStr(w.week);
+      }
       setMode('grid');
     } else if (input === 'b') {
       setMode('browse');
@@ -223,6 +230,84 @@ export function TrackerView() {
   // Visible rows
   const visibleSlots = ALL_SLOTS.slice(scrollOffset, scrollOffset + VISIBLE_ROWS);
 
+  // Fix 1B: When picker is open, split grid rows around cursor for inline picker
+  if (mode === 'pick') {
+    const cursorVisIdx = cursorRow - scrollOffset;
+    const rowsAbove = visibleSlots.slice(0, Math.min(cursorVisIdx + 1, visibleSlots.length));
+    const pickerHeight = CATEGORIES.length + 3; // header + cats + footer
+    const rowsBelowCount = Math.max(0, VISIBLE_ROWS - rowsAbove.length - pickerHeight);
+    const rowsBelow = visibleSlots.slice(cursorVisIdx + 1, cursorVisIdx + 1 + rowsBelowCount);
+
+    const renderGridRow = (time: string, visIdx: number, baseOffset: number) => {
+      const rowIdx = baseOffset + visIdx;
+      return (
+        <Box key={time}>
+          <Text dimColor>{time}  </Text>
+          {weekDates.map((date, colIdx) => {
+            const slotCode = week.slots[date]?.[time];
+            const isCursor = rowIdx === cursorRow && colIdx === cursorCol;
+            return (
+              <Box key={date} width={COL_WIDTH}>
+                <SlotCell code={slotCode} isActive={!!slotCode} isCursor={isCursor} />
+              </Box>
+            );
+          })}
+        </Box>
+      );
+    };
+
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        {/* Header */}
+        <Box>
+          <Text bold>{weekLabel}</Text>
+          {todayDayName && <Text dimColor>{'  '}[Today: {todayDayName}]</Text>}
+          <Text dimColor>{'  '}Day {dayNum}/7</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>{'Time  '}</Text>
+          {DAY_NAMES.map((name, i) => (
+            <Text key={name} color={i === cursorCol ? 'cyan' : i === todayCol ? 'yellow' : undefined} bold={i === cursorCol}>
+              {name.padEnd(COL_WIDTH)}
+            </Text>
+          ))}
+        </Box>
+        <Text dimColor>{'─────  ────  ────  ────  ────  ────  ────  ────'}</Text>
+
+        {/* Grid rows above cursor */}
+        <Box flexDirection="column">
+          {rowsAbove.map((time, vi) => renderGridRow(time, vi, scrollOffset))}
+        </Box>
+
+        {/* Inline picker */}
+        <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
+          <Text bold color="cyan">Set slot: {currentDate} {currentTime}</Text>
+          {CATEGORIES.map((cat, i) => (
+            <Box key={cat.code}>
+              <Text color={i === pickerCursor ? 'cyan' : undefined} bold={i === pickerCursor}>
+                {i === pickerCursor ? '> ' : '  '}
+              </Text>
+              <Text color={cat.color as any} bold={i === pickerCursor}>
+                {cat.code.padEnd(4)}
+              </Text>
+              <Text color={i === pickerCursor ? 'cyan' : undefined}>
+                {cat.label}
+              </Text>
+            </Box>
+          ))}
+          <Text dimColor>Enter:set  j/k:nav  .:clear  Esc:cancel</Text>
+        </Box>
+
+        {/* Grid rows below picker */}
+        {rowsBelow.length > 0 && (
+          <Box flexDirection="column">
+            {rowsBelow.map((time, vi) => renderGridRow(time, vi + cursorVisIdx + 1, scrollOffset))}
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" flexGrow={1}>
       {/* Header */}
@@ -247,8 +332,8 @@ export function TrackerView() {
       </Box>
       <Text dimColor>{'─────  ────  ────  ────  ────  ────  ────  ────'}</Text>
 
-      {/* Grid rows */}
-      <Box flexDirection="column" flexGrow={1}>
+      {/* Fix 1A: Grid rows — no flexGrow, natural height */}
+      <Box flexDirection="column">
         {visibleSlots.map((time, visIdx) => {
           const rowIdx = scrollOffset + visIdx;
           return (
@@ -267,27 +352,6 @@ export function TrackerView() {
           );
         })}
       </Box>
-
-      {/* Picker panel */}
-      {mode === 'pick' && (
-        <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginTop={1}>
-          <Text bold color="cyan">Set slot: {currentDate} {currentTime}</Text>
-          {CATEGORIES.map((cat, i) => (
-            <Box key={cat.code}>
-              <Text color={i === pickerCursor ? 'cyan' : undefined} bold={i === pickerCursor}>
-                {i === pickerCursor ? '> ' : '  '}
-              </Text>
-              <Text color={cat.color as any} bold={i === pickerCursor}>
-                {cat.code.padEnd(4)}
-              </Text>
-              <Text color={i === pickerCursor ? 'cyan' : undefined}>
-                {cat.label}
-              </Text>
-            </Box>
-          ))}
-          <Box marginTop={1}><Text dimColor>Enter:set  j/k:nav  .:clear  Esc:cancel</Text></Box>
-        </Box>
-      )}
 
       {/* Day summary panel */}
       {mode === 'day' && currentDate && (

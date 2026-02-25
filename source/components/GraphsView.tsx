@@ -1,164 +1,355 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { listWeeks, loadWeek, buildDailyEntries, getWeekDates, DAY_NAMES } from '../lib/tracker.js';
+import TextInput from 'ink-text-input';
+import { nanoid } from 'nanoid';
+import {
+  loadGoals, addGoal, removeGoal, toggleCompletion,
+  isGoalComplete, computeStreak, getTodayStr, getRecentWeeks,
+  GOAL_COLORS, GoalsData, TrackedGoal,
+} from '../lib/goals.js';
 
-type GraphType = 'deepwork' | 'exercise' | 'all';
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKS_TO_SHOW = 8;
 
-const GRAPH_TABS: { key: GraphType; label: string }[] = [
-  { key: 'deepwork', label: 'Deep Work' },
-  { key: 'exercise', label: 'Exercise' },
-  { key: 'all',      label: 'All' },
-];
-
-function deepWorkIntensity(hours: number): string {
-  if (hours === 0) return '░';
-  if (hours < 1)   return '▒';
-  if (hours < 3)   return '▓';
-  return '█';
-}
-
-function exerciseIntensity(hours: number): string {
-  return hours > 0 ? '█' : '░';
-}
-
-function HeatmapGrid({
-  weekStrs,
-  dayEntries,
-  type,
-}: {
-  weekStrs: string[];
-  dayEntries: Map<string, { deepHours: number; exerciseHours: number }>;
-  type: 'deepwork' | 'exercise';
-}) {
-  // Build columns (each week = one column)
-  // Rows = Mon..Sun (0..6)
-  const weeksToShow = weekStrs.slice(0, 26).reverse(); // oldest first, max 26 weeks
-
-  // Group each week's dates
-  const weekDateGroups = weeksToShow.map(ws => {
-    const w = loadWeek(ws);
-    return w ? getWeekDates(w.start) : [];
-  });
-
-  return (
-    <Box flexDirection="column">
-      {DAY_NAMES.map((dayName, dayIdx) => (
-        <Box key={dayName}>
-          <Box width={5}><Text dimColor>{dayName}</Text></Box>
-          {weekDateGroups.map((dates, wi) => {
-            const date = dates[dayIdx];
-            if (!date) return <Text key={wi} dimColor>{'· '}</Text>;
-            const entry = dayEntries.get(date);
-            if (!entry) return <Text key={wi} dimColor>{'· '}</Text>;
-            const hours = type === 'deepwork' ? entry.deepHours : entry.exerciseHours;
-            const char = type === 'deepwork' ? deepWorkIntensity(hours) : exerciseIntensity(hours);
-            const color = type === 'deepwork'
-              ? (hours === 0 ? 'gray' : hours < 1 ? 'cyan' : hours < 3 ? 'cyan' : 'cyanBright')
-              : (hours > 0 ? 'green' : 'gray');
-            return <Text key={wi} color={color as any} bold={hours >= 3}>{char}{' '}</Text>;
-          })}
-        </Box>
-      ))}
-    </Box>
-  );
-}
+type ViewMode = 'main' | 'add' | 'delete-confirm';
+type AddStep = 'name' | 'type' | 'project' | 'color';
 
 export function GraphsView() {
-  const [activeGraph, setActiveGraph] = useState<GraphType>('deepwork');
+  const [data, setData] = useState<GoalsData>(() => loadGoals());
+  const [activeTab, setActiveTab] = useState(0); // index into goals, last = "All"
+  const [viewMode, setViewMode] = useState<ViewMode>('main');
+  const [weekOffset, setWeekOffset] = useState(0); // scroll offset for weeks
 
-  const { weekStrs, dayEntries, totals } = useMemo(() => {
-    const weekStrs = listWeeks();
-    const weeks = weekStrs.map(ws => loadWeek(ws)).filter(Boolean) as any[];
-    const dayEntries = buildDailyEntries(weeks);
+  // Add goal state
+  const [addStep, setAddStep] = useState<AddStep>('name');
+  const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState<'manual' | 'auto'>('manual');
+  const [newProject, setNewProject] = useState('');
+  const [newColorIdx, setNewColorIdx] = useState(0);
 
-    let totalDeep = 0, totalExercise = 0;
-    for (const e of dayEntries.values()) {
-      totalDeep += e.deepHours;
-      totalExercise += e.exerciseHours;
+  // Delete confirm
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const tabs = useMemo(() => {
+    const goalTabs = data.goals.map(g => g.name);
+    return [...goalTabs, 'All'];
+  }, [data.goals]);
+
+  const activeGoal = activeTab < data.goals.length ? data.goals[activeTab]! : null;
+  const isAllTab = activeTab >= data.goals.length;
+
+  const weeks = useMemo(() => getRecentWeeks(WEEKS_TO_SHOW + weekOffset).slice(0, WEEKS_TO_SHOW), [weekOffset]);
+
+  const today = getTodayStr();
+
+  const handleToggleToday = useCallback(() => {
+    if (!activeGoal) return;
+    const updated = toggleCompletion(activeGoal.id, today, { ...data });
+    setData(updated);
+  }, [activeGoal, today, data]);
+
+  const handleStartAdd = useCallback(() => {
+    setViewMode('add');
+    setAddStep('name');
+    setNewName('');
+    setNewType('manual');
+    setNewProject('');
+    setNewColorIdx(data.goals.length % GOAL_COLORS.length);
+  }, [data.goals.length]);
+
+  const handleFinishAdd = useCallback(() => {
+    if (!newName.trim()) { setViewMode('main'); return; }
+    const goal: TrackedGoal = {
+      id: nanoid(),
+      name: newName.trim(),
+      color: GOAL_COLORS[newColorIdx]!,
+      type: newType,
+      ...(newType === 'auto' && newProject.trim() ? { autoProject: newProject.trim() } : {}),
+    };
+    const updated = addGoal(goal);
+    setData(updated);
+    setActiveTab(updated.goals.length - 1);
+    setViewMode('main');
+  }, [newName, newType, newProject, newColorIdx]);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    const updated = removeGoal(deleteTarget);
+    setData(updated);
+    setActiveTab(t => Math.min(t, updated.goals.length));
+    setDeleteTarget(null);
+    setViewMode('main');
+  }, [deleteTarget]);
+
+  useInput((input, key) => {
+    if (viewMode === 'delete-confirm') {
+      if (input === 'y' || input === 'Y') handleConfirmDelete();
+      else if (input === 'n' || input === 'N' || key.escape) { setDeleteTarget(null); setViewMode('main'); }
+      return;
     }
-    return { weekStrs, dayEntries, totals: { deep: totalDeep, exercise: totalExercise } };
-  }, []);
 
-  useInput((_input, key) => {
+    if (viewMode === 'add') {
+      if (key.escape) { setViewMode('main'); return; }
+
+      if (addStep === 'name') {
+        // TextInput handles this
+        return;
+      }
+      if (addStep === 'type') {
+        if (input === 'm' || input === 'M') { setNewType('manual'); setAddStep(newType === 'auto' ? 'project' : 'color'); }
+        else if (input === 'a' || input === 'A') { setNewType('auto'); setAddStep('project'); }
+        else if (key.return) {
+          if (newType === 'auto') setAddStep('project');
+          else setAddStep('color');
+        }
+        else if (key.tab) setNewType(t => t === 'manual' ? 'auto' : 'manual');
+        return;
+      }
+      if (addStep === 'project') {
+        // TextInput handles this
+        return;
+      }
+      if (addStep === 'color') {
+        if (input === 'h' || key.leftArrow) setNewColorIdx(i => (i - 1 + GOAL_COLORS.length) % GOAL_COLORS.length);
+        else if (input === 'l' || key.rightArrow) setNewColorIdx(i => (i + 1) % GOAL_COLORS.length);
+        else if (key.return) handleFinishAdd();
+        return;
+      }
+      return;
+    }
+
+    // Main mode
     if (key.tab) {
-      setActiveGraph(prev => {
-        const idx = GRAPH_TABS.findIndex(t => t.key === prev);
-        return GRAPH_TABS[(idx + 1) % GRAPH_TABS.length]!.key;
-      });
+      setActiveTab(t => (t + 1) % tabs.length);
+    } else if (key.return || input === 'x') {
+      handleToggleToday();
+    } else if (input === 'a') {
+      handleStartAdd();
+    } else if (input === 'd') {
+      if (activeGoal) {
+        setDeleteTarget(activeGoal.id);
+        setViewMode('delete-confirm');
+      }
+    } else if (input === 'j' || key.downArrow) {
+      setWeekOffset(o => o + 1);
+    } else if (input === 'k' || key.upArrow) {
+      setWeekOffset(o => Math.max(0, o - 1));
     }
   });
 
-  if (weekStrs.length === 0) {
+  // ─── Add Goal Flow ──────────────────────────────────────────────────────────
+
+  if (viewMode === 'add') {
     return (
       <Box flexDirection="column" flexGrow={1}>
-        <Text dimColor>No tracker data yet.</Text>
-        <Box marginTop={1}>
-          <Text>Go to <Text bold color="cyan">Tracker (9)</Text> and press <Text bold color="cyan">n</Text> to start a week.</Text>
+        <Text bold color="cyan">Add New Goal</Text>
+        <Text dimColor>Esc to cancel</Text>
+        <Box marginTop={1} flexDirection="column">
+          {addStep === 'name' && (
+            <Box>
+              <Text>Name: </Text>
+              <TextInput
+                value={newName}
+                onChange={setNewName}
+                onSubmit={() => {
+                  if (newName.trim()) setAddStep('type');
+                }}
+              />
+            </Box>
+          )}
+          {addStep === 'type' && (
+            <Box flexDirection="column">
+              <Text>Name: <Text bold>{newName}</Text></Text>
+              <Box marginTop={1}>
+                <Text>Type: </Text>
+                <Text color={newType === 'manual' ? 'cyan' : 'gray'} bold={newType === 'manual'}>[m] manual</Text>
+                <Text>  </Text>
+                <Text color={newType === 'auto' ? 'cyan' : 'gray'} bold={newType === 'auto'}>[a] auto</Text>
+              </Box>
+              <Text dimColor>Tab to toggle, Enter to confirm</Text>
+            </Box>
+          )}
+          {addStep === 'project' && (
+            <Box flexDirection="column">
+              <Text>Name: <Text bold>{newName}</Text>  Type: <Text bold>auto</Text></Text>
+              <Box marginTop={1}>
+                <Text>#project: </Text>
+                <TextInput
+                  value={newProject}
+                  onChange={setNewProject}
+                  onSubmit={() => setAddStep('color')}
+                />
+              </Box>
+            </Box>
+          )}
+          {addStep === 'color' && (
+            <Box flexDirection="column">
+              <Text>Name: <Text bold>{newName}</Text>  Type: <Text bold>{newType}</Text></Text>
+              <Box marginTop={1}>
+                <Text>Color: </Text>
+                {GOAL_COLORS.map((c, i) => (
+                  <Text key={c} color={c as any} bold={i === newColorIdx}>
+                    {i === newColorIdx ? '[' : ' '}{'\u2588'}{i === newColorIdx ? ']' : ' '}
+                  </Text>
+                ))}
+              </Box>
+              <Text dimColor>h/l to select, Enter to save</Text>
+            </Box>
+          )}
         </Box>
       </Box>
     );
   }
 
-  const renderGraph = () => {
-    if (activeGraph === 'all') {
-      return (
-        <Box flexDirection="column">
-          <Box marginBottom={1}>
-            <Text bold color="cyan">Deep Work</Text>
-            <Text dimColor>  {totals.deep.toFixed(1)}h total</Text>
-          </Box>
-          <HeatmapGrid weekStrs={weekStrs} dayEntries={dayEntries} type="deepwork" />
-          <Box marginTop={1} marginBottom={1}>
-            <Text bold color="green">Exercise</Text>
-            <Text dimColor>  {totals.exercise.toFixed(1)}h total</Text>
-          </Box>
-          <HeatmapGrid weekStrs={weekStrs} dayEntries={dayEntries} type="exercise" />
-        </Box>
-      );
-    }
+  // ─── Delete Confirmation ──────────────────────────────────────────────────
+
+  if (viewMode === 'delete-confirm' && deleteTarget) {
+    const goal = data.goals.find(g => g.id === deleteTarget);
     return (
-      <Box flexDirection="column">
-        <HeatmapGrid
-          weekStrs={weekStrs}
-          dayEntries={dayEntries}
-          type={activeGraph}
-        />
+      <Box flexDirection="column" flexGrow={1}>
+        <Text bold color="red">Delete Goal</Text>
         <Box marginTop={1}>
-          <Text dimColor>less </Text>
-          <Text color="gray">░ </Text>
-          <Text color="cyan">▒ ▓ </Text>
-          <Text color="cyanBright" bold>█ </Text>
-          <Text dimColor> more</Text>
-          {activeGraph === 'deepwork' && (
-            <Text dimColor>{'  '}0h  1h  3h  5h+{'  '}Total: {totals.deep.toFixed(1)}h</Text>
-          )}
-          {activeGraph === 'exercise' && (
-            <Text dimColor>{'  '}Total: {totals.exercise.toFixed(1)}h  Weeks tracked: {weekStrs.length}</Text>
-          )}
+          <Text>Delete <Text bold color={goal?.color as any}>{goal?.name}</Text> and all its data? </Text>
+          <Text color="yellow">[y/n]</Text>
         </Box>
       </Box>
     );
-  };
+  }
+
+  // ─── Main View ──────────────────────────────────────────────────────────────
+
+  if (data.goals.length === 0) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <Text dimColor>No goals configured yet.</Text>
+        <Box marginTop={1}>
+          <Text>Press <Text bold color="cyan">a</Text> to add your first goal</Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column">
+          <Text dimColor>Goals can be:</Text>
+          <Text dimColor>  manual — you toggle daily (e.g. Exercise, Reading)</Text>
+          <Text dimColor>  auto   — tracks pomodoro sessions by #project</Text>
+        </Box>
+      </Box>
+    );
+  }
+
+  // Tab bar
+  const tabBar = (
+    <Box marginBottom={1}>
+      {tabs.map((label, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && <Text dimColor>  </Text>}
+          <Text
+            bold={i === activeTab}
+            color={i === activeTab ? 'yellow' : 'gray'}
+            underline={i === activeTab}
+          >
+            {label}
+          </Text>
+        </React.Fragment>
+      ))}
+    </Box>
+  );
+
+  if (isAllTab) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        {tabBar}
+        {data.goals.map(goal => (
+          <GoalSection key={goal.id} goal={goal} data={data} weeks={weeks} today={today} compact />
+        ))}
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {/* Tab bar */}
-      <Box marginBottom={1}>
-        {GRAPH_TABS.map((tab, i) => (
-          <React.Fragment key={tab.key}>
-            {i > 0 && <Text dimColor>  </Text>}
-            <Text
-              bold={tab.key === activeGraph}
-              color={tab.key === activeGraph ? 'yellow' : 'gray'}
-              underline={tab.key === activeGraph}
-            >
-              {tab.label}
-            </Text>
-          </React.Fragment>
+      {tabBar}
+      {activeGoal && <GoalSection goal={activeGoal} data={data} weeks={weeks} today={today} />}
+    </Box>
+  );
+}
+
+// ─── Goal Section Component ──────────────────────────────────────────────────
+
+function GoalSection({
+  goal, data, weeks, today, compact
+}: {
+  goal: TrackedGoal;
+  data: GoalsData;
+  weeks: string[][];
+  today: string;
+  compact?: boolean;
+}) {
+  const streak = useMemo(() => computeStreak(goal.id, data), [goal.id, data]);
+
+  // Count total completions
+  const totalDays = useMemo(() => {
+    let count = 0;
+    // Check all weeks shown
+    for (const week of weeks) {
+      for (const date of week) {
+        if (isGoalComplete(goal, date, data)) count++;
+      }
+    }
+    return count;
+  }, [goal, data, weeks]);
+
+  // This week stats
+  const thisWeek = weeks[weeks.length - 1] ?? [];
+  const thisWeekDone = thisWeek.filter(d => isGoalComplete(goal, d, data)).length;
+
+  return (
+    <Box flexDirection="column" marginBottom={compact ? 1 : 0}>
+      <Box>
+        <Text bold color={goal.color as any}>{'── '}{goal.name}</Text>
+        <Text dimColor> ({goal.type}){compact ? `  ${totalDays}d  streak:${streak.current}d  best:${streak.best}d` : ''}</Text>
+      </Box>
+
+      {/* Heatmap grid */}
+      <Box flexDirection="column" marginTop={compact ? 0 : 1}>
+        {/* Week number headers */}
+        <Box>
+          <Box width={5}><Text> </Text></Box>
+          {weeks.map((_, wi) => (
+            <Text key={wi} dimColor>{`W${wi + 1} `}</Text>
+          ))}
+        </Box>
+
+        {/* Day rows */}
+        {DAY_NAMES.map((dayName, dayIdx) => (
+          <Box key={dayName}>
+            <Box width={5}><Text dimColor>{dayName}</Text></Box>
+            {weeks.map((weekDates, wi) => {
+              const date = weekDates[dayIdx]!;
+              const isFuture = date > today;
+              const done = !isFuture && isGoalComplete(goal, date, data);
+              const isToday = date === today;
+
+              if (isFuture) {
+                return <Text key={wi} dimColor>{'░  '}</Text>;
+              }
+              if (done) {
+                return <Text key={wi} color={goal.color as any} bold={isToday}>{isToday ? '\u2588* ' : '\u2588  '}</Text>;
+              }
+              return <Text key={wi} dimColor>{isToday ? '\u00b7* ' : '\u00b7  '}</Text>;
+            })}
+          </Box>
         ))}
       </Box>
 
-      {renderGraph()}
+      {!compact && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text dimColor>{'\u00b7'} = not done  {'\u2588'} = done  {'\u00b7'}* = today  {'░'} = future</Text>
+          <Box marginTop={1}>
+            <Text>Total: <Text bold>{totalDays}d</Text></Text>
+            <Text>{'  '}Streak: <Text bold color={streak.current > 0 ? 'green' : undefined}>{streak.current}d</Text></Text>
+            <Text>{'  '}Best: <Text bold>{streak.best}d</Text></Text>
+          </Box>
+          <Text>This week: <Text bold>{thisWeekDone}/7</Text></Text>
+        </Box>
+      )}
     </Box>
   );
 }

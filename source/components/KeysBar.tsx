@@ -99,7 +99,11 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
   }
 
   if (view === 'graphs') {
-    actionHints.push({ key: 'Tab', label: 'Switch graph' });
+    actionHints.push({ key: 'Tab', label: 'Switch goal' });
+    actionHints.push({ key: 'Enter', label: 'Toggle today' });
+    actionHints.push({ key: 'a', label: 'Add goal' });
+    actionHints.push({ key: 'd', label: 'Delete' });
+    actionHints.push({ key: 'j/k', label: 'Scroll weeks' });
   }
 
   if (view === 'config') {

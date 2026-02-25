@@ -22,7 +22,7 @@ const VIEW_TITLES: Record<View, string> = {
   tasks: 'Tasks',
   web: 'Web Time',
   tracker: 'Time Tracker',
-  graphs: 'Graphs',
+  graphs: 'Goals',
 };
 
 const VIEW_NUMS: Record<View, string> = {
