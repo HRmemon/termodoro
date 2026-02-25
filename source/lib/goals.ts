@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { loadSessions } from './store.js';
+import { getProjects } from './tasks.js';
 
 export interface TrackedGoal {
   id: string;
@@ -42,6 +43,16 @@ export function addGoal(goal: TrackedGoal): GoalsData {
   data.goals.push(goal);
   data.completions[goal.id] = [];
   data.overrides[goal.id] = [];
+  saveGoals(data);
+  return data;
+}
+
+export function updateGoal(id: string, updates: Partial<Omit<TrackedGoal, 'id'>>): GoalsData {
+  const data = loadGoals();
+  const idx = data.goals.findIndex(g => g.id === id);
+  if (idx >= 0) {
+    data.goals[idx] = { ...data.goals[idx]!, ...updates };
+  }
   saveGoals(data);
   return data;
 }
@@ -211,3 +222,13 @@ export function getRecentWeeks(count: number): string[][] {
 }
 
 export const GOAL_COLORS = ['cyan', 'green', 'yellow', 'magenta', 'red', 'blue', 'white'];
+
+export function getAllProjects(): string[] {
+  const projects = new Set<string>();
+  for (const p of getProjects()) projects.add(p);
+  const sessions = getCachedSessions();
+  for (const s of sessions) {
+    if (s.project) projects.add(s.project);
+  }
+  return [...projects].sort();
+}

@@ -5,6 +5,7 @@ import type { Config } from '../types.js';
 import { saveConfig } from '../lib/config.js';
 import { ALL_SOUND_CHOICES, SOUND_LABELS, previewSound } from '../lib/sounds.js';
 import type { SoundEvent } from '../lib/sounds.js';
+import { loadTrackerConfig, saveTrackerConfig, SlotCategory } from '../lib/tracker.js';
 
 interface ConfigViewProps {
   config: Config;
@@ -45,11 +46,31 @@ const FIELDS: ConfigField[] = [
   { key: 'browserTracking', label: 'Browser Tracking', type: 'boolean' },
 ];
 
+type CatEditStep = 'code' | 'label' | 'color' | 'key';
+
 export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [saved, setSaved] = useState(false);
+
+  // Tracker categories sub-mode
+  const [catMode, setCatMode] = useState(false);
+  const [catList, setCatList] = useState<SlotCategory[]>(() => loadTrackerConfig().categories);
+  const [catCursor, setCatCursor] = useState(0);
+  const [catEditing, setCatEditing] = useState<'add' | 'edit' | null>(null);
+  const [catEditStep, setCatEditStep] = useState<CatEditStep>('code');
+  const [catEditCode, setCatEditCode] = useState('');
+  const [catEditLabel, setCatEditLabel] = useState('');
+  const [catEditColor, setCatEditColor] = useState('cyan');
+  const [catEditKey, setCatEditKey] = useState('');
+
+  const CAT_COLORS = ['cyan', 'blueBright', 'green', 'yellow', 'blue', 'gray', 'red', 'redBright', 'magenta', 'white'];
+
+  const saveCats = useCallback((cats: SlotCategory[]) => {
+    setCatList(cats);
+    saveTrackerConfig({ categories: cats });
+  }, []);
 
   const getFieldValue = (field: ConfigField): string => {
     if (field.type === 'sound-event' && field.soundEvent) {
@@ -79,13 +100,77 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
     const newConfig = { ...config, sounds: newSounds };
     onConfigChange(newConfig);
     saveConfig(newConfig);
-    // Preview the sound
     if (newChoice !== 'none' && newChoice !== 'custom' && config.sound) {
       previewSound(newChoice, config.sounds.volume);
     }
   }, [config, onConfigChange]);
 
   useInput((input, key) => {
+    // Category edit sub-flow (add/edit form)
+    if (catEditing) {
+      if (key.escape) { setCatEditing(null); setIsTyping(false); return; }
+
+      if (catEditStep === 'code') {
+        // TextInput handles
+        return;
+      }
+      if (catEditStep === 'label') {
+        return;
+      }
+      if (catEditStep === 'color') {
+        if (input === 'h' || key.leftArrow) {
+          setCatEditColor(c => {
+            const idx = CAT_COLORS.indexOf(c);
+            return CAT_COLORS[(idx - 1 + CAT_COLORS.length) % CAT_COLORS.length]!;
+          });
+        } else if (input === 'l' || key.rightArrow) {
+          setCatEditColor(c => {
+            const idx = CAT_COLORS.indexOf(c);
+            return CAT_COLORS[(idx + 1) % CAT_COLORS.length]!;
+          });
+        } else if (key.return) {
+          setCatEditStep('key');
+          setIsTyping(true);
+        }
+        return;
+      }
+      if (catEditStep === 'key') {
+        // TextInput handles
+        return;
+      }
+      return;
+    }
+
+    // Category list mode
+    if (catMode) {
+      if (key.escape) { setCatMode(false); return; }
+      if (input === 'j' || key.downArrow) setCatCursor(p => Math.min(p + 1, catList.length - 1));
+      else if (input === 'k' || key.upArrow) setCatCursor(p => Math.max(0, p - 1));
+      else if (input === 'a') {
+        setCatEditing('add');
+        setCatEditStep('code');
+        setCatEditCode('');
+        setCatEditLabel('');
+        setCatEditColor('cyan');
+        setCatEditKey('');
+        setIsTyping(true);
+      } else if (input === 'e' && catList.length > 0) {
+        const cat = catList[catCursor]!;
+        setCatEditing('edit');
+        setCatEditStep('code');
+        setCatEditCode(cat.code);
+        setCatEditLabel(cat.label);
+        setCatEditColor(cat.color);
+        setCatEditKey(cat.key ?? '');
+        setIsTyping(true);
+      } else if (input === 'd' && catList.length > 0) {
+        const newList = catList.filter((_, i) => i !== catCursor);
+        saveCats(newList);
+        setCatCursor(p => Math.min(p, newList.length - 1));
+      }
+      return;
+    }
+
     if (isEditing) {
       if (key.escape) {
         setIsEditing(false);
@@ -94,8 +179,11 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
       return;
     }
 
+    // Total items = FIELDS.length + 1 (for "Tracker Categories" entry)
+    const totalItems = FIELDS.length + 1;
+
     if (input === 'j' || key.downArrow) {
-      setSelectedIdx(i => Math.min(i + 1, FIELDS.length - 1));
+      setSelectedIdx(i => Math.min(i + 1, totalItems - 1));
       return;
     }
     if (input === 'k' || key.upArrow) {
@@ -104,6 +192,14 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
     }
 
     if (key.return) {
+      // Check if on the "Tracker Categories" row
+      if (selectedIdx === FIELDS.length) {
+        setCatMode(true);
+        setCatCursor(0);
+        setCatList(loadTrackerConfig().categories);
+        return;
+      }
+
       const field = FIELDS[selectedIdx]!;
       if (field.type === 'boolean') {
         const newConfig = { ...config, [field.key]: !(config as unknown as Record<string, unknown>)[field.key] };
@@ -133,10 +229,9 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
       return;
     }
 
-    // Allow p to preview sound on sound-event fields
     if (input === 'p') {
       const field = FIELDS[selectedIdx]!;
-      if (field.type === 'sound-event' && field.soundEvent && config.sound) {
+      if (field?.type === 'sound-event' && field.soundEvent && config.sound) {
         const choice = config.sounds[field.soundEvent];
         const customPath = config.sounds.customPaths[field.soundEvent];
         previewSound(choice, config.sounds.volume, customPath);
@@ -177,6 +272,119 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
     setIsEditing(false);
     setIsTyping(false);
   }, [selectedIdx, config, onConfigChange, setIsTyping]);
+
+  const handleCatEditFinish = useCallback(() => {
+    if (!catEditCode.trim()) { setCatEditing(null); setIsTyping(false); return; }
+    const newCat: SlotCategory = {
+      code: catEditCode.trim(),
+      label: catEditLabel.trim() || catEditCode.trim(),
+      color: catEditColor,
+      key: catEditKey.trim() || null,
+    };
+    if (catEditing === 'add') {
+      saveCats([...catList, newCat]);
+    } else if (catEditing === 'edit') {
+      const newList = [...catList];
+      newList[catCursor] = newCat;
+      saveCats(newList);
+    }
+    setCatEditing(null);
+    setIsTyping(false);
+  }, [catEditing, catEditCode, catEditLabel, catEditColor, catEditKey, catList, catCursor, saveCats, setIsTyping]);
+
+  // ─── Category Editor Sub-mode ───────────────────────────────────────────────
+
+  if (catEditing) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <Text bold color="cyan">{catEditing === 'add' ? 'Add' : 'Edit'} Category</Text>
+        <Text dimColor>Esc to cancel</Text>
+        <Box marginTop={1} flexDirection="column">
+          {catEditStep === 'code' && (
+            <Box>
+              <Text>Code: </Text>
+              <TextInput
+                value={catEditCode}
+                onChange={setCatEditCode}
+                onSubmit={() => { if (catEditCode.trim()) setCatEditStep('label'); }}
+              />
+            </Box>
+          )}
+          {catEditStep === 'label' && (
+            <Box flexDirection="column">
+              <Text>Code: <Text bold>{catEditCode}</Text></Text>
+              <Box>
+                <Text>Label: </Text>
+                <TextInput
+                  value={catEditLabel}
+                  onChange={setCatEditLabel}
+                  onSubmit={() => { setCatEditStep('color'); setIsTyping(false); }}
+                />
+              </Box>
+            </Box>
+          )}
+          {catEditStep === 'color' && (
+            <Box flexDirection="column">
+              <Text>Code: <Text bold>{catEditCode}</Text>  Label: <Text bold>{catEditLabel}</Text></Text>
+              <Box marginTop={1}>
+                <Text>Color: </Text>
+                {CAT_COLORS.map((c) => (
+                  <Text key={c} color={c as any} bold={c === catEditColor}>
+                    {c === catEditColor ? '[' : ' '}{'\u2588'}{c === catEditColor ? ']' : ' '}
+                  </Text>
+                ))}
+              </Box>
+              <Text dimColor>h/l to select, Enter to continue</Text>
+            </Box>
+          )}
+          {catEditStep === 'key' && (
+            <Box flexDirection="column">
+              <Text>Code: <Text bold>{catEditCode}</Text>  Label: <Text bold>{catEditLabel}</Text>  Color: <Text color={catEditColor as any}>{'\u2588'}</Text></Text>
+              <Box>
+                <Text>Shortcut key (empty for none): </Text>
+                <TextInput
+                  value={catEditKey}
+                  onChange={setCatEditKey}
+                  onSubmit={handleCatEditFinish}
+                />
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </Box>
+    );
+  }
+
+  // ─── Category List Sub-mode ─────────────────────────────────────────────────
+
+  if (catMode) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <Text bold color="cyan">Tracker Categories</Text>
+        <Text dimColor>a:add  e:edit  d:delete  Esc:back</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {catList.map((cat, i) => (
+            <Box key={`${cat.code}-${i}`}>
+              <Text color={i === catCursor ? 'yellow' : 'gray'} bold={i === catCursor}>
+                {i === catCursor ? '> ' : '  '}
+              </Text>
+              <Text dimColor>[</Text>
+              <Text color={cat.key ? 'white' : 'gray'} bold={!!cat.key}>
+                {cat.key ?? ' '}
+              </Text>
+              <Text dimColor>] </Text>
+              <Box width={5}><Text color={cat.color as any}>{cat.code}</Text></Box>
+              <Box width={16}><Text>{cat.label}</Text></Box>
+              <Text color={cat.color as any}>{'\u2588\u2588'}</Text>
+            </Box>
+          ))}
+          {catList.length === 0 && <Text dimColor>No categories. Press a to add one.</Text>}
+        </Box>
+      </Box>
+    );
+  }
+
+  // ─── Main Config View ───────────────────────────────────────────────────────
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -226,6 +434,19 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
           </Box>
         );
       })}
+
+      {/* Tracker Categories entry */}
+      <Box>
+        <Text color={selectedIdx === FIELDS.length ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length}>
+          {selectedIdx === FIELDS.length ? '> ' : '  '}
+        </Text>
+        <Box width={22}>
+          <Text color={selectedIdx === FIELDS.length ? 'white' : 'gray'}>Tracker Categories</Text>
+        </Box>
+        <Text color="cyan" bold={selectedIdx === FIELDS.length}>{catList.length} categories</Text>
+        {selectedIdx === FIELDS.length && <Text dimColor>  Enter to manage</Text>}
+      </Box>
+
       {saved && (
         <Box marginTop={1}>
           <Text color="green" bold>Config saved!</Text>

@@ -89,19 +89,20 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
   if (view === 'tracker') {
     actionHints.push({ key: 'j/k', label: 'Scroll' });
     actionHints.push({ key: 'h/l', label: 'Days' });
-    actionHints.push({ key: 'e', label: 'Edit slot' });
-    actionHints.push({ key: 'D/E/W/S', label: 'Quick set' });
+    actionHints.push({ key: 'e', label: 'Picker' });
+    actionHints.push({ key: '[key]', label: 'Quick set' });
     actionHints.push({ key: '.', label: 'Clear' });
-    actionHints.push({ key: 'd', label: 'Day summary' });
-    actionHints.push({ key: 'w', label: 'Week summary' });
+    actionHints.push({ key: 'd/w', label: 'Summary' });
     actionHints.push({ key: 'n', label: 'New week' });
     actionHints.push({ key: 'b', label: 'Browse' });
   }
 
   if (view === 'graphs') {
-    actionHints.push({ key: 'Tab', label: 'Switch goal' });
-    actionHints.push({ key: 'Enter', label: 'Toggle today' });
-    actionHints.push({ key: 'a', label: 'Add goal' });
+    actionHints.push({ key: 'h/l', label: 'Switch' });
+    actionHints.push({ key: '\u2190\u2192', label: 'Select date' });
+    actionHints.push({ key: 'Enter', label: 'Toggle date' });
+    actionHints.push({ key: 'a', label: 'Add' });
+    actionHints.push({ key: 'e', label: 'Edit' });
     actionHints.push({ key: 'd', label: 'Delete' });
     actionHints.push({ key: 'j/k', label: 'Scroll weeks' });
   }

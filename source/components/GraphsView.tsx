@@ -1,24 +1,27 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { nanoid } from 'nanoid';
 import {
-  loadGoals, addGoal, removeGoal, toggleCompletion,
+  loadGoals, addGoal, removeGoal, updateGoal, toggleCompletion,
   isGoalComplete, computeStreak, getTodayStr, getRecentWeeks,
-  GOAL_COLORS, GoalsData, TrackedGoal,
+  getAllProjects, GOAL_COLORS, GoalsData, TrackedGoal,
 } from '../lib/goals.js';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKS_TO_SHOW = 8;
 
-type ViewMode = 'main' | 'add' | 'delete-confirm';
+type ViewMode = 'main' | 'add' | 'edit' | 'delete-confirm';
 type AddStep = 'name' | 'type' | 'project' | 'color';
 
 export function GraphsView() {
   const [data, setData] = useState<GoalsData>(() => loadGoals());
-  const [activeTab, setActiveTab] = useState(0); // index into goals, last = "All"
+  const [activeTab, setActiveTab] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('main');
-  const [weekOffset, setWeekOffset] = useState(0); // scroll offset for weeks
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // Selected date for heatmap navigation (Part 4)
+  const [selectedDate, setSelectedDate] = useState<string>(() => getTodayStr());
 
   // Add goal state
   const [addStep, setAddStep] = useState<AddStep>('name');
@@ -26,6 +29,18 @@ export function GraphsView() {
   const [newType, setNewType] = useState<'manual' | 'auto'>('manual');
   const [newProject, setNewProject] = useState('');
   const [newColorIdx, setNewColorIdx] = useState(0);
+
+  // Project autocomplete (Part 5)
+  const allProjects = useMemo(() => getAllProjects(), [data]);
+  const [projSuggIdx, setProjSuggIdx] = useState(0);
+
+  const projSuggestions = useMemo(() => {
+    const partial = newProject.toLowerCase();
+    if (!partial) return allProjects.slice(0, 8);
+    return allProjects.filter(p => p.toLowerCase().includes(partial)).slice(0, 8);
+  }, [newProject, allProjects]);
+
+  useEffect(() => { setProjSuggIdx(0); }, [projSuggestions.length, newProject]);
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -38,15 +53,17 @@ export function GraphsView() {
   const activeGoal = activeTab < data.goals.length ? data.goals[activeTab]! : null;
   const isAllTab = activeTab >= data.goals.length;
 
-  const weeks = useMemo(() => getRecentWeeks(WEEKS_TO_SHOW + weekOffset).slice(0, WEEKS_TO_SHOW), [weekOffset]);
+  // Part 7: Fix week scrolling
+  const weeks = useMemo(() => getRecentWeeks(WEEKS_TO_SHOW + weekOffset).slice(weekOffset, weekOffset + WEEKS_TO_SHOW), [weekOffset]);
 
   const today = getTodayStr();
 
-  const handleToggleToday = useCallback(() => {
+  // Part 4: Toggle selected date instead of today
+  const handleToggleDate = useCallback(() => {
     if (!activeGoal) return;
-    const updated = toggleCompletion(activeGoal.id, today, { ...data });
+    const updated = toggleCompletion(activeGoal.id, selectedDate, { ...data });
     setData(updated);
-  }, [activeGoal, today, data]);
+  }, [activeGoal, selectedDate, data]);
 
   const handleStartAdd = useCallback(() => {
     setViewMode('add');
@@ -56,6 +73,17 @@ export function GraphsView() {
     setNewProject('');
     setNewColorIdx(data.goals.length % GOAL_COLORS.length);
   }, [data.goals.length]);
+
+  // Part 8: Start edit
+  const handleStartEdit = useCallback(() => {
+    if (!activeGoal) return;
+    setViewMode('edit');
+    setAddStep('name');
+    setNewName(activeGoal.name);
+    setNewType(activeGoal.type);
+    setNewProject(activeGoal.autoProject ?? '');
+    setNewColorIdx(Math.max(0, GOAL_COLORS.indexOf(activeGoal.color)));
+  }, [activeGoal]);
 
   const handleFinishAdd = useCallback(() => {
     if (!newName.trim()) { setViewMode('main'); return; }
@@ -72,6 +100,24 @@ export function GraphsView() {
     setViewMode('main');
   }, [newName, newType, newProject, newColorIdx]);
 
+  // Part 8: Finish edit
+  const handleFinishEdit = useCallback(() => {
+    if (!activeGoal || !newName.trim()) { setViewMode('main'); return; }
+    const updates: Partial<Omit<TrackedGoal, 'id'>> = {
+      name: newName.trim(),
+      color: GOAL_COLORS[newColorIdx]!,
+      type: newType,
+    };
+    if (newType === 'auto' && newProject.trim()) {
+      updates.autoProject = newProject.trim();
+    } else {
+      updates.autoProject = undefined;
+    }
+    const updated = updateGoal(activeGoal.id, updates);
+    setData(updated);
+    setViewMode('main');
+  }, [activeGoal, newName, newType, newProject, newColorIdx]);
+
   const handleConfirmDelete = useCallback(() => {
     if (!deleteTarget) return;
     const updated = removeGoal(deleteTarget);
@@ -81,6 +127,16 @@ export function GraphsView() {
     setViewMode('main');
   }, [deleteTarget]);
 
+  // Part 4: h/l date navigation helpers
+  const moveDateBy = useCallback((days: number) => {
+    const d = new Date(selectedDate + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setSelectedDate(`${y}-${m}-${dd}`);
+  }, [selectedDate]);
+
   useInput((input, key) => {
     if (viewMode === 'delete-confirm') {
       if (input === 'y' || input === 'Y') handleConfirmDelete();
@@ -88,15 +144,14 @@ export function GraphsView() {
       return;
     }
 
-    if (viewMode === 'add') {
+    if (viewMode === 'add' || viewMode === 'edit') {
       if (key.escape) { setViewMode('main'); return; }
 
       if (addStep === 'name') {
-        // TextInput handles this
         return;
       }
       if (addStep === 'type') {
-        if (input === 'm' || input === 'M') { setNewType('manual'); setAddStep(newType === 'auto' ? 'project' : 'color'); }
+        if (input === 'm' || input === 'M') { setNewType('manual'); setAddStep('color'); }
         else if (input === 'a' || input === 'A') { setNewType('auto'); setAddStep('project'); }
         else if (key.return) {
           if (newType === 'auto') setAddStep('project');
@@ -106,13 +161,22 @@ export function GraphsView() {
         return;
       }
       if (addStep === 'project') {
-        // TextInput handles this
+        // Handle arrow keys for project suggestions
+        if (key.downArrow) { setProjSuggIdx(i => Math.min(i + 1, projSuggestions.length - 1)); return; }
+        if (key.upArrow) { setProjSuggIdx(i => Math.max(0, i - 1)); return; }
+        if (key.tab && projSuggestions.length > 0) {
+          setNewProject(projSuggestions[projSuggIdx] ?? newProject);
+          return;
+        }
         return;
       }
       if (addStep === 'color') {
         if (input === 'h' || key.leftArrow) setNewColorIdx(i => (i - 1 + GOAL_COLORS.length) % GOAL_COLORS.length);
         else if (input === 'l' || key.rightArrow) setNewColorIdx(i => (i + 1) % GOAL_COLORS.length);
-        else if (key.return) handleFinishAdd();
+        else if (key.return) {
+          if (viewMode === 'edit') handleFinishEdit();
+          else handleFinishAdd();
+        }
         return;
       }
       return;
@@ -121,11 +185,29 @@ export function GraphsView() {
     // Main mode
     if (key.tab) {
       setActiveTab(t => (t + 1) % tabs.length);
-    } else if (key.return || input === 'x') {
-      handleToggleToday();
+    }
+    // Part 6: h/l tab switching
+    else if (input === 'h') {
+      setActiveTab(t => Math.max(0, t - 1));
+    } else if (input === 'l') {
+      setActiveTab(t => Math.min(tabs.length - 1, t + 1));
+    }
+    // Part 4: date navigation with arrow keys
+    else if (key.leftArrow) {
+      moveDateBy(-1);
+    } else if (key.rightArrow) {
+      moveDateBy(1);
+    }
+    else if (key.return || input === 'x') {
+      handleToggleDate();
     } else if (input === 'a') {
       handleStartAdd();
-    } else if (input === 'd') {
+    }
+    // Part 8: edit goal
+    else if (input === 'e') {
+      if (activeGoal) handleStartEdit();
+    }
+    else if (input === 'd') {
       if (activeGoal) {
         setDeleteTarget(activeGoal.id);
         setViewMode('delete-confirm');
@@ -137,12 +219,13 @@ export function GraphsView() {
     }
   });
 
-  // ─── Add Goal Flow ──────────────────────────────────────────────────────────
+  // ─── Add / Edit Goal Flow ────────────────────────────────────────────────────
 
-  if (viewMode === 'add') {
+  if (viewMode === 'add' || viewMode === 'edit') {
+    const isEdit = viewMode === 'edit';
     return (
       <Box flexDirection="column" flexGrow={1}>
-        <Text bold color="cyan">Add New Goal</Text>
+        <Text bold color="cyan">{isEdit ? 'Edit Goal' : 'Add New Goal'}</Text>
         <Text dimColor>Esc to cancel</Text>
         <Box marginTop={1} flexDirection="column">
           {addStep === 'name' && (
@@ -180,6 +263,17 @@ export function GraphsView() {
                   onSubmit={() => setAddStep('color')}
                 />
               </Box>
+              {/* Project suggestions */}
+              {projSuggestions.length > 0 && (
+                <Box flexDirection="column" marginTop={1}>
+                  {projSuggestions.map((p, i) => (
+                    <Text key={p} color={i === projSuggIdx ? 'cyan' : 'gray'} bold={i === projSuggIdx}>
+                      {i === projSuggIdx ? '> ' : '  '}{p}
+                    </Text>
+                  ))}
+                  <Text dimColor>Up/Down to navigate, Tab to accept</Text>
+                </Box>
+              )}
             </Box>
           )}
           {addStep === 'color' && (
@@ -234,6 +328,9 @@ export function GraphsView() {
     );
   }
 
+  // Selected date display
+  const selDateLabel = selectedDate === today ? 'Today' : selectedDate.slice(5).replace('-', '/');
+
   // Tab bar
   const tabBar = (
     <Box marginBottom={1}>
@@ -249,6 +346,8 @@ export function GraphsView() {
           </Text>
         </React.Fragment>
       ))}
+      <Text dimColor>{'  |\u2190\u2192'}</Text>
+      <Text bold color="cyan">{' '}{selDateLabel}</Text>
     </Box>
   );
 
@@ -257,7 +356,7 @@ export function GraphsView() {
       <Box flexDirection="column" flexGrow={1}>
         {tabBar}
         {data.goals.map(goal => (
-          <GoalSection key={goal.id} goal={goal} data={data} weeks={weeks} today={today} compact />
+          <GoalSection key={goal.id} goal={goal} data={data} weeks={weeks} today={today} selectedDate={selectedDate} compact />
         ))}
       </Box>
     );
@@ -266,7 +365,7 @@ export function GraphsView() {
   return (
     <Box flexDirection="column" flexGrow={1}>
       {tabBar}
-      {activeGoal && <GoalSection goal={activeGoal} data={data} weeks={weeks} today={today} />}
+      {activeGoal && <GoalSection goal={activeGoal} data={data} weeks={weeks} today={today} selectedDate={selectedDate} />}
     </Box>
   );
 }
@@ -274,20 +373,19 @@ export function GraphsView() {
 // ─── Goal Section Component ──────────────────────────────────────────────────
 
 function GoalSection({
-  goal, data, weeks, today, compact
+  goal, data, weeks, today, selectedDate, compact
 }: {
   goal: TrackedGoal;
   data: GoalsData;
   weeks: string[][];
   today: string;
+  selectedDate: string;
   compact?: boolean;
 }) {
   const streak = useMemo(() => computeStreak(goal.id, data), [goal.id, data]);
 
-  // Count total completions
   const totalDays = useMemo(() => {
     let count = 0;
-    // Check all weeks shown
     for (const week of weeks) {
       for (const date of week) {
         if (isGoalComplete(goal, date, data)) count++;
@@ -296,14 +394,13 @@ function GoalSection({
     return count;
   }, [goal, data, weeks]);
 
-  // This week stats
   const thisWeek = weeks[weeks.length - 1] ?? [];
   const thisWeekDone = thisWeek.filter(d => isGoalComplete(goal, d, data)).length;
 
   return (
     <Box flexDirection="column" marginBottom={compact ? 1 : 0}>
       <Box>
-        <Text bold color={goal.color as any}>{'── '}{goal.name}</Text>
+        <Text bold color={goal.color as any}>{'\u2500\u2500 '}{goal.name}</Text>
         <Text dimColor> ({goal.type}){compact ? `  ${totalDays}d  streak:${streak.current}d  best:${streak.best}d` : ''}</Text>
       </Box>
 
@@ -326,14 +423,15 @@ function GoalSection({
               const isFuture = date > today;
               const done = !isFuture && isGoalComplete(goal, date, data);
               const isToday = date === today;
+              const isSelected = date === selectedDate;
 
               if (isFuture) {
-                return <Text key={wi} dimColor>{'░  '}</Text>;
+                return <Text key={wi} dimColor>{isSelected ? '\u2591\u25c4 ' : '\u2591  '}</Text>;
               }
               if (done) {
-                return <Text key={wi} color={goal.color as any} bold={isToday}>{isToday ? '\u2588* ' : '\u2588  '}</Text>;
+                return <Text key={wi} color={goal.color as any} bold={isSelected}>{isSelected ? '\u2588\u25c4 ' : isToday ? '\u2588* ' : '\u2588  '}</Text>;
               }
-              return <Text key={wi} dimColor>{isToday ? '\u00b7* ' : '\u00b7  '}</Text>;
+              return <Text key={wi} color={isSelected ? 'white' : undefined} dimColor={!isSelected} bold={isSelected}>{isSelected ? '\u00b7\u25c4 ' : isToday ? '\u00b7* ' : '\u00b7  '}</Text>;
             })}
           </Box>
         ))}
@@ -341,7 +439,7 @@ function GoalSection({
 
       {!compact && (
         <Box flexDirection="column" marginTop={1}>
-          <Text dimColor>{'\u00b7'} = not done  {'\u2588'} = done  {'\u00b7'}* = today  {'░'} = future</Text>
+          <Text dimColor>{'\u00b7'} = not done  {'\u2588'} = done  * = today  {'\u25c4'} = selected  {'\u2591'} = future</Text>
           <Box marginTop={1}>
             <Text>Total: <Text bold>{totalDays}d</Text></Text>
             <Text>{'  '}Streak: <Text bold color={streak.current > 0 ? 'green' : undefined}>{streak.current}d</Text></Text>

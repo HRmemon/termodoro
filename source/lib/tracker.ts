@@ -6,22 +6,49 @@ export interface SlotCategory {
   code: string;
   label: string;
   color: string;
+  key: string | null;  // shortcut key, null for picker-only
 }
 
 export const CATEGORIES: SlotCategory[] = [
-  { code: 'D',  label: 'Deep Work',      color: 'cyan' },
-  { code: 'hD', label: '½ Deep Work',    color: 'blueBright' },
-  { code: 'E',  label: 'Exercise',       color: 'green' },
-  { code: 'O',  label: 'Okayish',        color: 'yellow' },
-  { code: 'S',  label: 'Sleep',          color: 'blue' },
-  { code: 'N',  label: 'No Deep Work',   color: 'gray' },
-  { code: 'W',  label: 'Wasted',         color: 'red' },
-  { code: 'SF', label: 'Sched. Failed',  color: 'redBright' },
-  { code: 'WU', label: 'Woke Up',        color: 'magenta' },
+  { code: 'D',  label: 'Deep Work',      color: 'cyan',       key: 'D' },
+  { code: 'hD', label: '\u00bd Deep Work',    color: 'blueBright', key: '/' },
+  { code: 'E',  label: 'Exercise',       color: 'green',      key: 'E' },
+  { code: 'O',  label: 'Okayish',        color: 'yellow',     key: 'O' },
+  { code: 'S',  label: 'Sleep',          color: 'blue',       key: 'S' },
+  { code: 'N',  label: 'No Deep Work',   color: 'gray',       key: 'N' },
+  { code: 'W',  label: 'Wasted',         color: 'red',        key: 'W' },
+  { code: 'SF', label: 'Sched. Failed',  color: 'redBright',  key: null },
+  { code: 'WU', label: 'Woke Up',        color: 'magenta',    key: null },
 ];
 
+// ─── Tracker Config (customizable categories) ─────────────────────────────
+
+export interface TrackerConfig {
+  categories: SlotCategory[];
+}
+
+const TRACKER_CONFIG_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'tracker-config.json');
+
+export function loadTrackerConfig(): TrackerConfig {
+  try {
+    if (fs.existsSync(TRACKER_CONFIG_PATH)) {
+      return JSON.parse(fs.readFileSync(TRACKER_CONFIG_PATH, 'utf8'));
+    }
+  } catch { /* ignore */ }
+  return { categories: CATEGORIES };
+}
+
+export function saveTrackerConfig(config: TrackerConfig): void {
+  fs.mkdirSync(path.dirname(TRACKER_CONFIG_PATH), { recursive: true });
+  fs.writeFileSync(TRACKER_CONFIG_PATH, JSON.stringify(config, null, 2));
+}
+
+export function getCategories(): SlotCategory[] {
+  return loadTrackerConfig().categories;
+}
+
 export function getCategoryByCode(code: string): SlotCategory | undefined {
-  return CATEGORIES.find(c => c.code === code);
+  return getCategories().find(c => c.code === code);
 }
 
 // 48 slots: 00:00, 00:30, 01:00, ... 23:30

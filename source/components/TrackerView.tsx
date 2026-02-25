@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import {
-  ALL_SLOTS, CATEGORIES, DAY_NAMES, WeekData,
-  getCategoryByCode, getISOWeekStr, getMondayOfWeek, getWeekDates,
+  ALL_SLOTS, DAY_NAMES, WeekData,
+  getCategoryByCode, getCategories, getISOWeekStr, getMondayOfWeek, getWeekDates,
   dateToString, loadWeek, createWeek, listWeeks, setSlot, computeDayStats,
 } from '../lib/tracker.js';
 
@@ -30,7 +30,7 @@ function SlotCell({
   code, isActive, isCursor
 }: { code: string | undefined; isActive: boolean; isCursor: boolean }) {
   const cat = code ? getCategoryByCode(code) : undefined;
-  const display = code ? (code === 'hD' ? '½D' : code.padEnd(2)) : ' ·';
+  const display = code ? (code === 'hD' ? '\u00bdD' : code.padEnd(2)) : ' \u00b7';
   const color = cat?.color as any ?? 'gray';
 
   if (isCursor) {
@@ -39,7 +39,7 @@ function SlotCell({
   if (code) {
     return <Text color={color}>{` ${display.trim().padEnd(2)} `}</Text>;
   }
-  return <Text dimColor>{`  ·  `}</Text>;
+  return <Text dimColor>{`  \u00b7  `}</Text>;
 }
 
 type Mode = 'grid' | 'pick' | 'day' | 'week' | 'browse';
@@ -47,17 +47,17 @@ type Mode = 'grid' | 'pick' | 'day' | 'week' | 'browse';
 export function TrackerView() {
   const { stdout } = useStdout();
   const termHeight = stdout?.rows ?? 24;
-  const VISIBLE_ROWS = Math.max(6, termHeight - 14);
+  const VISIBLE_ROWS = Math.max(6, termHeight - 16);
+
+  const categories = useMemo(() => getCategories(), []);
 
   const todayStr = getTodayStr();
   const monday = getMondayOfWeek(new Date());
   const currentWeekStr = getISOWeekStr(monday);
 
   const [weekStr, setWeekStr] = useState<string | null>(() => {
-    // Load current week if it exists, otherwise null
     const w = loadWeek(currentWeekStr);
     if (w) return currentWeekStr;
-    // Try to load most recent past week
     const all = listWeeks();
     return all[0] ?? null;
   });
@@ -67,7 +67,6 @@ export function TrackerView() {
   const weekDates = week ? getWeekDates(week.start) : [];
   const todayCol = weekDates.length > 0 ? getTodayColIndex(weekDates) : -1;
 
-  // Default scroll to 06:00 (index 12) or current time
   const defaultRow = (() => {
     const h = new Date().getHours();
     const idx = h * 2;
@@ -107,15 +106,14 @@ export function TrackerView() {
     }
 
     if (mode === 'pick') {
-      if (input === 'j' || key.downArrow) setPickerCursor(p => Math.min(p + 1, CATEGORIES.length - 1));
+      if (input === 'j' || key.downArrow) setPickerCursor(p => Math.min(p + 1, categories.length - 1));
       else if (input === 'k' || key.upArrow) setPickerCursor(p => Math.max(0, p - 1));
-      else if (key.return) handleSetSlot(CATEGORIES[pickerCursor]!.code);
+      else if (key.return) handleSetSlot(categories[pickerCursor]!.code);
       else if (key.escape) setMode('grid');
       else if (input === '.') handleSetSlot(null);
-      // Quick type code in picker
       else {
-        const upper = input.toUpperCase();
-        const cat = CATEGORIES.find(c => c.code === upper || (c.code === 'hD' && input === '/'));
+        // Quick type by shortcut key
+        const cat = categories.find(c => c.key && (c.key === input || c.key === input.toUpperCase()));
         if (cat) { handleSetSlot(cat.code); }
       }
       return;
@@ -140,40 +138,35 @@ export function TrackerView() {
     } else if (input === 'l' || key.rightArrow) {
       setCursorCol(p => Math.min(6, p + 1));
     } else if (key.tab) {
-      // Jump to next day
       setCursorCol(p => (p + 1) % 7);
     } else if (input === 'e' || key.return) {
       if (week) { setPickerCursor(0); setMode('pick'); }
     } else if (input === '.') {
       handleSetSlot(null);
     }
-    // Quick-set with uppercase
-    else if (input === 'D') handleSetSlot('D');
-    else if (input === 'E') handleSetSlot('E');
-    else if (input === 'W') handleSetSlot('W');
-    else if (input === 'S') handleSetSlot('S');
-    else if (input === 'N') handleSetSlot('N');
-    else if (input === 'O') handleSetSlot('O');
-    else if (input === '/') handleSetSlot('hD'); // / for ½D
-    else if (input === 'n') {
-      // Fix 1E: Only create if current week doesn't already exist
-      const existing = loadWeek(currentWeekStr);
-      if (existing) {
-        setWeek(existing);
-        setWeekStr(currentWeekStr);
-      } else {
-        const w = createWeek(new Date());
-        setWeek(w);
-        setWeekStr(w.week);
+    // Dynamic quick-set by shortcut key
+    else {
+      const cat = categories.find(c => c.key && (c.key === input || c.key === input.toUpperCase()));
+      if (cat) handleSetSlot(cat.code);
+      else if (input === 'n') {
+        const existing = loadWeek(currentWeekStr);
+        if (existing) {
+          setWeek(existing);
+          setWeekStr(currentWeekStr);
+        } else {
+          const w = createWeek(new Date());
+          setWeek(w);
+          setWeekStr(w.week);
+        }
+        setMode('grid');
+      } else if (input === 'b') {
+        setMode('browse');
+        setBrowseCursor(0);
+      } else if (input === 'd') {
+        setMode(m => m === 'day' ? 'grid' : 'day');
+      } else if (input === 'w') {
+        setMode(m => m === 'week' ? 'grid' : 'week');
       }
-      setMode('grid');
-    } else if (input === 'b') {
-      setMode('browse');
-      setBrowseCursor(0);
-    } else if (input === 'd') {
-      setMode(m => m === 'day' ? 'grid' : 'day');
-    } else if (input === 'w') {
-      setMode(m => m === 'week' ? 'grid' : 'week');
     }
   });
 
@@ -230,11 +223,11 @@ export function TrackerView() {
   // Visible rows
   const visibleSlots = ALL_SLOTS.slice(scrollOffset, scrollOffset + VISIBLE_ROWS);
 
-  // Fix 1B: When picker is open, split grid rows around cursor for inline picker
+  // When picker is open, split grid rows around cursor for inline picker
   if (mode === 'pick') {
     const cursorVisIdx = cursorRow - scrollOffset;
     const rowsAbove = visibleSlots.slice(0, Math.min(cursorVisIdx + 1, visibleSlots.length));
-    const pickerHeight = CATEGORIES.length + 3; // header + cats + footer
+    const pickerHeight = categories.length + 3;
     const rowsBelowCount = Math.max(0, VISIBLE_ROWS - rowsAbove.length - pickerHeight);
     const rowsBelow = visibleSlots.slice(cursorVisIdx + 1, cursorVisIdx + 1 + rowsBelowCount);
 
@@ -272,21 +265,26 @@ export function TrackerView() {
             </Text>
           ))}
         </Box>
-        <Text dimColor>{'─────  ────  ────  ────  ────  ────  ────  ────'}</Text>
+        <Text dimColor>{'\u2500\u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500'}</Text>
 
         {/* Grid rows above cursor */}
         <Box flexDirection="column">
           {rowsAbove.map((time, vi) => renderGridRow(time, vi, scrollOffset))}
         </Box>
 
-        {/* Inline picker */}
+        {/* Inline picker with [key] indicators */}
         <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
           <Text bold color="cyan">Set slot: {currentDate} {currentTime}</Text>
-          {CATEGORIES.map((cat, i) => (
+          {categories.map((cat, i) => (
             <Box key={cat.code}>
               <Text color={i === pickerCursor ? 'cyan' : undefined} bold={i === pickerCursor}>
                 {i === pickerCursor ? '> ' : '  '}
               </Text>
+              <Text dimColor>[</Text>
+              <Text color={cat.key ? 'white' : 'gray'} bold={!!cat.key}>
+                {cat.key ?? ' '}
+              </Text>
+              <Text dimColor>] </Text>
               <Text color={cat.color as any} bold={i === pickerCursor}>
                 {cat.code.padEnd(4)}
               </Text>
@@ -295,7 +293,7 @@ export function TrackerView() {
               </Text>
             </Box>
           ))}
-          <Text dimColor>Enter:set  j/k:nav  .:clear  Esc:cancel</Text>
+          <Text dimColor>Enter:set  j/k:nav  [.]:clear  Esc:cancel</Text>
         </Box>
 
         {/* Grid rows below picker */}
@@ -330,9 +328,9 @@ export function TrackerView() {
           </Text>
         ))}
       </Box>
-      <Text dimColor>{'─────  ────  ────  ────  ────  ────  ────  ────'}</Text>
+      <Text dimColor>{'\u2500\u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500'}</Text>
 
-      {/* Fix 1A: Grid rows — no flexGrow, natural height */}
+      {/* Grid rows */}
       <Box flexDirection="column">
         {visibleSlots.map((time, visIdx) => {
           const rowIdx = scrollOffset + visIdx;
@@ -383,7 +381,7 @@ export function TrackerView() {
             {DAY_NAMES.map(d => <Box key={d} width={6}><Text dimColor>{d}</Text></Box>)}
             <Box width={7}><Text dimColor>Total</Text></Box>
           </Box>
-          {CATEGORIES.map(cat => {
+          {categories.map(cat => {
             const perDay = weekDates.map(date => (week.slots[date] ?? {}));
             const dayCounts = perDay.map(daySlots =>
               Object.values(daySlots).filter(c => c === cat.code).length * 0.5
@@ -395,7 +393,7 @@ export function TrackerView() {
                 <Box width={6}><Text color={cat.color as any}>{cat.code}</Text></Box>
                 {dayCounts.map((h, i) => (
                   <Box key={i} width={6}>
-                    <Text color={cat.color as any}>{h > 0 ? formatHours(h) : '·'}</Text>
+                    <Text color={cat.color as any}>{h > 0 ? formatHours(h) : '\u00b7'}</Text>
                   </Box>
                 ))}
                 <Box width={7}><Text bold>{formatHours(total)}</Text></Box>
