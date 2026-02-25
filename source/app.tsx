@@ -1,20 +1,14 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useInput, useApp } from 'ink';
+import { useInput, useApp, Box, Text } from 'ink';
 import { nanoid } from 'nanoid';
-import type { Config, View, SessionType } from './types.js';
-import { loadSessions, appendSession, loadTimerState, saveTimerState, clearTimerState, saveStickyProject, loadStickyProject } from './lib/store.js';
-import { generateAndStoreSuggestions } from './lib/tracker.js';
-import type { TimerSnapshot } from './lib/store.js';
-import type { TimerInitialState } from './hooks/useTimer.js';
-import type { EngineInitialState } from './hooks/usePomodoroEngine.js';
+import type { Config, View } from './types.js';
+import { loadSessions } from './lib/store.js';
 import { loadTasks, addTask } from './lib/tasks.js';
 import { loadReminders, updateReminder, addReminder } from './lib/reminders.js';
 import { notifyReminder } from './lib/notify.js';
-import { useTimer } from './hooks/useTimer.js';
-import { usePomodoroEngine } from './hooks/usePomodoroEngine.js';
-import { useSequence, parseSequenceString, PRESET_SEQUENCES } from './hooks/useSequence.js';
-import type { SequenceInitialState } from './hooks/useSequence.js';
+import { parseSequenceString, PRESET_SEQUENCES } from './hooks/useSequence.js';
 import { loadCustomSequences } from './lib/sequences.js';
+import { useDaemonConnection } from './hooks/useDaemonConnection.js';
 import { Layout } from './components/Layout.js';
 import { StatusLine } from './components/StatusLine.js';
 import { KeysBar } from './components/KeysBar.js';
@@ -47,6 +41,28 @@ interface AppProps {
   initialSequence?: string;
 }
 
+function DaemonNotRunning() {
+  return (
+    <Box flexDirection="column" padding={2}>
+      <Text bold color="red">Daemon not running</Text>
+      <Text> </Text>
+      <Text>Start the daemon first:</Text>
+      <Text color="cyan">  pomodorocli daemon start</Text>
+      <Text> </Text>
+      <Text dimColor>Or run as a systemd service:</Text>
+      <Text color="cyan">  systemctl --user start pomodorocli</Text>
+    </Box>
+  );
+}
+
+function Connecting() {
+  return (
+    <Box padding={2}>
+      <Text color="yellow">Connecting to daemon...</Text>
+    </Box>
+  );
+}
+
 export function App({ config: initialConfig, initialView, initialProject, initialSequence }: AppProps) {
   const [config, setConfig] = useState(initialConfig);
   const [view, setView] = useState<View>(initialView ?? 'timer');
@@ -59,191 +75,47 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   const [showResetModal, setShowResetModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-
-  // Counter to force remount of view components after external edit
   const [editGeneration, setEditGeneration] = useState(0);
-
-  // Focus state for global search navigation
   const [taskFocusId, setTaskFocusId] = useState<string | null>(null);
   const [reminderFocusId, setReminderFocusId] = useState<string | null>(null);
 
   const { exit } = useApp();
 
-  // Restore timer state from disk on mount
-  const [restoredState] = useState(() => {
-    const stickyProject = loadStickyProject();
-    const snapshot = loadTimerState();
-    if (!snapshot) {
-      // No running timer, but restore sticky project if present
-      if (stickyProject) {
-        return { timerInit: undefined, engineInit: { project: stickyProject } as EngineInitialState, snapshot: undefined, sequenceInit: undefined };
-      }
-      return null;
-    }
+  // Connect to daemon
+  const { timer, engine, sequence, actions, connectionStatus } = useDaemonConnection();
 
-    let timerInit: TimerInitialState;
-    if (snapshot.isPaused) {
-      timerInit = {
-        secondsLeft: snapshot.pausedSecondsLeft ?? snapshot.totalSeconds,
-        isRunning: true,
-        isPaused: true,
-      };
-    } else {
-      const elapsed = Math.floor((Date.now() - new Date(snapshot.startedAt).getTime()) / 1000);
-      const remaining = snapshot.totalSeconds - elapsed;
-      if (remaining <= 0) {
-        // Timer expired while app was closed — auto-complete and advance to next session
-        appendSession({
-          id: nanoid(),
-          type: snapshot.sessionType,
-          status: 'completed',
-          label: snapshot.label,
-          project: snapshot.project,
-          startedAt: snapshot.startedAt,
-          endedAt: new Date(new Date(snapshot.startedAt).getTime() + snapshot.totalSeconds * 1000).toISOString(),
-          durationPlanned: snapshot.totalSeconds,
-          durationActual: snapshot.totalSeconds,
-        });
-        // Generate tracker suggestions for off-app completed work sessions
-        if (snapshot.sessionType === 'work') {
-          try {
-            generateAndStoreSuggestions(snapshot.startedAt, snapshot.totalSeconds);
-          } catch { /* ignore */ }
-        }
-        clearTimerState();
-
-        // Compute next session type
-        let nextSessionType: SessionType;
-        let nextSessionNumber = snapshot.sessionNumber;
-        let nextTotalWork = snapshot.totalWorkSessions;
-        if (snapshot.sessionType === 'work') {
-          nextTotalWork += 1;
-          nextSessionType = nextTotalWork % initialConfig.longBreakInterval === 0 ? 'long-break' : 'short-break';
-        } else {
-          nextSessionNumber += 1;
-          nextSessionType = 'work';
-        }
-
-        const engineInit: EngineInitialState = {
-          sessionType: nextSessionType,
-          sessionNumber: nextSessionNumber,
-          totalWorkSessions: nextTotalWork,
-          project: stickyProject,
-        };
-        // No timerInit — timer starts idle for the next session
-        return { timerInit: undefined, engineInit, snapshot: undefined };
-      }
-      timerInit = {
-        secondsLeft: remaining,
-        isRunning: true,
-        isPaused: false,
-      };
-    }
-
-    const engineInit: EngineInitialState = {
-      sessionType: snapshot.sessionType,
-      sessionNumber: snapshot.sessionNumber,
-      totalWorkSessions: snapshot.totalWorkSessions,
-      label: snapshot.label,
-      project: snapshot.project ?? stickyProject,
-      overrideDuration: snapshot.overrideDuration,
-      startedAt: snapshot.startedAt,
-    };
-
-    // Restore sequence state if present and timer not expired
-    let sequenceInit: SequenceInitialState | undefined;
-    if (snapshot.sequenceName && snapshot.sequenceBlocks && snapshot.sequenceBlockIndex !== undefined) {
-      sequenceInit = {
-        sequence: { name: snapshot.sequenceName, blocks: snapshot.sequenceBlocks },
-        blockIndex: snapshot.sequenceBlockIndex,
-      };
-    }
-
-    return { timerInit, engineInit, snapshot, sequenceInit };
-  });
-
-  const [engine, engineActions] = usePomodoroEngine(config, restoredState?.engineInit);
-  const [seqState, seqActions] = useSequence(restoredState?.sequenceInit);
-
-  // Wall-clock ref for timer persistence
-  const timerStartedAtRef = useRef<string>(restoredState?.snapshot?.startedAt ?? '');
-
-  // Track which reminder times have already fired (keyed by "HH:MM") each day
+  // Track which reminder times have already fired
   const firedRemindersRef = useRef<Set<string>>(new Set());
 
-  const onTimerComplete = useCallback(() => {
-    engineActions.completeSession();
-    clearTimerState();
-    if (seqState.isActive) {
-      const nextBlock = seqActions.advance();
-      if (nextBlock) {
-        engineActions.applySequenceBlock(nextBlock);
-      }
-    }
-  }, [engineActions, seqState.isActive, seqActions]);
-
-  const [timer, timerActions] = useTimer(engine.durationSeconds, onTimerComplete, restoredState?.timerInit);
-
-  // Use refs so persistence always reads fresh values (avoids stale closures)
-  const engineRef = useRef(engine);
-  engineRef.current = engine;
-  const engineActionsRef = useRef(engineActions);
-  engineActionsRef.current = engineActions;
-  const seqStateRef = useRef(seqState);
-  seqStateRef.current = seqState;
-
-  // Helper to persist timer state to disk — uses refs, safe to call from any closure
-  const persistTimer = useCallback((opts: { isPaused: boolean; startedAt: string; pausedSecondsLeft?: number }) => {
-    try {
-      const eng = engineRef.current;
-      const defaultDuration = engineActionsRef.current.getDuration(eng.sessionType);
-      const snapshot: TimerSnapshot = {
-        sessionType: eng.sessionType,
-        totalSeconds: eng.durationSeconds,
-        startedAt: opts.startedAt,
-        isPaused: opts.isPaused,
-        pausedSecondsLeft: opts.pausedSecondsLeft,
-        sessionNumber: eng.sessionNumber,
-        totalWorkSessions: eng.totalWorkSessions,
-        label: eng.currentLabel,
-        project: eng.currentProject,
-        overrideDuration: eng.durationSeconds !== defaultDuration ? eng.durationSeconds : null,
-        sequenceName: seqStateRef.current.sequence?.name,
-        sequenceBlocks: seqStateRef.current.sequence?.blocks,
-        sequenceBlockIndex: seqStateRef.current.isActive ? seqStateRef.current.currentBlockIndex : undefined,
-      };
-      saveTimerState(snapshot);
-    } catch {
-      // Don't let persistence errors break the timer
-    }
-  }, []);
-
-  const allSequences = useMemo(() => {
-    return [...Object.values(PRESET_SEQUENCES), ...loadCustomSequences()];
-  }, []);
-
   // Apply CLI initial flags on mount
+  const appliedInitRef = useRef(false);
   useEffect(() => {
+    if (appliedInitRef.current || connectionStatus !== 'connected') return;
+    appliedInitRef.current = true;
+
     if (initialProject) {
-      engineActions.setSessionInfo({ project: initialProject });
-      saveStickyProject(initialProject);
+      actions.setProject(initialProject);
     }
     if (initialSequence) {
       // Try preset name first, then custom sequences, then inline format
       const preset = PRESET_SEQUENCES[initialSequence];
       if (preset) {
-        handleActivateSequence(preset);
+        actions.activateSequence(initialSequence);
       } else {
         const custom = loadCustomSequences().find(s => s.name === initialSequence);
         if (custom) {
-          handleActivateSequence(custom);
+          actions.activateSequence(initialSequence);
         } else {
           const parsed = parseSequenceString(initialSequence);
-          if (parsed) handleActivateSequence(parsed);
+          if (parsed) actions.activateSequenceInline(initialSequence);
         }
       }
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [connectionStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const allSequences = useMemo(() => {
+    return [...Object.values(PRESET_SEQUENCES), ...loadCustomSequences()];
+  }, []);
 
   const todayStats = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -277,7 +149,6 @@ export function App({ config: initialConfig, initialView, initialProject, initia
             if (task) message = `${r.title}\nTask: ${task.text}`;
           }
           notifyReminder(r.title, message, config.sound, config.notificationDuration, config.sounds);
-          // Disable non-recurring reminders after firing
           if (!r.recurring) {
             updateReminder(r.id, { enabled: false });
           }
@@ -290,53 +161,25 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     return () => clearInterval(interval);
   }, [config.notifications, config.notificationDuration]);
 
-  // CHANGE 7: Force timer reset when activating a sequence
   const handleActivateSequence = useCallback((seq: import('./types.js').SessionSequence) => {
-    seqActions.setSequence(seq);
-    const firstBlock = seq.blocks[0]!;
-    engineActions.applySequenceBlock(firstBlock);
-    timerActions.reset(firstBlock.durationMinutes * 60);
+    actions.activateSequence(seq.name);
     setView('timer');
-  }, [seqActions, engineActions, timerActions]);
+  }, [actions]);
 
   const handleClearSequence = useCallback(() => {
-    seqActions.clear();
-    engineActions.resetOverride();
-  }, [seqActions, engineActions]);
+    actions.clearSequence();
+  }, [actions]);
 
-  // CHANGE 6: Set custom duration
   const handleSetCustomDuration = useCallback((minutes: number) => {
     if (minutes > 0 && minutes <= 180) {
-      engineActions.setDurationOverride(minutes * 60);
-      timerActions.reset(minutes * 60);
+      actions.setDuration(minutes);
     }
-  }, [engineActions, timerActions]);
+  }, [actions]);
 
-  // CHANGE 8: Reset modal confirm
   const handleResetConfirm = useCallback((asProductive: boolean) => {
-    if (timer.elapsed >= 10) {
-      if (asProductive) {
-        engineActions.completeSession();
-      } else {
-        engineActions.abandonSession();
-      }
-    }
-    timerActions.reset();
-    clearTimerState();
+    actions.resetAndLog(asProductive);
     setShowResetModal(false);
-  }, [timer.elapsed, engineActions, timerActions]);
-
-  // Auto-start breaks
-  const isBreak = engine.sessionType !== 'work';
-  if (isBreak && config.autoStartBreaks && !timer.isRunning && !timer.isPaused && timer.secondsLeft === engine.durationSeconds) {
-    setTimeout(() => {
-      timerActions.start();
-      engineActions.startSession();
-      const now = new Date().toISOString();
-      timerStartedAtRef.current = now;
-      setTimeout(() => persistTimer({ isPaused: false, startedAt: now }), 0);
-    }, 0);
-  }
+  }, [actions]);
 
   const handleCommand = useCallback((cmd: string, args: string) => {
     setShowCommandPalette(false);
@@ -363,11 +206,12 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       case 'session': {
         const preset = PRESET_SEQUENCES[args.trim()];
         if (preset) {
-          handleActivateSequence(preset);
+          actions.activateSequence(args.trim());
         } else {
           const seq = parseSequenceString(args);
-          if (seq) handleActivateSequence(seq);
+          if (seq) actions.activateSequenceInline(args);
         }
+        setView('timer');
         break;
       }
       case 'task': {
@@ -418,8 +262,6 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           else if (unit === 'h') ms = amount * 60 * 60 * 1000;
 
           const label = remindMatch[3]?.trim() || `${amount}${unit} timer`;
-
-          // Store as a real reminder so it shows in the list
           const fireAt = new Date(Date.now() + ms);
           const fireTime = `${String(fireAt.getHours()).padStart(2, '0')}:${String(fireAt.getMinutes()).padStart(2, '0')}`;
           const reminderId = nanoid();
@@ -431,10 +273,8 @@ export function App({ config: initialConfig, initialView, initialProject, initia
             recurring: false,
           });
 
-          // Use setTimeout for accurate firing (don't rely on 30s polling)
           setTimeout(() => {
             notifyReminder(label, `Timer: ${label}`, config.sound, config.notificationDuration, config.sounds);
-            // Disable after firing
             updateReminder(reminderId, { enabled: false });
           }, ms);
 
@@ -443,13 +283,13 @@ export function App({ config: initialConfig, initialView, initialProject, initia
         break;
       }
       case 'quit':
-        engineActions.abandonSession();
+        actions.abandon();
         exit();
         break;
       default:
         break;
     }
-  }, [engineActions, exit, handleActivateSequence]);
+  }, [actions, exit, config]);
 
   const handleGlobalSearchNavigate = useCallback((targetView: View, focusId: string, type: 'task' | 'sequence' | 'reminder') => {
     setShowGlobalSearch(false);
@@ -459,7 +299,6 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     } else if (type === 'reminder') {
       setReminderFocusId(focusId);
     }
-    // sequences: just navigate to plan view, no focus needed
   }, []);
 
   useInput((input, key) => {
@@ -474,7 +313,6 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       if (isZen) { setIsZen(false); return; }
     }
 
-    // CHANGE 12: include showHelp and showResetModal in the guard
     if (showCommandPalette || showSearch || showInsights || showGlobalSearch || showHelp || showResetModal || isTyping) return;
 
     if (input === 'z' && (view === 'timer' || view === 'clock')) {
@@ -486,26 +324,24 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       return;
     }
 
-    // CHANGE 10: help overlay
     if (input === '?' && !isZen) {
       setShowHelp(true);
       return;
     }
 
-    // Ctrl+G: open current view in $EDITOR
     if (input === 'g' && key.ctrl && !isZen) {
       const changed = openInNvim(view);
       if (changed) {
         setEditGeneration(g => g + 1);
         if (view === 'config') {
           setConfig(loadConfig());
+          actions.updateConfig();
         }
       }
       return;
     }
 
     if (!isZen) {
-      // CHANGE 1: updated view numbers
       if (input === '1') { setView('timer'); return; }
       if (input === '2') { setView('tasks'); return; }
       if (input === '3') { setView('reminders'); return; }
@@ -524,26 +360,20 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     }
 
     if (input === '/' && !isZen) {
-      // In tasks view, let TasksView handle / for in-view filtering
       if (view !== 'tasks') {
         setShowGlobalSearch(true);
       }
       return;
     }
 
-    // CHANGE 3: clear sequence from timer screen
-    if (input === 'c' && view === 'timer' && seqState.isActive) {
+    if (input === 'c' && view === 'timer' && sequence.sequenceIsActive) {
       handleClearSequence();
       return;
     }
 
-    // CHANGE 8: reset modal from timer screen
     if (input === 'r' && view === 'timer') {
-      // If elapsed is 0 and it's a break, skip directly to next focus session
       if (timer.elapsed === 0 && engine.sessionType !== 'work') {
-        engineActions.advanceToNext();
-        timerActions.reset();
-        clearTimerState();
+        actions.advanceSession();
         return;
       }
       setShowResetModal(true);
@@ -552,39 +382,24 @@ export function App({ config: initialConfig, initialView, initialProject, initia
 
     if (view === 'timer' || isZen) {
       if (input === ' ') {
-        if (!timer.isRunning && !timer.isPaused) {
-          timerActions.start();
-          engineActions.startSession();
-          const now = new Date().toISOString();
-          timerStartedAtRef.current = now;
-          setTimeout(() => persistTimer({ isPaused: false, startedAt: now }), 0);
-        } else if (timer.isPaused) {
-          timerActions.resume();
-          const now = new Date();
-          const newStartedAt = new Date(now.getTime() - (timer.totalSeconds - timer.secondsLeft) * 1000).toISOString();
-          timerStartedAtRef.current = newStartedAt;
-          setTimeout(() => persistTimer({ isPaused: false, startedAt: newStartedAt }), 0);
-        } else if (!config.strictMode) {
-          timerActions.pause();
-          setTimeout(() => persistTimer({ isPaused: true, startedAt: timerStartedAtRef.current, pausedSecondsLeft: timer.secondsLeft }), 0);
-        }
+        actions.toggle();
         return;
       }
-      if (input === 's' && !config.strictMode && timer.isRunning && !isZen) {
-        timerActions.skip();
-        engineActions.skipSession();
-        clearTimerState();
-        if (seqState.isActive) {
-          const nextBlock = seqActions.advance();
-          if (nextBlock) {
-            engineActions.applySequenceBlock(nextBlock);
-            timerActions.reset(nextBlock.durationMinutes * 60);
-          }
-        }
+      if (input === 's' && !engine.isStrictMode && timer.isRunning && !isZen) {
+        actions.skip();
         return;
       }
     }
   });
+
+  // Show connection status screens
+  if (connectionStatus === 'connecting') {
+    return <Connecting />;
+  }
+
+  if (connectionStatus === 'disconnected') {
+    return <DaemonNotRunning />;
+  }
 
   // Full-screen overlays
   if (showCommandPalette) {
@@ -622,12 +437,10 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     );
   }
 
-  // CHANGE 10: help overlay
   if (showHelp) {
     return <HelpView onClose={() => setShowHelp(false)} />;
   }
 
-  // CHANGE 8: reset modal overlay
   if (showResetModal) {
     return (
       <ResetModal
@@ -672,9 +485,9 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       view={view}
       isRunning={timer.isRunning}
       isPaused={timer.isPaused}
-      strictMode={config.strictMode}
+      strictMode={engine.isStrictMode}
       isZen={false}
-      hasActiveSequence={seqState.isActive}
+      hasActiveSequence={sequence.sequenceIsActive}
       hasActiveProject={!!engine.currentProject}
     />
   );
@@ -690,15 +503,15 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           isRunning={timer.isRunning}
           sessionNumber={engine.sessionNumber}
           totalWorkSessions={engine.totalWorkSessions}
-          sequenceBlocks={seqState.sequence?.blocks}
-          currentBlockIndex={seqState.currentBlockIndex}
+          sequenceBlocks={sequence.sequenceBlocks}
+          currentBlockIndex={sequence.sequenceBlockIndex}
           setIsTyping={setIsTyping}
           timerFormat={config.timerFormat}
           onSetCustomDuration={handleSetCustomDuration}
           currentProject={engine.currentProject}
-          onSetProject={(p) => { engineActions.setSessionInfo({ project: p }); saveStickyProject(p || undefined); }}
+          onSetProject={(p) => actions.setProject(p)}
           sequences={allSequences}
-          activeSequence={seqState.sequence}
+          activeSequence={sequence.sequenceName ? { name: sequence.sequenceName, blocks: sequence.sequenceBlocks ?? [] } : null}
           onActivateSequence={handleActivateSequence}
           onClearSequence={handleClearSequence}
         />
@@ -706,7 +519,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       {view === 'plan' && (
         <PlannerView
           key={editGeneration}
-          activeSequence={seqState.sequence}
+          activeSequence={sequence.sequenceName ? { name: sequence.sequenceName, blocks: sequence.sequenceBlocks ?? [] } : null}
           onActivateSequence={handleActivateSequence}
           onClearSequence={handleClearSequence}
           setIsTyping={setIsTyping}
@@ -714,7 +527,15 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       )}
       {view === 'stats' && <ReportsView />}
       {view === 'config' && (
-        <ConfigView key={editGeneration} config={config} onConfigChange={setConfig} setIsTyping={setIsTyping} />
+        <ConfigView
+          key={editGeneration}
+          config={config}
+          onConfigChange={(newConfig) => {
+            setConfig(newConfig);
+            actions.updateConfig();
+          }}
+          setIsTyping={setIsTyping}
+        />
       )}
       {view === 'clock' && <ClockView />}
       {view === 'reminders' && (

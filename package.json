@@ -9,7 +9,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx source/cli.tsx",
-    "start": "node dist/cli.js"
+    "dev:daemon": "tsx source/cli.tsx daemon start",
+    "start": "node dist/cli.js",
+    "daemon": "node dist/cli.js daemon start"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

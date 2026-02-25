@@ -5,19 +5,34 @@ import meow from 'meow';
 import { loadConfig } from './lib/config.js';
 import { App } from './app.js';
 import type { View } from './types.js';
+import { isDaemonRunning, sendCommand } from './daemon/client.js';
+import { startDaemon } from './daemon/server.js';
+import { DAEMON_PID_PATH } from './daemon/protocol.js';
 
 const cli = meow(`
   Usage
     $ pomodorocli [command]
 
   Commands
-    start       Start Pomodoro (default)
-    stats       View stats
-    plan        View planner
-    backup      Backup session data
-    export      Export sessions to CSV
-    import      Import sessions from file
-    track       Set up Firefox browser tracking
+    start         Start TUI (default, requires daemon)
+    daemon start  Start the background daemon
+    daemon stop   Stop the daemon
+    daemon status Check if daemon is running
+    stats         View stats
+    plan          View planner
+    backup        Backup session data
+    export        Export sessions to CSV
+    import        Import sessions from file
+    track         Set up Firefox browser tracking
+
+  Timer Control (sends commands to daemon)
+    pause         Pause the timer
+    resume        Resume the timer
+    toggle        Toggle start/pause
+    skip          Skip current session
+    reset         Reset current session
+    status        Print timer state as JSON
+    project <name>  Set current project
 
   Options
     --work, -w        Work duration in minutes (default: 25)
@@ -26,12 +41,15 @@ const cli = meow(`
     --strict          Enable strict mode (no pause/skip)
     --project, -p     Set initial project tag
     --sequence, -s    Activate a sequence (name or inline e.g. "45w 15b 45w")
+    --format, -f      Output format for status (json, short)
 
   Examples
+    $ pomodorocli daemon start
     $ pomodorocli
-    $ pomodorocli start --work 50 --strict
     $ pomodorocli start --project backend --sequence deep-work
-    $ pomodorocli stats
+    $ pomodorocli toggle
+    $ pomodorocli status --format short
+    $ pomodorocli project backend
 `, {
   importMeta: import.meta,
   flags: {
@@ -42,6 +60,7 @@ const cli = meow(`
     output: { type: 'string', shortFlag: 'o' },
     project: { type: 'string', shortFlag: 'p' },
     sequence: { type: 'string', shortFlag: 's' },
+    format: { type: 'string', shortFlag: 'f' },
   },
 });
 
@@ -54,7 +73,8 @@ if (cli.flags.shortBreak) config.shortBreakDuration = cli.flags.shortBreak;
 if (cli.flags.longBreak) config.longBreakDuration = cli.flags.longBreak;
 if (cli.flags.strict) config.strictMode = true;
 
-// Handle non-interactive commands
+// --- Non-interactive commands ---
+
 if (command === 'backup') {
   const { handleBackup } = await import('./lib/data.js');
   handleBackup();
@@ -79,6 +99,131 @@ if (command === 'import') {
   const { handleImport } = await import('./lib/data.js');
   handleImport(file);
   process.exit(0);
+}
+
+// --- Daemon management ---
+
+if (command === 'daemon') {
+  const subcommand = cli.input[1] ?? 'start';
+
+  if (subcommand === 'start') {
+    if (isDaemonRunning()) {
+      console.log('Daemon is already running.');
+      process.exit(0);
+    }
+    // startDaemon() starts the server and keeps the process alive.
+    // We must not fall through to TUI/timer command code below.
+    startDaemon();
+    // If we get here, the server is listening. Block forever.
+    await new Promise(() => {});
+  } else if (subcommand === 'stop') {
+    if (!isDaemonRunning()) {
+      console.log('Daemon is not running.');
+      process.exit(0);
+    }
+    try {
+      const resp = await sendCommand({ cmd: 'shutdown' });
+      console.log(resp.ok ? 'Daemon stopped.' : `Error: ${(resp as { error: string }).error}`);
+    } catch (err) {
+      console.error('Failed to stop daemon:', err);
+    }
+    process.exit(0);
+  } else if (subcommand === 'status') {
+    if (isDaemonRunning()) {
+      const fs = await import('node:fs');
+      const pid = fs.readFileSync(DAEMON_PID_PATH, 'utf-8').trim();
+      console.log(`Daemon is running (PID: ${pid})`);
+    } else {
+      console.log('Daemon is not running.');
+    }
+    process.exit(0);
+  } else {
+    console.error(`Unknown daemon subcommand: ${subcommand}`);
+    process.exit(1);
+  }
+}
+
+// --- Timer control commands (sent to daemon) ---
+
+const timerCommands: Record<string, () => Promise<void>> = {
+  async pause() {
+    const resp = await sendCommand({ cmd: 'pause' });
+    if (resp.ok) console.log('Paused.');
+    else console.error((resp as { error: string }).error);
+  },
+  async resume() {
+    const resp = await sendCommand({ cmd: 'resume' });
+    if (resp.ok) console.log('Resumed.');
+    else console.error((resp as { error: string }).error);
+  },
+  async toggle() {
+    const resp = await sendCommand({ cmd: 'toggle' });
+    if (resp.ok) {
+      const s = resp.state;
+      console.log(s.isRunning && !s.isPaused ? 'Running.' : s.isPaused ? 'Paused.' : 'Started.');
+    } else {
+      console.error((resp as { error: string }).error);
+    }
+  },
+  async skip() {
+    const resp = await sendCommand({ cmd: 'skip' });
+    if (resp.ok) console.log('Skipped.');
+    else console.error((resp as { error: string }).error);
+  },
+  async reset() {
+    const resp = await sendCommand({ cmd: 'reset' });
+    if (resp.ok) console.log('Reset.');
+    else console.error((resp as { error: string }).error);
+  },
+  async status() {
+    const resp = await sendCommand({ cmd: 'status' });
+    if (!resp.ok) {
+      console.error((resp as { error: string }).error);
+      return;
+    }
+    const s = resp.state;
+    if (cli.flags.format === 'short') {
+      const icon = s.sessionType === 'work' ? '\u{1F345}' : '\u2615';
+      const m = Math.floor(s.secondsLeft / 60);
+      const sec = s.secondsLeft % 60;
+      const time = `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+      let text = `${icon} ${time}`;
+      if (s.currentProject) text += ` #${s.currentProject}`;
+      if (!s.isRunning && !s.isPaused) text = `${icon} idle`;
+      if (s.isPaused) text += ' [paused]';
+      console.log(text);
+    } else {
+      console.log(JSON.stringify(s, null, 2));
+    }
+  },
+  async project() {
+    const name = cli.input[1] ?? '';
+    const resp = await sendCommand({ cmd: 'set-project', project: name });
+    if (resp.ok) console.log(name ? `Project set to #${name}` : 'Project cleared.');
+    else console.error((resp as { error: string }).error);
+  },
+};
+
+if (command in timerCommands) {
+  if (!isDaemonRunning()) {
+    console.error('Daemon is not running. Start it with: pomodorocli daemon start');
+    process.exit(1);
+  }
+  try {
+    await timerCommands[command]!();
+  } catch (err) {
+    console.error('Error:', err);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+// --- Interactive TUI commands ---
+
+// Ensure daemon is running before starting TUI
+if (!isDaemonRunning()) {
+  console.error('Daemon is not running. Start it with: pomodorocli daemon start');
+  process.exit(1);
 }
 
 // Map command to initial view

@@ -1,0 +1,13 @@
+[Unit]
+Description=pomodorocli Timer Daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/pomodorocli daemon start
+Restart=on-failure
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
