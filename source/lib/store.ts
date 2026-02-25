@@ -115,6 +115,24 @@ export function clearTimerState(): void {
   }
 }
 
+// Sticky project persistence
+const STICKY_PROJECT_PATH = path.join(DATA_DIR, 'sticky-project.json');
+
+export function saveStickyProject(project: string | undefined): void {
+  if (project) {
+    atomicWrite(STICKY_PROJECT_PATH, { project });
+  } else {
+    try {
+      if (fs.existsSync(STICKY_PROJECT_PATH)) fs.unlinkSync(STICKY_PROJECT_PATH);
+    } catch { /* ignore */ }
+  }
+}
+
+export function loadStickyProject(): string | undefined {
+  const data = readJSON<{ project?: string } | null>(STICKY_PROJECT_PATH, null);
+  return data?.project;
+}
+
 // Data dir path for export/backup
 export function getDataDir(): string {
   return DATA_DIR;

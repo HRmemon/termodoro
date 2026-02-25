@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useInput, useApp } from 'ink';
 import { nanoid } from 'nanoid';
 import type { Config, View, SessionType } from './types.js';
-import { loadSessions, appendSession, loadTimerState, saveTimerState, clearTimerState } from './lib/store.js';
+import { loadSessions, appendSession, loadTimerState, saveTimerState, clearTimerState, saveStickyProject, loadStickyProject } from './lib/store.js';
 import { generateAndStoreSuggestions } from './lib/tracker.js';
 import type { TimerSnapshot } from './lib/store.js';
 import type { TimerInitialState } from './hooks/useTimer.js';
@@ -14,6 +14,7 @@ import { useTimer } from './hooks/useTimer.js';
 import { usePomodoroEngine } from './hooks/usePomodoroEngine.js';
 import { useSequence, parseSequenceString, PRESET_SEQUENCES } from './hooks/useSequence.js';
 import type { SequenceInitialState } from './hooks/useSequence.js';
+import { loadCustomSequences } from './lib/sequences.js';
 import { Layout } from './components/Layout.js';
 import { StatusLine } from './components/StatusLine.js';
 import { KeysBar } from './components/KeysBar.js';
@@ -42,9 +43,11 @@ import { loadConfig } from './lib/config.js';
 interface AppProps {
   config: Config;
   initialView?: View;
+  initialProject?: string;
+  initialSequence?: string;
 }
 
-export function App({ config: initialConfig, initialView }: AppProps) {
+export function App({ config: initialConfig, initialView, initialProject, initialSequence }: AppProps) {
   const [config, setConfig] = useState(initialConfig);
   const [view, setView] = useState<View>(initialView ?? 'timer');
   const [isZen, setIsZen] = useState(false);
@@ -68,8 +71,15 @@ export function App({ config: initialConfig, initialView }: AppProps) {
 
   // Restore timer state from disk on mount
   const [restoredState] = useState(() => {
+    const stickyProject = loadStickyProject();
     const snapshot = loadTimerState();
-    if (!snapshot) return null;
+    if (!snapshot) {
+      // No running timer, but restore sticky project if present
+      if (stickyProject) {
+        return { timerInit: undefined, engineInit: { project: stickyProject } as EngineInitialState, snapshot: undefined, sequenceInit: undefined };
+      }
+      return null;
+    }
 
     let timerInit: TimerInitialState;
     if (snapshot.isPaused) {
@@ -118,6 +128,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
           sessionType: nextSessionType,
           sessionNumber: nextSessionNumber,
           totalWorkSessions: nextTotalWork,
+          project: stickyProject,
         };
         // No timerInit — timer starts idle for the next session
         return { timerInit: undefined, engineInit, snapshot: undefined };
@@ -134,7 +145,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       sessionNumber: snapshot.sessionNumber,
       totalWorkSessions: snapshot.totalWorkSessions,
       label: snapshot.label,
-      project: snapshot.project,
+      project: snapshot.project ?? stickyProject,
       overrideDuration: snapshot.overrideDuration,
       startedAt: snapshot.startedAt,
     };
@@ -206,6 +217,33 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       // Don't let persistence errors break the timer
     }
   }, []);
+
+  const allSequences = useMemo(() => {
+    return [...Object.values(PRESET_SEQUENCES), ...loadCustomSequences()];
+  }, []);
+
+  // Apply CLI initial flags on mount
+  useEffect(() => {
+    if (initialProject) {
+      engineActions.setSessionInfo({ project: initialProject });
+      saveStickyProject(initialProject);
+    }
+    if (initialSequence) {
+      // Try preset name first, then custom sequences, then inline format
+      const preset = PRESET_SEQUENCES[initialSequence];
+      if (preset) {
+        handleActivateSequence(preset);
+      } else {
+        const custom = loadCustomSequences().find(s => s.name === initialSequence);
+        if (custom) {
+          handleActivateSequence(custom);
+        } else {
+          const parsed = parseSequenceString(initialSequence);
+          if (parsed) handleActivateSequence(parsed);
+        }
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todayStats = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -637,6 +675,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       strictMode={config.strictMode}
       isZen={false}
       hasActiveSequence={seqState.isActive}
+      hasActiveProject={!!engine.currentProject}
     />
   );
 
@@ -656,6 +695,12 @@ export function App({ config: initialConfig, initialView }: AppProps) {
           setIsTyping={setIsTyping}
           timerFormat={config.timerFormat}
           onSetCustomDuration={handleSetCustomDuration}
+          currentProject={engine.currentProject}
+          onSetProject={(p) => { engineActions.setSessionInfo({ project: p }); saveStickyProject(p || undefined); }}
+          sequences={allSequences}
+          activeSequence={seqState.sequence}
+          onActivateSequence={handleActivateSequence}
+          onClearSequence={handleClearSequence}
         />
       )}
       {view === 'plan' && (

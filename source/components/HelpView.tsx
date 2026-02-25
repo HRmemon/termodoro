@@ -26,11 +26,11 @@ const page1 = [
       ['s', 'Skip session'],
       ['z', 'Zen mode'],
       ['t', 'Set custom duration'],
+      ['p', 'Set project (Tab: autocomplete)'],
+      ['P', 'Clear project'],
+      ['S', 'Pick sequence'],
       ['r', 'Reset (log prompt)'],
       ['c', 'Clear active sequence'],
-      ['j/k', 'Navigate active tasks'],
-      ['Enter', 'Deactivate task'],
-      ['x', 'Complete task'],
     ],
   },
   {
@@ -62,9 +62,6 @@ const page1 = [
     hints: [
       ['j/k', 'Navigate'],
       ['Enter', 'Activate sequence'],
-      ['a', 'New custom sequence'],
-      ['e', 'Edit custom'],
-      ['d', 'Delete custom'],
       ['c', 'Clear active'],
     ],
   },
@@ -85,6 +82,7 @@ const page2 = [
       ['Enter', 'Edit / toggle'],
       ['s', 'Save to disk'],
       ['p', 'Preview sound'],
+      ['', 'Sequences: a/e/d in sub-mode'],
     ],
   },
   {

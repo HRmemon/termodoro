@@ -24,10 +24,13 @@ const cli = meow(`
     --short-break     Short break duration (default: 5)
     --long-break      Long break duration (default: 15)
     --strict          Enable strict mode (no pause/skip)
+    --project, -p     Set initial project tag
+    --sequence, -s    Activate a sequence (name or inline e.g. "45w 15b 45w")
 
   Examples
     $ pomodorocli
     $ pomodorocli start --work 50 --strict
+    $ pomodorocli start --project backend --sequence deep-work
     $ pomodorocli stats
 `, {
   importMeta: import.meta,
@@ -37,6 +40,8 @@ const cli = meow(`
     longBreak: { type: 'number' },
     strict: { type: 'boolean' },
     output: { type: 'string', shortFlag: 'o' },
+    project: { type: 'string', shortFlag: 'p' },
+    sequence: { type: 'string', shortFlag: 's' },
   },
 });
 
@@ -87,4 +92,4 @@ const viewMap: Record<string, View> = {
 };
 const initialView = viewMap[command] ?? 'timer';
 
-render(<App config={config} initialView={initialView} />);
+render(<App config={config} initialView={initialView} initialProject={cli.flags.project} initialSequence={cli.flags.sequence} />);

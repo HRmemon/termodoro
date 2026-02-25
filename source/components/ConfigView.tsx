@@ -1,12 +1,15 @@
 import { useState, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
-import type { Config } from '../types.js';
+import type { Config, SessionSequence } from '../types.js';
 import { saveConfig } from '../lib/config.js';
 import { ALL_SOUND_CHOICES, SOUND_LABELS, previewSound } from '../lib/sounds.js';
 import type { SoundEvent } from '../lib/sounds.js';
 import { loadTrackerConfig, saveTrackerConfig, SlotCategory, DomainRule, loadTrackerConfigFull, saveTrackerConfigFull, getCategoryByCode } from '../lib/tracker.js';
 import { getAllDomains, getAllDomainPaths } from '../lib/browser-stats.js';
+import { loadCustomSequences, addCustomSequence, deleteCustomSequence } from '../lib/sequences.js';
+import { PRESET_SEQUENCES, parseSequenceString } from '../hooks/useSequence.js';
+import { colors } from '../lib/theme.js';
 
 interface ConfigViewProps {
   config: Config;
@@ -77,6 +80,16 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
   const [knownDomains] = useState<string[]>(() => [...getAllDomains(), ...getAllDomainPaths()]);
   const [domainSugIdx, setDomainSugIdx] = useState(0);
 
+  // Sequence CRUD sub-mode
+  const [seqMode, setSeqMode] = useState(false);
+  const [seqList, setSeqList] = useState<SessionSequence[]>(() => loadCustomSequences());
+  const [seqCursor, setSeqCursor] = useState(0);
+  const [seqEditing, setSeqEditing] = useState<'add' | 'edit' | null>(null);
+  const [seqEditStep, setSeqEditStep] = useState<'name' | 'blocks'>('name');
+  const [seqEditName, setSeqEditName] = useState('');
+  const [seqEditBlocks, setSeqEditBlocks] = useState('');
+  const [seqError, setSeqError] = useState('');
+
   const saveRules = useCallback((rules: DomainRule[]) => {
     setRuleList(rules);
     const full = loadTrackerConfigFull();
@@ -88,6 +101,10 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
   const saveCats = useCallback((cats: SlotCategory[]) => {
     setCatList(cats);
     saveTrackerConfig({ categories: cats });
+  }, []);
+
+  const refreshSeqs = useCallback(() => {
+    setSeqList(loadCustomSequences());
   }, []);
 
   const getFieldValue = (field: ConfigField): string => {
@@ -195,6 +212,41 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
       return;
     }
 
+    // Sequence edit sub-flow
+    if (seqEditing) {
+      if (key.escape) { setSeqEditing(null); setIsTyping(false); setSeqError(''); return; }
+      return; // TextInput handles input
+    }
+
+    // Sequence list mode
+    if (seqMode) {
+      if (key.escape) { setSeqMode(false); return; }
+      if (input === 'j' || key.downArrow) setSeqCursor(p => Math.min(p + 1, seqList.length - 1));
+      else if (input === 'k' || key.upArrow) setSeqCursor(p => Math.max(0, p - 1));
+      else if (input === 'a') {
+        setSeqEditing('add');
+        setSeqEditStep('name');
+        setSeqEditName('');
+        setSeqEditBlocks('');
+        setSeqError('');
+        setIsTyping(true);
+      } else if (input === 'e' && seqList.length > 0) {
+        const seq = seqList[seqCursor]!;
+        setSeqEditing('edit');
+        setSeqEditStep('blocks');
+        setSeqEditName(seq.name);
+        setSeqEditBlocks(seq.blocks.map(b => `${b.durationMinutes}${b.type === 'work' ? 'w' : 'b'}`).join(' '));
+        setSeqError('');
+        setIsTyping(true);
+      } else if (input === 'd' && seqList.length > 0) {
+        const seq = seqList[seqCursor]!;
+        deleteCustomSequence(seq.name);
+        refreshSeqs();
+        setSeqCursor(p => Math.min(p, Math.max(0, seqList.length - 2)));
+      }
+      return;
+    }
+
     // Domain rule list mode
     if (ruleMode) {
       if (key.escape) { setRuleMode(false); return; }
@@ -259,8 +311,8 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
       return;
     }
 
-    // Total items = FIELDS.length + 2 (for "Tracker Categories" and "Domain Rules")
-    const totalItems = FIELDS.length + 2;
+    // Total items = FIELDS.length + 3 (Tracker Categories, Domain Rules, Sequences)
+    const totalItems = FIELDS.length + 3;
 
     if (input === 'j' || key.downArrow) {
       setSelectedIdx(i => Math.min(i + 1, totalItems - 1));
@@ -284,6 +336,13 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
         setRuleMode(true);
         setRuleCursor(0);
         setRuleList(loadTrackerConfigFull().domainRules);
+        return;
+      }
+      // Check if on the "Sequences" row
+      if (selectedIdx === FIELDS.length + 2) {
+        setSeqMode(true);
+        setSeqCursor(0);
+        refreshSeqs();
         return;
       }
 
@@ -378,6 +437,104 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
     setCatEditing(null);
     setIsTyping(false);
   }, [catEditing, catEditCode, catEditLabel, catEditColor, catEditKey, catList, catCursor, saveCats, setIsTyping]);
+
+  // ─── Sequence Name Submit ────────────────────────────────────────────────────
+
+  const handleSeqNameSubmit = useCallback((value: string) => {
+    const name = value.trim();
+    if (!name) { setSeqError('Name cannot be empty'); return; }
+    if (PRESET_SEQUENCES[name]) { setSeqError('Cannot shadow a preset name'); return; }
+    setSeqEditName(name);
+    setSeqEditStep('blocks');
+    setSeqEditBlocks('');
+    setSeqError('');
+  }, []);
+
+  const handleSeqBlocksSubmit = useCallback((value: string) => {
+    const seq = parseSequenceString(value.trim());
+    if (!seq) { setSeqError('Invalid format. Use: 45w 15b 45w'); return; }
+
+    if (seqEditing === 'add') {
+      seq.name = seqEditName;
+      addCustomSequence(seq);
+    } else if (seqEditing === 'edit') {
+      const existing = seqList[seqCursor];
+      if (existing) {
+        seq.name = existing.name;
+        addCustomSequence(seq);
+      }
+    }
+
+    refreshSeqs();
+    setSeqEditing(null);
+    setIsTyping(false);
+    setSeqError('');
+  }, [seqEditing, seqEditName, seqCursor, seqList, refreshSeqs, setIsTyping]);
+
+  // ─── Sequence Editor Sub-mode ──────────────────────────────────────────────
+
+  if (seqEditing) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <Text bold color="cyan">{seqEditing === 'add' ? 'Add' : 'Edit'} Custom Sequence</Text>
+        <Text dimColor>Esc to cancel</Text>
+        <Box marginTop={1} flexDirection="column">
+          {seqEditStep === 'name' && (
+            <Box>
+              <Text>Name: </Text>
+              <TextInput value={seqEditName} onChange={setSeqEditName} onSubmit={handleSeqNameSubmit} placeholder="my-flow" />
+            </Box>
+          )}
+          {seqEditStep === 'blocks' && (
+            <Box flexDirection="column">
+              <Text>Name: <Text bold>{seqEditName}</Text></Text>
+              <Box>
+                <Text>Blocks (e.g. 45w 15b 45w): </Text>
+                <TextInput value={seqEditBlocks} onChange={setSeqEditBlocks} onSubmit={handleSeqBlocksSubmit} placeholder="25w 5b 25w 5b" />
+              </Box>
+            </Box>
+          )}
+        </Box>
+        {seqError !== '' && (
+          <Box marginTop={1}><Text color="red">{seqError}</Text></Box>
+        )}
+      </Box>
+    );
+  }
+
+  // ─── Sequence List Sub-mode ────────────────────────────────────────────────
+
+  if (seqMode) {
+    const presets = Object.values(PRESET_SEQUENCES);
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <Text bold color="cyan">Custom Sequences</Text>
+        <Text dimColor>a:add  e:edit  d:delete  Esc:back</Text>
+        <Box marginTop={1} marginBottom={1}>
+          <Text dimColor>Presets (read-only):</Text>
+        </Box>
+        {presets.map(seq => (
+          <Box key={seq.name}>
+            <Text dimColor>  {seq.name}  </Text>
+            <Text dimColor>{seq.blocks.map(b => `${b.durationMinutes}${b.type === 'work' ? 'w' : 'b'}`).join(' ')}</Text>
+          </Box>
+        ))}
+        <Box marginTop={1} marginBottom={1}>
+          <Text dimColor>Custom:</Text>
+        </Box>
+        {seqList.map((seq, i) => (
+          <Box key={seq.name}>
+            <Text color={i === seqCursor ? 'yellow' : 'gray'} bold={i === seqCursor}>
+              {i === seqCursor ? '> ' : '  '}
+            </Text>
+            <Box width={14}><Text color={i === seqCursor ? 'white' : 'gray'} bold={i === seqCursor}>{seq.name}</Text></Box>
+            <Text dimColor>{seq.blocks.map(b => `${b.durationMinutes}${b.type === 'work' ? 'w' : 'b'}`).join(' ')}</Text>
+          </Box>
+        ))}
+        {seqList.length === 0 && <Text dimColor>  No custom sequences. Press a to add one.</Text>}
+      </Box>
+    );
+  }
 
   // ─── Domain Rule Editor Sub-mode ─────────────────────────────────────────────
 
@@ -639,6 +796,18 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
         </Box>
         <Text color="cyan" bold={selectedIdx === FIELDS.length + 1}>{ruleList.length} rules</Text>
         {selectedIdx === FIELDS.length + 1 && <Text dimColor>  Enter to manage</Text>}
+      </Box>
+
+      {/* Sequences entry */}
+      <Box>
+        <Text color={selectedIdx === FIELDS.length + 2 ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length + 2}>
+          {selectedIdx === FIELDS.length + 2 ? '> ' : '  '}
+        </Text>
+        <Box width={22}>
+          <Text color={selectedIdx === FIELDS.length + 2 ? 'white' : 'gray'}>Sequences</Text>
+        </Box>
+        <Text color="cyan" bold={selectedIdx === FIELDS.length + 2}>{seqList.length} custom</Text>
+        {selectedIdx === FIELDS.length + 2 && <Text dimColor>  Enter to manage</Text>}
       </Box>
 
       {saved && (

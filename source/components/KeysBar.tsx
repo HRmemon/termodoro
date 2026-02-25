@@ -11,6 +11,7 @@ interface KeysBarProps {
   strictMode: boolean;
   isZen: boolean;
   hasActiveSequence: boolean;
+  hasActiveProject: boolean;
 }
 
 interface KeyHint {
@@ -18,7 +19,7 @@ interface KeyHint {
   label: string;
 }
 
-export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence }: KeysBarProps) {
+export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence, hasActiveProject }: KeysBarProps) {
   // Zen mode: minimal
   if (isZen) {
     const hint = isRunning && !isPaused ? 'Pause' : isPaused ? 'Resume' : 'Start';
@@ -43,6 +44,9 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     if (isRunning && !strictMode) actionHints.push({ key: 's', label: 'Skip' });
     actionHints.push({ key: 'z', label: 'Zen' });
     actionHints.push({ key: 't', label: 'Set duration' });
+    actionHints.push({ key: 'p', label: 'Project' });
+    if (hasActiveProject) actionHints.push({ key: 'P', label: 'Clear project' });
+    actionHints.push({ key: 'S', label: 'Sequences' });
     actionHints.push({ key: 'r', label: 'Reset+log' });
     if (hasActiveSequence) actionHints.push({ key: 'c', label: 'Clear seq' });
   }
@@ -72,9 +76,6 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
   if (view === 'plan') {
     actionHints.push({ key: 'j/k', label: 'Navigate' });
     actionHints.push({ key: 'Enter', label: 'Activate' });
-    actionHints.push({ key: 'a', label: 'New' });
-    actionHints.push({ key: 'e', label: 'Edit' });
-    actionHints.push({ key: 'd', label: 'Delete' });
     if (hasActiveSequence) actionHints.push({ key: 'c', label: 'Clear' });
   }
 

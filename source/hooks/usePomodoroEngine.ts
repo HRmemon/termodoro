@@ -59,8 +59,8 @@ export function usePomodoroEngine(config: Config, initialState?: EngineInitialSt
   const durationSeconds = overrideDuration ?? getDuration(sessionType);
 
   const setSessionInfo = useCallback((info: { label?: string; project?: string }) => {
-    if (info.label !== undefined) setCurrentLabel(info.label);
-    if (info.project !== undefined) setCurrentProject(info.project);
+    if (info.label !== undefined) setCurrentLabel(info.label || undefined);
+    if (info.project !== undefined) setCurrentProject(info.project || undefined);
   }, []);
 
   const saveSession = useCallback((status: Session['status']) => {
