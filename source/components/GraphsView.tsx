@@ -256,9 +256,9 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     } else if (key.rightArrow) {
       moveDateBy(1);
     }
-    else if (input === 'j' || key.downArrow) {
+    else if (input === 'j') {
       setWeekOffset(o => o + 1);
-    } else if (input === 'k' || key.upArrow) {
+    } else if (input === 'k') {
       setWeekOffset(o => Math.max(0, o - 1));
     }
     else if (key.return || input === 'x') {
