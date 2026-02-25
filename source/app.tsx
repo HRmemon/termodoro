@@ -36,6 +36,8 @@ import { WebView } from './components/WebView.js';
 import { TrackerView } from './components/TrackerView.js';
 import { GraphsView } from './components/GraphsView.js';
 import { getStreaks } from './lib/stats.js';
+import { openInNvim } from './lib/nvim-edit.js';
+import { loadConfig } from './lib/config.js';
 
 interface AppProps {
   config: Config;
@@ -54,6 +56,9 @@ export function App({ config: initialConfig, initialView }: AppProps) {
   const [showResetModal, setShowResetModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
+  // Counter to force remount of view components after external edit
+  const [editGeneration, setEditGeneration] = useState(0);
 
   // Focus state for global search navigation
   const [taskFocusId, setTaskFocusId] = useState<string | null>(null);
@@ -444,6 +449,18 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       return;
     }
 
+    // Ctrl+G: open current view in $EDITOR
+    if (input === 'g' && key.ctrl && !isZen) {
+      const changed = openInNvim(view);
+      if (changed) {
+        setEditGeneration(g => g + 1);
+        if (view === 'config') {
+          setConfig(loadConfig());
+        }
+      }
+      return;
+    }
+
     if (!isZen) {
       // CHANGE 1: updated view numbers
       if (input === '1') { setView('timer'); return; }
@@ -638,6 +655,7 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       )}
       {view === 'plan' && (
         <PlannerView
+          key={editGeneration}
           activeSequence={seqState.sequence}
           onActivateSequence={handleActivateSequence}
           onClearSequence={handleClearSequence}
@@ -646,11 +664,12 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       )}
       {view === 'stats' && <ReportsView />}
       {view === 'config' && (
-        <ConfigView config={config} onConfigChange={setConfig} setIsTyping={setIsTyping} />
+        <ConfigView key={editGeneration} config={config} onConfigChange={setConfig} setIsTyping={setIsTyping} />
       )}
       {view === 'clock' && <ClockView />}
       {view === 'reminders' && (
         <RemindersView
+          key={editGeneration}
           setIsTyping={setIsTyping}
           compactTime={config.compactTime}
           focusId={reminderFocusId}
@@ -659,14 +678,15 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       )}
       {view === 'tasks' && (
         <TasksView
+          key={editGeneration}
           setIsTyping={setIsTyping}
           focusId={taskFocusId}
           onFocusConsumed={() => setTaskFocusId(null)}
         />
       )}
       {view === 'web' && <WebView />}
-      {view === 'tracker' && <TrackerView />}
-      {view === 'graphs' && <GraphsView setIsTyping={setIsTyping} />}
+      {view === 'tracker' && <TrackerView key={editGeneration} />}
+      {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} />}
     </Layout>
   );
 }
