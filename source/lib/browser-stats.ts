@@ -89,6 +89,26 @@ export interface SlotDomainBreakdown {
   activeMinutes: number;
 }
 
+export function getAllDomains(): string[] {
+  if (!fs.existsSync(DB_PATH)) return [];
+
+  let db: InstanceType<typeof Database> | null = null;
+  try {
+    db = new Database(DB_PATH, { readonly: true });
+    const rows = db.prepare(`
+      SELECT domain, SUM(duration_sec) as total
+      FROM page_visits
+      GROUP BY domain
+      ORDER BY total DESC
+    `).all() as { domain: string; total: number }[];
+    return rows.map(r => r.domain);
+  } catch {
+    return [];
+  } finally {
+    db?.close();
+  }
+}
+
 export function getSlotDomainBreakdown(date: string): SlotDomainBreakdown[] {
   if (!fs.existsSync(DB_PATH)) return [];
 

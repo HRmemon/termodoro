@@ -6,6 +6,7 @@ import { saveConfig } from '../lib/config.js';
 import { ALL_SOUND_CHOICES, SOUND_LABELS, previewSound } from '../lib/sounds.js';
 import type { SoundEvent } from '../lib/sounds.js';
 import { loadTrackerConfig, saveTrackerConfig, SlotCategory, DomainRule, loadTrackerConfigFull, saveTrackerConfigFull, getCategoryByCode } from '../lib/tracker.js';
+import { getAllDomains } from '../lib/browser-stats.js';
 
 interface ConfigViewProps {
   config: Config;
@@ -73,6 +74,8 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
   const [ruleEditStep, setRuleEditStep] = useState<'pattern' | 'category'>('pattern');
   const [ruleEditPattern, setRuleEditPattern] = useState('');
   const [ruleEditCatIdx, setRuleEditCatIdx] = useState(0);
+  const [knownDomains] = useState<string[]>(() => getAllDomains());
+  const [domainSugIdx, setDomainSugIdx] = useState(0);
 
   const saveRules = useCallback((rules: DomainRule[]) => {
     setRuleList(rules);
@@ -159,7 +162,11 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
     // Domain rule edit sub-flow
     if (ruleEditing) {
       if (key.escape) { setRuleEditing(null); setIsTyping(false); return; }
-      if (ruleEditStep === 'pattern') return; // TextInput handles
+      if (ruleEditStep === 'pattern') {
+        if (key.downArrow) { setDomainSugIdx(i => i + 1); return; }
+        if (key.upArrow) { setDomainSugIdx(i => Math.max(0, i - 1)); return; }
+        return;
+      }
       if (ruleEditStep === 'category') {
         if (input === 'h' || key.leftArrow) {
           setRuleEditCatIdx(i => (i - 1 + catList.length) % catList.length);
@@ -380,16 +387,50 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
         <Text bold color="cyan">{ruleEditing === 'add' ? 'Add' : 'Edit'} Domain Rule</Text>
         <Text dimColor>Esc to cancel</Text>
         <Box marginTop={1} flexDirection="column">
-          {ruleEditStep === 'pattern' && (
-            <Box>
-              <Text>Domain pattern: </Text>
-              <TextInput
-                value={ruleEditPattern}
-                onChange={setRuleEditPattern}
-                onSubmit={() => { if (ruleEditPattern.trim()) { setRuleEditStep('category'); setIsTyping(false); } }}
-              />
-            </Box>
-          )}
+          {ruleEditStep === 'pattern' && (() => {
+            const filtered = ruleEditPattern.length > 0
+              ? knownDomains.filter(d => d.toLowerCase().includes(ruleEditPattern.toLowerCase()))
+              : knownDomains;
+            const activeIdx = domainSugIdx % Math.max(1, filtered.length);
+            const startIdx = Math.max(0, Math.min(activeIdx - 3, filtered.length - 8));
+            const shown = filtered.slice(startIdx, startIdx + 8);
+            return (
+              <Box flexDirection="column">
+                <Box>
+                  <Text>Domain pattern: </Text>
+                  <TextInput
+                    value={ruleEditPattern}
+                    onChange={(v) => { setRuleEditPattern(v); setDomainSugIdx(0); }}
+                    onSubmit={() => {
+                      // If a suggestion is highlighted and differs from input, fill it first
+                      if (filtered.length > 0) {
+                        const pick = filtered[activeIdx];
+                        if (pick && pick !== ruleEditPattern) {
+                          setRuleEditPattern(pick);
+                          return;
+                        }
+                      }
+                      if (ruleEditPattern.trim()) { setRuleEditStep('category'); setIsTyping(false); }
+                    }}
+                  />
+                </Box>
+                {shown.length > 0 && (
+                  <Box flexDirection="column" marginTop={1}>
+                    <Text dimColor>↑/↓ select, Enter to fill/confirm</Text>
+                    {shown.map((d) => {
+                      const realIdx = filtered.indexOf(d);
+                      return (
+                        <Text key={d} color={realIdx === activeIdx ? 'cyan' : 'gray'} bold={realIdx === activeIdx}>
+                          {realIdx === activeIdx ? '> ' : '  '}{d}
+                        </Text>
+                      );
+                    })}
+                    {filtered.length > 8 && <Text dimColor>  ...{filtered.length - 8} more</Text>}
+                  </Box>
+                )}
+              </Box>
+            );
+          })()}
           {ruleEditStep === 'category' && (
             <Box flexDirection="column">
               <Text>Pattern: <Text bold>{ruleEditPattern}</Text></Text>
