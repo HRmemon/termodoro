@@ -76,7 +76,7 @@ These work from any view (unless a text input is active):
 | `?` | Help overlay (paginated keybinding reference) |
 | `Ctrl+G` | Open current view's data in `$EDITOR` for bulk editing |
 | `z` | Toggle Zen mode (Timer and Clock views) |
-| `q` | Quit |
+| `q` | Close overlay / exit zen mode |
 
 ---
 

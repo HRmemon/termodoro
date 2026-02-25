@@ -16,7 +16,7 @@ const page1 = [
       ['Ctrl+G', 'Open view in $EDITOR'],
       ['z', 'Toggle Zen mode'],
       ['?', 'This help'],
-      ['q', 'Quit'],
+      ['q', 'Close overlay / exit zen'],
     ],
   },
   {
@@ -141,7 +141,7 @@ export function HelpView({ onClose }: HelpViewProps) {
   const pages = [page1, page2];
 
   useInput((input, key) => {
-    if (key.escape) { onClose(); return; }
+    if (key.escape || input === 'q') { onClose(); return; }
     if (input === 'l' || key.rightArrow || input === 'j' || key.downArrow) {
       setPage(p => Math.min(p + 1, pages.length - 1));
     }

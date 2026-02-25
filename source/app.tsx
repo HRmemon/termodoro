@@ -425,20 +425,25 @@ export function App({ config: initialConfig, initialView }: AppProps) {
   }, []);
 
   useInput((input, key) => {
+    // Let q close any open overlay or exit zen mode
+    if (input === 'q') {
+      if (showHelp) { setShowHelp(false); return; }
+      if (showInsights) { setShowInsights(false); return; }
+      if (showGlobalSearch) { setShowGlobalSearch(false); return; }
+      if (showCommandPalette) { setShowCommandPalette(false); return; }
+      if (showSearch) { setShowSearch(false); return; }
+      if (showResetModal) { setShowResetModal(false); return; }
+      if (isZen) { setIsZen(false); return; }
+    }
+
     // CHANGE 12: include showHelp and showResetModal in the guard
     if (showCommandPalette || showSearch || showInsights || showGlobalSearch || showHelp || showResetModal || isTyping) return;
-
-    if (input === 'q' && !isZen) {
-      engineActions.abandonSession();
-      exit();
-      return;
-    }
 
     if (input === 'z' && (view === 'timer' || view === 'clock')) {
       setIsZen(prev => !prev);
       return;
     }
-    if (key.escape && isZen) {
+    if ((key.escape || input === 'q') && isZen) {
       setIsZen(false);
       return;
     }

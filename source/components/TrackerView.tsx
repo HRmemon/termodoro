@@ -207,7 +207,7 @@ export function TrackerView() {
     }
 
     if (mode === 'day' || mode === 'week') {
-      if (key.escape || input === 'd' || input === 'w') setMode('grid');
+      if (key.escape || input === 'q' || input === 'd' || input === 'w') setMode('grid');
       return;
     }
 
