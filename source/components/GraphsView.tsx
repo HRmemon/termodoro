@@ -250,11 +250,42 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     } else if (input === 'l') {
       setActiveTab(t => Math.min(tabs.length - 1, t + 1));
     }
-    // Date navigation with arrow keys
+    // Date navigation with arrow keys (clamp to today)
     else if (key.leftArrow) {
       moveDateBy(-1);
     } else if (key.rightArrow) {
-      moveDateBy(1);
+      // Don't go past today
+      const next = new Date(selectedDate + 'T00:00:00');
+      next.setDate(next.getDate() + 1);
+      const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+      if (nextStr <= today) setSelectedDate(nextStr);
+    }
+    // t = jump to today
+    else if (input === 't') {
+      setSelectedDate(today);
+    }
+    // Up/down arrows: adjust rating for rate goals, otherwise week scroll
+    else if (key.upArrow) {
+      if (activeGoal?.type === 'rate') {
+        const current = getRating(activeGoal, selectedDate, data);
+        const max = activeGoal.rateMax ?? 5;
+        if (current < max) {
+          const updated = setRating(activeGoal.id, selectedDate, current + 1, { ...data });
+          setData(updated);
+        }
+      } else {
+        setWeekOffset(o => Math.max(0, o - 1));
+      }
+    } else if (key.downArrow) {
+      if (activeGoal?.type === 'rate') {
+        const current = getRating(activeGoal, selectedDate, data);
+        if (current > 0) {
+          const updated = setRating(activeGoal.id, selectedDate, current - 1, { ...data });
+          setData(updated);
+        }
+      } else {
+        setWeekOffset(o => o + 1);
+      }
     }
     else if (input === 'j') {
       setWeekOffset(o => o + 1);
