@@ -55,6 +55,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
   const activeGoal = activeTab < data.goals.length ? data.goals[activeTab]! : null;
   const isAllTab = activeTab >= data.goals.length;
 
+
   // Part 7: Fix week scrolling
   const weeks = useMemo(() => getRecentWeeks(WEEKS_TO_SHOW + weekOffset).slice(weekOffset, weekOffset + WEEKS_TO_SHOW), [weekOffset]);
 
@@ -488,7 +489,7 @@ function GoalSection({
               const suffix = isSelected ? '◄ ' : isToday ? '* ' : '  ';
 
               if (isFuture) {
-                return <Text key={wi} dimColor>{isSelected ? '░◄ ' : '░  '}</Text>;
+                return <Text key={wi} dimColor>{isSelected ? ' ◄ ' : '   '}</Text>;
               }
 
               if (isRate) {
@@ -517,7 +518,7 @@ function GoalSection({
           {isRate ? (
             <Text dimColor>{'·'} = none  {'░▒▓█'} = rating intensity  * = today  {'◄'} = selected</Text>
           ) : (
-            <Text dimColor>{'·'} = not done  {'█'} = done  * = today  {'◄'} = selected  {'░'} = future</Text>
+            <Text dimColor>{'·'} = not done  {'█'} = done  * = today  {'◄'} = selected</Text>
           )}
           <Box marginTop={1}>
             <Text>Total: <Text bold>{totalDays}d</Text></Text>
