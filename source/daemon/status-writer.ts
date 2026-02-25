@@ -50,8 +50,8 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-function getSessionIcon(type: string): string {
-  return type === 'work' ? '\u{1F345}' : '\u2615'; // tomato or coffee
+function getSessionLabel(type: string): string {
+  return type === 'work' ? 'F' : 'B';
 }
 
 function getWaybarClass(state: EngineFullState): string {
@@ -79,16 +79,19 @@ function signalWaybar(): void {
 export function writeStatusFile(state: EngineFullState): void {
   try {
     const todayStats = getTodayStats();
-    const icon = getSessionIcon(state.sessionType);
+    const label = getSessionLabel(state.sessionType);
     const time = formatTime(state.secondsLeft);
     const percentage = state.totalSeconds > 0
       ? Math.round((state.secondsLeft / state.totalSeconds) * 100)
       : 0;
 
-    let text = `${icon} ${time}`;
-    if (state.currentProject) text += ` #${state.currentProject}`;
-    if (!state.isRunning && !state.isPaused) text = `${icon} idle`;
-    if (state.isPaused) text += ' [paused]';
+    let text: string;
+    if (!state.isRunning && !state.isPaused) {
+      text = 'idle';
+    } else {
+      text = `${label} ${time}`;
+      if (state.isPaused) text += ' ||';
+    }
 
     const tooltipParts: string[] = [];
     if (state.currentProject) tooltipParts.push(`#${state.currentProject}`);

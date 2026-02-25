@@ -261,14 +261,18 @@ const timerCommands: Record<string, () => Promise<void>> = {
     }
     const s = resp.state;
     if (cli.flags.format === 'short') {
-      const icon = s.sessionType === 'work' ? '\u{1F345}' : '\u2615';
+      const label = s.sessionType === 'work' ? 'F' : 'B';
       const m = Math.floor(s.secondsLeft / 60);
       const sec = s.secondsLeft % 60;
       const time = `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-      let text = `${icon} ${time}`;
-      if (s.currentProject) text += ` #${s.currentProject}`;
-      if (!s.isRunning && !s.isPaused) text = `${icon} idle`;
-      if (s.isPaused) text += ' [paused]';
+      let text: string;
+      if (!s.isRunning && !s.isPaused) {
+        text = 'idle';
+      } else {
+        text = `${label} ${time}`;
+        if (s.currentProject) text += ` #${s.currentProject}`;
+        if (s.isPaused) text += ' [paused]';
+      }
       console.log(text);
     } else {
       console.log(JSON.stringify(s, null, 2));
