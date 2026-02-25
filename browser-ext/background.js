@@ -11,12 +11,46 @@ function connect() {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       reconnectTimeout = setTimeout(connect, 30000);
     });
+    port.onMessage.addListener((msg) => {
+      if (msg && msg.type === "warn" && msg.domain) {
+        showFocusWarning(msg.domain);
+      }
+    });
   } catch {
     port = null;
     if (reconnectTimeout) clearTimeout(reconnectTimeout);
     reconnectTimeout = setTimeout(connect, 30000);
   }
 }
+
+function showFocusWarning(domain) {
+  browser.notifications.create(`focus-warn-${domain}`, {
+    type: "basic",
+    title: "Focus Mode",
+    message: `Close ${domain} — you're in a focus session`,
+  });
+}
+
+browser.notifications.onClicked.addListener(async (notificationId) => {
+  if (!notificationId.startsWith("focus-warn-")) return;
+  const domain = notificationId.slice("focus-warn-".length);
+  try {
+    const tabs = await browser.tabs.query({});
+    for (const tab of tabs) {
+      try {
+        const u = new URL(tab.url);
+        if (u.hostname === domain) {
+          browser.tabs.remove(tab.id);
+        }
+      } catch {
+        // skip non-parseable URLs
+      }
+    }
+  } catch {
+    // ignore
+  }
+  browser.notifications.clear(notificationId);
+});
 
 connect();
 
@@ -140,6 +174,13 @@ async function updateActiveTab() {
     const info = parseTab(tab);
     if (!info) return;
     openSpan("active", info, true, false);
+    if (port) {
+      try {
+        port.postMessage({ type: "check", domain: info.domain, path: info.path });
+      } catch {
+        // ignore
+      }
+    }
   } catch {
     // Ignore
   }

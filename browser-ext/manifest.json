@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Pomodorocli Browser Tracker",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Tracks browser activity for pomodorocli",
   "browser_specific_settings": {
     "gecko": {
       "id": "pomodorocli-tracker@local"
     }
   },
-  "permissions": ["tabs", "nativeMessaging", "alarms"],
+  "permissions": ["tabs", "nativeMessaging", "alarms", "notifications"],
   "background": {
     "scripts": ["background.js"]
   }

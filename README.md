@@ -296,6 +296,8 @@ Browser usage statistics from the Firefox extension. Shows domain breakdowns, to
 
 **Setup**: Run `pomodorocli track` to set up the Firefox native messaging host, then load the browser extension.
 
+**Focus Mode Warnings**: During a work session, navigating to a domain flagged as W (Wasted) in your domain rules triggers a browser notification. Clicking the notification closes matching tabs. Configure domain rules in Config view (`7`).
+
 ---
 
 ### [9] Tracker

@@ -1,7 +1,7 @@
 #!/usr/bin/node
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
 
 const dataDir = join(homedir(), '.local', 'share', 'pomodorocli');
@@ -38,6 +38,78 @@ const insertMany = db.transaction((entries) => {
   }
 });
 
+const STATUS_PATH = '/tmp/pomodorocli-status.json';
+const CONFIG_PATH = join(dataDir, 'tracker-config.json');
+
+function isWorkSessionActive() {
+  try {
+    const raw = readFileSync(STATUS_PATH, 'utf-8');
+    const s = JSON.parse(raw);
+    return s.isRunning && !s.isPaused && s.sessionType === 'work';
+  } catch {
+    return false;
+  }
+}
+
+function loadDomainRules() {
+  try {
+    const raw = readFileSync(CONFIG_PATH, 'utf-8');
+    const cfg = JSON.parse(raw);
+    return Array.isArray(cfg.domainRules) ? cfg.domainRules : [];
+  } catch {
+    return [];
+  }
+}
+
+function globToRegex(pattern) {
+  return pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+}
+
+function matchDomain(domain, rules) {
+  for (const rule of rules) {
+    if (rule.pattern.includes('/')) continue;
+    const regex = new RegExp(`^${globToRegex(rule.pattern)}$`, 'i');
+    if (regex.test(domain)) return rule.category;
+  }
+  return null;
+}
+
+function matchUrl(domain, path, rules) {
+  for (const rule of rules) {
+    if (rule.pattern.includes('/')) {
+      const slashIdx = rule.pattern.indexOf('/');
+      const domainPart = rule.pattern.slice(0, slashIdx);
+      const pathPart = rule.pattern.slice(slashIdx);
+      const domainRe = new RegExp(`^${globToRegex(domainPart)}$`, 'i');
+      const pathRe = new RegExp(`^${globToRegex(pathPart)}`, 'i');
+      if (domainRe.test(domain) && pathRe.test(path)) return rule.category;
+    } else {
+      const regex = new RegExp(`^${globToRegex(rule.pattern)}$`, 'i');
+      if (regex.test(domain)) return rule.category;
+    }
+  }
+  return null;
+}
+
+function sendMessage(msg) {
+  const json = Buffer.from(JSON.stringify(msg), 'utf-8');
+  const len = Buffer.alloc(4);
+  len.writeUInt32LE(json.length, 0);
+  process.stdout.write(len);
+  process.stdout.write(json);
+}
+
+function handleCheck(msg) {
+  if (!isWorkSessionActive()) return;
+  const rules = loadDomainRules();
+  const category = msg.path
+    ? matchUrl(msg.domain, msg.path, rules)
+    : matchDomain(msg.domain, rules);
+  if (category === 'W') {
+    sendMessage({ type: 'warn', domain: msg.domain });
+  }
+}
+
 let buf = Buffer.alloc(0);
 
 function processBuffer() {
@@ -59,6 +131,8 @@ function processBuffer() {
       const msg = JSON.parse(msgBytes.toString('utf-8'));
       if (msg && msg.type === 'tick' && Array.isArray(msg.entries)) {
         insertMany(msg.entries);
+      } else if (msg && msg.type === 'check' && msg.domain) {
+        handleCheck(msg);
       }
     } catch {
       // Skip malformed JSON

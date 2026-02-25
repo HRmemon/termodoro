@@ -28,14 +28,14 @@ The extension tracks time **event-driven**, not on a fixed tick:
 
 | File | Purpose |
 |------|---------|
-| `manifest.json` | Firefox Manifest V3 — permissions: `tabs`, `nativeMessaging`, `alarms` |
-| `background.js` | Service worker — event listeners, span tracking, flush logic |
+| `manifest.json` | Firefox Manifest V3 — permissions: `tabs`, `nativeMessaging`, `alarms`, `notifications` |
+| `background.js` | Service worker — event listeners, span tracking, flush logic, focus warnings |
 
 ### `../native-host/`
 
 | File | Purpose |
 |------|---------|
-| `pomodorocli-host.mjs` | Node.js stdio host — reads native messaging protocol, writes to SQLite |
+| `pomodorocli-host.mjs` | Node.js stdio host — reads native messaging protocol, writes to SQLite, focus-mode domain checks |
 | `package.json` | Separate `node_modules` compiled against system Node (`/usr/bin/node`) |
 
 > **Why separate `node_modules`?** The host must run under the system Node (`/usr/bin/node v25`) which Firefox resolves via `PATH`. The main project uses nvm's Node v24. `better-sqlite3` is a native addon — it must be compiled for the Node version that actually runs it.
@@ -88,6 +88,19 @@ CREATE TABLE page_visits (
 | `tabs` | Read tab URLs, titles, active/audible state |
 | `nativeMessaging` | Communicate with the Node.js host process |
 | `alarms` | (Reserved) Periodic checkpoint — currently handled by `setInterval` |
+| `notifications` | Show focus-mode warnings when visiting flagged domains during work sessions |
+
+## Focus Mode Warnings
+
+When a work session is running, navigating to a domain flagged as **W** (Wasted) in your domain rules triggers a browser notification:
+
+> **Focus Mode** — Close youtube.com — you're in a focus session
+
+Clicking the notification closes all tabs matching that domain.
+
+**How it works**: On every tab switch or navigation, the extension sends the domain and path to the native host. The host reads `/tmp/pomodorocli-status.json` to check if a work session is active, then checks `~/.local/share/pomodorocli/tracker-config.json` for matching W-flagged domain rules. If both conditions match, it sends a `warn` message back and the extension shows the notification.
+
+**Setup**: Add W domain rules in Config view (key `7`) → Domain Rules (e.g. `youtube.com → W`). Warnings appear automatically during work sessions.
 
 ## Troubleshooting
 
