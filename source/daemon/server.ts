@@ -9,7 +9,7 @@ import { loadCustomSequences } from '../lib/sequences.js';
 import { PRESET_SEQUENCES, parseSequenceString } from '../hooks/useSequence.js';
 import type { DaemonCommand, DaemonResponse, DaemonEvent, DaemonEventType } from './protocol.js';
 import { DAEMON_SOCKET_PATH, DAEMON_PID_PATH } from './protocol.js';
-import { writeStatusFile, clearStatusFile } from './status-writer.js';
+import { writeStatusFile, clearStatusFile, invalidateTodayStats } from './status-writer.js';
 import { executeHook } from './hooks.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 
@@ -139,12 +139,15 @@ export function startDaemon(): void {
     executeHook('on-session-start', data as Record<string, unknown>);
   });
   engine.on('session:complete', (data) => {
+    invalidateTodayStats();
     executeHook('on-session-complete', data as Record<string, unknown>);
   });
   engine.on('session:skip', (data) => {
+    invalidateTodayStats();
     executeHook('on-session-skip', data as Record<string, unknown>);
   });
   engine.on('session:abandon', (data) => {
+    invalidateTodayStats();
     executeHook('on-session-abandon', data as Record<string, unknown>);
   });
   engine.on('break:start', (data) => {
@@ -246,8 +249,7 @@ export function startDaemon(): void {
           return { ok: true, state: engine.getState() };
 
         case 'shutdown':
-          // Delay shutdown to allow response to be sent
-          setTimeout(() => shutdown(), 100);
+          // Handled directly in socket data handler for proper flush
           return { ok: true, state: engine.getState() };
 
         default:
@@ -264,6 +266,13 @@ export function startDaemon(): void {
 
     socket.on('data', (data) => {
       buffer += data.toString();
+
+      // Prevent unbounded buffer growth from misbehaving clients
+      if (buffer.length > 65536) {
+        socket.destroy();
+        return;
+      }
+
       let newlineIdx: number;
       while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
         const line = buffer.slice(0, newlineIdx).trim();
@@ -276,8 +285,14 @@ export function startDaemon(): void {
           // Subscribe is special — add to subscribers set
           if (cmd.cmd === 'subscribe') {
             subscribers.add(socket);
-            // Send current state immediately
             send(socket, { ok: true, state: engine.getState() });
+            continue;
+          }
+
+          // Shutdown: flush response before exiting
+          if (cmd.cmd === 'shutdown') {
+            const resp = JSON.stringify({ ok: true, state: engine.getState() }) + '\n';
+            socket.write(resp, () => shutdown());
             continue;
           }
 
@@ -298,19 +313,34 @@ export function startDaemon(): void {
     });
   });
 
-  // Clean up stale socket file
+  // Ensure parent directory exists
+  fs.mkdirSync(path.dirname(DAEMON_SOCKET_PATH), { recursive: true });
+
+  // Clean up stale socket file — but only if no live daemon owns it
   try {
     if (fs.existsSync(DAEMON_SOCKET_PATH)) {
+      let stale = true;
+      if (fs.existsSync(DAEMON_PID_PATH)) {
+        const pid = parseInt(fs.readFileSync(DAEMON_PID_PATH, 'utf-8').trim(), 10);
+        try {
+          process.kill(pid, 0); // Check if process is alive
+          stale = false; // PID is alive — another daemon is running
+        } catch {
+          // Process doesn't exist — socket is stale
+        }
+      }
+      if (!stale) {
+        console.error('Another daemon is still running. Stop it first.');
+        process.exit(1);
+      }
       fs.unlinkSync(DAEMON_SOCKET_PATH);
     }
   } catch { /* ignore */ }
 
-  // Ensure parent directory exists
-  fs.mkdirSync(path.dirname(DAEMON_SOCKET_PATH), { recursive: true });
-
   server.listen(DAEMON_SOCKET_PATH, () => {
-    // Write PID file
+    // Write PID file and restrict socket permissions
     fs.writeFileSync(DAEMON_PID_PATH, String(process.pid));
+    try { fs.chmodSync(DAEMON_SOCKET_PATH, 0o600); } catch { /* ignore */ }
     console.log(`Daemon listening on ${DAEMON_SOCKET_PATH} (PID: ${process.pid})`);
   });
 

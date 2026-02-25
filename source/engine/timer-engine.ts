@@ -387,12 +387,16 @@ export class PomodoroEngine extends EventEmitter {
     if (!this.isRunning || this.isPaused) return;
 
     this.secondsLeft -= 1;
+
     if (this.secondsLeft <= 0) {
       this.secondsLeft = 0;
+      // Emit final tick before completion events
+      this.emit('tick', this.getState());
       this.stopTickInterval();
       this.isRunning = false;
       this.isComplete = true;
       this.onSessionComplete();
+      return;
     }
 
     this.emit('tick', this.getState());
@@ -429,19 +433,19 @@ export class PomodoroEngine extends EventEmitter {
       this.advanceSequence();
     }
 
-    // Auto-start breaks/work
+    this.emit('state:change', this.getState());
+
+    // Auto-start breaks/work (after state:change so clients see the idle state first)
     const isBreak = this.sessionType !== 'work';
     if ((isBreak && this.config.autoStartBreaks) || (!isBreak && this.config.autoStartWork)) {
-      // Auto-start after a small delay
-      setTimeout(() => {
-        this.start();
+      // Use nextTick to let current event processing finish before starting
+      process.nextTick(() => {
         if (isBreak) {
           this.emit('break:start', { sessionType: this.sessionType, duration: this.totalSeconds });
         }
-      }, 100);
+        this.start();
+      });
     }
-
-    this.emit('state:change', this.getState());
   }
 
   private completeExpiredSession(): void {

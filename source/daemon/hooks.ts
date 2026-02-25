@@ -23,7 +23,6 @@ function flattenData(data: Record<string, unknown>, prefix = 'POMODORO'): Record
       .replace(/_{2,}/g, '_');
 
     if (typeof value === 'object' && !Array.isArray(value)) {
-      // Flatten nested objects (e.g., session data)
       const nested = flattenData(value as Record<string, unknown>, envKey);
       Object.assign(env, nested);
     } else {
@@ -35,6 +34,9 @@ function flattenData(data: Record<string, unknown>, prefix = 'POMODORO'): Record
 }
 
 export function executeHook(hookName: string, data: Record<string, unknown>): void {
+  // Validate hookName to prevent path traversal
+  if (!/^[a-z0-9-]+$/.test(hookName)) return;
+
   const scriptPath = path.join(HOOKS_DIR, `${hookName}.sh`);
 
   try {
@@ -59,9 +61,9 @@ export function executeHook(hookName: string, data: Record<string, unknown>): vo
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    // Collect output for logging
     let stdout = '';
     let stderr = '';
+    let exited = false;
 
     child.stdout?.on('data', (chunk) => {
       stdout += chunk.toString();
@@ -72,20 +74,30 @@ export function executeHook(hookName: string, data: Record<string, unknown>): vo
     });
 
     child.on('close', (code) => {
+      exited = true;
       if (stdout.trim()) appendLog(`  [${hookName}] stdout: ${stdout.trim()}`);
       if (stderr.trim()) appendLog(`  [${hookName}] stderr: ${stderr.trim()}`);
       if (code !== 0) appendLog(`  [${hookName}] exited with code ${code}`);
     });
 
     child.on('error', (err) => {
+      exited = true;
       appendLog(`  [${hookName}] error: ${err.message}`);
     });
 
-    // Kill after 5 seconds
+    // Kill after 5 seconds — only if the child hasn't already exited
     setTimeout(() => {
+      if (exited) return;
       try {
+        // Send SIGTERM first, then SIGKILL after 1s grace
         if (child.pid) {
-          process.kill(-child.pid, 'SIGKILL');
+          process.kill(-child.pid, 'SIGTERM');
+          setTimeout(() => {
+            if (exited) return;
+            try {
+              process.kill(-child.pid!, 'SIGKILL');
+            } catch { /* already exited */ }
+          }, 1000);
           appendLog(`  [${hookName}] killed after 5s timeout`);
         }
       } catch { /* already exited */ }

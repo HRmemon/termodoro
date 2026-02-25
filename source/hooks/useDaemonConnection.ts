@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DaemonSubscription, sendCommand } from '../daemon/client.js';
 import type { DaemonCommand } from '../daemon/protocol.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
@@ -84,21 +84,28 @@ export function useDaemonConnection(): {
   const [state, setState] = useState<EngineFullState>(DEFAULT_STATE);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const subscriptionRef = useRef<DaemonSubscription | null>(null);
+  const hadErrorRef = useRef(false);
 
   useEffect(() => {
     const sub = new DaemonSubscription({
       onState: (newState) => {
         setState(newState);
         setConnectionStatus('connected');
+        hadErrorRef.current = false;
       },
       onEvent: () => {
         // Events are handled through state updates
       },
       onError: () => {
+        hadErrorRef.current = true;
         setConnectionStatus('disconnected');
       },
       onClose: () => {
-        setConnectionStatus('disconnected');
+        // Only set disconnected if error handler hasn't already
+        if (!hadErrorRef.current) {
+          setConnectionStatus('disconnected');
+        }
+        hadErrorRef.current = false;
       },
     });
 
@@ -111,37 +118,41 @@ export function useDaemonConnection(): {
     };
   }, []);
 
+  // Send command through existing subscription socket, fall back to new connection
   const send = useCallback((cmd: DaemonCommand) => {
-    // Use sendCommand for fire-and-forget (response comes via subscription)
-    sendCommand(cmd).catch(() => {
-      // Connection error — subscription reconnect will handle it
-    });
+    const sub = subscriptionRef.current;
+    if (sub) {
+      sub.sendCommand(cmd);
+    } else {
+      sendCommand(cmd).catch(() => {});
+    }
   }, []);
 
-  const actions: DaemonActions = {
-    start: useCallback(() => send({ cmd: 'start' }), [send]),
-    pause: useCallback(() => send({ cmd: 'pause' }), [send]),
-    resume: useCallback(() => send({ cmd: 'resume' }), [send]),
-    toggle: useCallback(() => send({ cmd: 'toggle' }), [send]),
-    skip: useCallback(() => send({ cmd: 'skip' }), [send]),
-    reset: useCallback((newDuration?: number) => {
+  // Memoize actions to prevent unnecessary re-renders on every tick
+  const actions: DaemonActions = useMemo(() => ({
+    start: () => send({ cmd: 'start' }),
+    pause: () => send({ cmd: 'pause' }),
+    resume: () => send({ cmd: 'resume' }),
+    toggle: () => send({ cmd: 'toggle' }),
+    skip: () => send({ cmd: 'skip' }),
+    reset: (newDuration?: number) => {
       if (newDuration) {
         send({ cmd: 'set-duration', minutes: Math.round(newDuration / 60) });
       } else {
         send({ cmd: 'reset' });
       }
-    }, [send]),
-    resetAndLog: useCallback((productive: boolean) => send({ cmd: 'reset-log', productive }), [send]),
-    abandon: useCallback(() => send({ cmd: 'abandon' }), [send]),
-    setProject: useCallback((project: string) => send({ cmd: 'set-project', project }), [send]),
-    setLabel: useCallback((label: string) => send({ cmd: 'set-label', label }), [send]),
-    setDuration: useCallback((minutes: number) => send({ cmd: 'set-duration', minutes }), [send]),
-    activateSequence: useCallback((name: string) => send({ cmd: 'activate-sequence', name }), [send]),
-    activateSequenceInline: useCallback((definition: string) => send({ cmd: 'activate-sequence-inline', definition }), [send]),
-    clearSequence: useCallback(() => send({ cmd: 'clear-sequence' }), [send]),
-    advanceSession: useCallback(() => send({ cmd: 'advance-session' }), [send]),
-    updateConfig: useCallback(() => send({ cmd: 'update-config' }), [send]),
-  };
+    },
+    resetAndLog: (productive: boolean) => send({ cmd: 'reset-log', productive }),
+    abandon: () => send({ cmd: 'abandon' }),
+    setProject: (project: string) => send({ cmd: 'set-project', project }),
+    setLabel: (label: string) => send({ cmd: 'set-label', label }),
+    setDuration: (minutes: number) => send({ cmd: 'set-duration', minutes }),
+    activateSequence: (name: string) => send({ cmd: 'activate-sequence', name }),
+    activateSequenceInline: (definition: string) => send({ cmd: 'activate-sequence-inline', definition }),
+    clearSequence: () => send({ cmd: 'clear-sequence' }),
+    advanceSession: () => send({ cmd: 'advance-session' }),
+    updateConfig: () => send({ cmd: 'update-config' }),
+  }), [send]);
 
   // Provide sliced views for backward compatibility
   const timer: DaemonTimerState = {

@@ -1,11 +1,48 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { execSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { loadSessions } from '../lib/store.js';
 
 const STATUS_PATH = path.join(os.tmpdir(), 'pomodorocli-status.json');
+
+// Cached today stats — only recomputed on session events, not every tick
+let cachedTodayStats = { count: 0, focusMinutes: 0 };
+let cachedStatsDate = '';
+
+function recomputeTodayStats(): void {
+  const today = new Date().toISOString().slice(0, 10);
+  cachedStatsDate = today;
+  try {
+    const sessions = loadSessions().filter(s =>
+      s.startedAt.startsWith(today) && s.type === 'work' && s.status === 'completed'
+    );
+    cachedTodayStats = {
+      count: sessions.length,
+      focusMinutes: Math.round(sessions.reduce((sum, s) => sum + s.durationActual, 0) / 60),
+    };
+  } catch {
+    // Keep stale cache on error
+  }
+}
+
+// Call this when a session completes/skips/abandons to refresh the cache
+export function invalidateTodayStats(): void {
+  recomputeTodayStats();
+}
+
+function getTodayStats() {
+  // Recompute if date changed (midnight rollover)
+  const today = new Date().toISOString().slice(0, 10);
+  if (cachedStatsDate !== today) {
+    recomputeTodayStats();
+  }
+  return cachedTodayStats;
+}
+
+// Initialize cache on module load
+recomputeTodayStats();
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -25,15 +62,18 @@ function getWaybarClass(state: EngineFullState): string {
   return 'break';
 }
 
-function getTodayStats() {
-  const today = new Date().toISOString().slice(0, 10);
-  const sessions = loadSessions().filter(s =>
-    s.startedAt.startsWith(today) && s.type === 'work' && s.status === 'completed'
-  );
-  return {
-    count: sessions.length,
-    focusMinutes: Math.round(sessions.reduce((sum, s) => sum + s.durationActual, 0) / 60),
-  };
+// Throttle waybar signal to at most once every 5 seconds
+let lastWaybarSignal = 0;
+
+function signalWaybar(): void {
+  const now = Date.now();
+  if (now - lastWaybarSignal < 5000) return;
+  lastWaybarSignal = now;
+
+  // Async: does not block the event loop
+  execFile('pkill', ['-RTMIN+8', 'waybar'], { timeout: 2000 }, () => {
+    // Ignore errors — waybar may not be running
+  });
 }
 
 export function writeStatusFile(state: EngineFullState): void {
@@ -84,7 +124,6 @@ export function writeStatusFile(state: EngineFullState): void {
     fs.writeFileSync(tmp, JSON.stringify(statusData, null, 2) + '\n');
     fs.renameSync(tmp, STATUS_PATH);
 
-    // Signal waybar to refresh (SIGRTMIN+8 = 42 on Linux)
     signalWaybar();
   } catch {
     // Don't crash if status write fails
@@ -95,13 +134,4 @@ export function clearStatusFile(): void {
   try {
     if (fs.existsSync(STATUS_PATH)) fs.unlinkSync(STATUS_PATH);
   } catch { /* ignore */ }
-}
-
-function signalWaybar(): void {
-  try {
-    // SIGRTMIN is 34 on Linux, so SIGRTMIN+8 = 42
-    execSync('pkill -RTMIN+8 waybar 2>/dev/null', { stdio: 'ignore', timeout: 1000 });
-  } catch {
-    // waybar not running, that's fine
-  }
 }
