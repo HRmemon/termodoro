@@ -21,6 +21,8 @@ const VIEW_TITLES: Record<View, string> = {
   reminders: 'Reminders',
   tasks: 'Tasks',
   web: 'Web Time',
+  tracker: 'Time Tracker',
+  graphs: 'Graphs',
 };
 
 const VIEW_NUMS: Record<View, string> = {
@@ -32,6 +34,8 @@ const VIEW_NUMS: Record<View, string> = {
   stats: '6',
   config: '7',
   web: '8',
+  tracker: '9',
+  graphs: '0',
 };
 
 export function Layout({ activeView, statusLine, keysBar, children }: LayoutProps) {

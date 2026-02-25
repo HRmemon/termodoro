@@ -16,6 +16,8 @@ const VIEWS: { key: View; num: string; label: string }[] = [
   { key: 'stats',     num: '6', label: 'Stats' },
   { key: 'config',    num: '7', label: 'Config' },
   { key: 'web',       num: '8', label: 'Web Time' },
+  { key: 'tracker',   num: '9', label: 'Tracker' },
+  { key: 'graphs',    num: '0', label: 'Graphs' },
 ];
 
 export function Sidebar({ activeView }: SidebarProps) {

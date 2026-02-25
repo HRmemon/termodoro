@@ -86,6 +86,22 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     actionHints.push({ key: 'Tab', label: 'Domains/Pages' });
   }
 
+  if (view === 'tracker') {
+    actionHints.push({ key: 'j/k', label: 'Scroll' });
+    actionHints.push({ key: 'h/l', label: 'Days' });
+    actionHints.push({ key: 'e', label: 'Edit slot' });
+    actionHints.push({ key: 'D/E/W/S', label: 'Quick set' });
+    actionHints.push({ key: '.', label: 'Clear' });
+    actionHints.push({ key: 'd', label: 'Day summary' });
+    actionHints.push({ key: 'w', label: 'Week summary' });
+    actionHints.push({ key: 'n', label: 'New week' });
+    actionHints.push({ key: 'b', label: 'Browse' });
+  }
+
+  if (view === 'graphs') {
+    actionHints.push({ key: 'Tab', label: 'Switch graph' });
+  }
+
   if (view === 'config') {
     actionHints.push({ key: 'j/k', label: 'Navigate' });
     actionHints.push({ key: 'Enter', label: 'Edit/Toggle' });
@@ -94,7 +110,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
 
   // Global nav hints (bottom row)
   const globalHints: KeyHint[] = [
-    { key: '1-8', label: 'Views' },
+    { key: '1-9,0', label: 'Views' },
     { key: '/', label: 'Search' },
     { key: ':', label: 'Cmd' },
     { key: '?', label: 'Help' },

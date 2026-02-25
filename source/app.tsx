@@ -32,6 +32,8 @@ import { GlobalSearch } from './components/GlobalSearch.js';
 import { HelpView } from './components/HelpView.js';
 import { ResetModal } from './components/ResetModal.js';
 import { WebView } from './components/WebView.js';
+import { TrackerView } from './components/TrackerView.js';
+import { GraphsView } from './components/GraphsView.js';
 import { getStreaks } from './lib/stats.js';
 
 interface AppProps {
@@ -445,6 +447,8 @@ export function App({ config: initialConfig, initialView }: AppProps) {
       if (input === '6') { setView('stats'); return; }
       if (input === '7') { setView('config'); return; }
       if (input === '8') { setView('web'); return; }
+      if (input === '9') { setView('tracker'); return; }
+      if (input === '0') { setView('graphs'); return; }
     }
 
     if (input === ':' && !isZen) {
@@ -654,6 +658,8 @@ export function App({ config: initialConfig, initialView }: AppProps) {
         />
       )}
       {view === 'web' && <WebView />}
+      {view === 'tracker' && <TrackerView />}
+      {view === 'graphs' && <GraphsView />}
     </Layout>
   );
 }
