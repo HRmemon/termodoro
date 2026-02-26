@@ -10,6 +10,7 @@ interface LayoutProps {
   statusLine: React.ReactNode;
   keysBar: React.ReactNode;
   children: React.ReactNode;
+  sidebarWidth?: number;
 }
 
 const VIEW_TITLES: Record<View, string> = {
@@ -36,17 +37,22 @@ const VIEW_NUMS: Record<View, string> = {
   graphs: '9',
 };
 
-export function Layout({ activeView, statusLine, keysBar, children }: LayoutProps) {
+export function Layout({ activeView, statusLine, keysBar, children, sidebarWidth: sidebarWidthProp }: LayoutProps) {
   const { columns, rows } = useFullScreen();
 
   // Render 1 row less than terminal height to prevent tmux jitter
   const safeRows = Math.max(10, rows - 1);
-  const sidebarWidth = 20;
-  const contentWidth = columns - sidebarWidth;
+  const sidebarWidth = Math.max(8, Math.min(sidebarWidthProp ?? 20, 30));
+  const showSidebar = sidebarWidth > 0;
+  const contentWidth = columns - (showSidebar ? sidebarWidth : 0);
 
   // Manual border strings with proper T-junctions
-  const topBorder = '┌' + '─'.repeat(sidebarWidth - 1) + '┬' + '─'.repeat(contentWidth - 2) + '┐';
-  const midDivider = '├' + '─'.repeat(sidebarWidth - 1) + '┴' + '─'.repeat(contentWidth - 2) + '┤';
+  const topBorder = showSidebar
+    ? '┌' + '─'.repeat(sidebarWidth - 1) + '┬' + '─'.repeat(contentWidth - 2) + '┐'
+    : '┌' + '─'.repeat(columns - 2) + '┐';
+  const midDivider = showSidebar
+    ? '├' + '─'.repeat(sidebarWidth - 1) + '┴' + '─'.repeat(contentWidth - 2) + '┤'
+    : '├' + '─'.repeat(columns - 2) + '┤';
   const simpleDivider = '├' + '─'.repeat(columns - 2) + '┤';
 
   return (
@@ -57,17 +63,19 @@ export function Layout({ activeView, statusLine, keysBar, children }: LayoutProp
 
       {/* Main area: sidebar │ content with side borders */}
       <Box flexDirection="row" flexGrow={1}>
-        <Box
-          width={sidebarWidth}
-          borderStyle="single"
-          borderTop={false}
-          borderBottom={false}
-          borderRight={false}
-          borderColor="gray"
-          paddingX={1}
-        >
-          <Sidebar activeView={activeView} />
-        </Box>
+        {showSidebar && (
+          <Box
+            width={sidebarWidth}
+            borderStyle="single"
+            borderTop={false}
+            borderBottom={false}
+            borderRight={false}
+            borderColor="gray"
+            paddingX={1}
+          >
+            <Sidebar activeView={activeView} />
+          </Box>
+        )}
         <Box
           flexDirection="column"
           flexGrow={1}

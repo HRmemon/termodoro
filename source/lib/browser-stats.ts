@@ -157,7 +157,26 @@ export function getBrowserStatsForRange(startDate: string, endDate: string): Bro
 
   let db: InstanceType<typeof Database> | null = null;
   try {
+    // Create index for performance (requires write access, separate from readonly query connection)
+    try {
+      const writeDb = new Database(DB_PATH);
+      writeDb.exec(`CREATE INDEX IF NOT EXISTS idx_page_visits_recorded_at ON page_visits(recorded_at)`);
+      writeDb.close();
+    } catch { /* index creation is best-effort */ }
+
     db = new Database(DB_PATH, { readonly: true });
+
+    // For all-time queries (startDate = '2000-01-01'), omit WHERE clause to skip full-table date scan.
+    // For date ranges, use string comparison (ISO format) which allows index usage.
+    const isAllTime = startDate === '2000-01-01';
+    const nextDay = (() => {
+      const d = new Date(endDate + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
+
+    const whereClause = isAllTime ? '' : `WHERE recorded_at >= ? AND recorded_at < ?`;
+    const params = isAllTime ? [] : [startDate, nextDay];
 
     const domains = db.prepare(`
       SELECT
@@ -166,10 +185,10 @@ export function getBrowserStatsForRange(startDate: string, endDate: string): Bro
         ROUND(SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as activeMinutes,
         ROUND(SUM(CASE WHEN is_audible = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as audibleMinutes
       FROM page_visits
-      WHERE date(recorded_at) BETWEEN ? AND ?
+      ${whereClause}
       GROUP BY domain
       ORDER BY totalMinutes DESC
-    `).all(startDate, endDate) as DomainStats[];
+    `).all(...params) as DomainStats[];
 
     const topPaths = db.prepare(`
       SELECT
@@ -178,10 +197,10 @@ export function getBrowserStatsForRange(startDate: string, endDate: string): Bro
         title,
         ROUND(SUM(duration_sec) / 60.0, 1) as totalMinutes
       FROM page_visits
-      WHERE date(recorded_at) BETWEEN ? AND ?
+      ${whereClause}
       GROUP BY domain, path
       ORDER BY totalMinutes DESC
-    `).all(startDate, endDate) as PathStats[];
+    `).all(...params) as PathStats[];
 
     const totals = db.prepare(`
       SELECT
@@ -189,8 +208,8 @@ export function getBrowserStatsForRange(startDate: string, endDate: string): Bro
         ROUND(SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as activeMinutes,
         ROUND(SUM(CASE WHEN is_audible = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as audibleMinutes
       FROM page_visits
-      WHERE date(recorded_at) BETWEEN ? AND ?
-    `).get(startDate, endDate) as { totalMinutes: number; activeMinutes: number; audibleMinutes: number } | undefined;
+      ${whereClause}
+    `).get(...params) as { totalMinutes: number; activeMinutes: number; audibleMinutes: number } | undefined;
 
     return {
       domains,

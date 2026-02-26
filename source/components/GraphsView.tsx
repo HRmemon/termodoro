@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
 import { nanoid } from 'nanoid';
 import {
@@ -20,6 +20,13 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
   const [activeTab, setActiveTab] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('main');
   const [weekOffset, setWeekOffset] = useState(0);
+  const [allTabOffset, setAllTabOffset] = useState(0);
+
+  const { stdout } = useStdout();
+  const termRows = stdout?.rows ?? 24;
+  // Each compact GoalSection uses: 1 name row + 1 week header row + 7 day rows + 1 blank = ~10 lines
+  const GOAL_SECTION_HEIGHT = 10;
+  const visibleGoalCount = Math.max(1, Math.floor((termRows - 6) / GOAL_SECTION_HEIGHT));
 
   // Selected date for heatmap navigation (Part 4)
   const [selectedDate, setSelectedDate] = useState<string>(() => getTodayStr());
@@ -260,13 +267,25 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
 
     // Main mode
     if (key.tab) {
-      setActiveTab(t => (t + 1) % tabs.length);
+      setActiveTab(t => {
+        const next = (t + 1) % tabs.length;
+        if (next !== tabs.length - 1) setAllTabOffset(0);
+        return next;
+      });
     }
     // h/l tab switching
     else if (input === 'h') {
-      setActiveTab(t => Math.max(0, t - 1));
+      setActiveTab(t => {
+        const next = Math.max(0, t - 1);
+        if (next !== tabs.length - 1) setAllTabOffset(0);
+        return next;
+      });
     } else if (input === 'l') {
-      setActiveTab(t => Math.min(tabs.length - 1, t + 1));
+      setActiveTab(t => {
+        const next = Math.min(tabs.length - 1, t + 1);
+        if (next !== tabs.length - 1) setAllTabOffset(0);
+        return next;
+      });
     }
     // Date navigation with arrow keys (clamp to today)
     else if (key.leftArrow) {
@@ -282,9 +301,11 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     else if (input === 't') {
       setSelectedDate(today);
     }
-    // Up/down arrows: adjust rating for rate goals, otherwise week scroll
+    // Up/down arrows: adjust rating for rate goals, otherwise week scroll (non-All tab)
     else if (key.upArrow) {
-      if (activeGoal?.type === 'rate') {
+      if (isAllTab) {
+        setAllTabOffset(o => Math.max(0, o - 1));
+      } else if (activeGoal?.type === 'rate') {
         const current = getRating(activeGoal, selectedDate, data);
         const max = activeGoal.rateMax ?? 5;
         if (current < max) {
@@ -295,7 +316,9 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
         setWeekOffset(o => Math.max(0, o - 1));
       }
     } else if (key.downArrow) {
-      if (activeGoal?.type === 'rate') {
+      if (isAllTab) {
+        setAllTabOffset(o => Math.min(o + 1, Math.max(0, data.goals.length - visibleGoalCount)));
+      } else if (activeGoal?.type === 'rate') {
         const current = getRating(activeGoal, selectedDate, data);
         if (current > 0) {
           const updated = setRating(activeGoal.id, selectedDate, current - 1, { ...data });
@@ -305,14 +328,23 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
         setWeekOffset(o => o + 1);
       }
     }
+    // j/k: on All tab scroll goals, on individual tabs navigate dates
     else if (input === 'j') {
-      moveDateBy(-1);
+      if (isAllTab) {
+        setAllTabOffset(o => Math.min(o + 1, Math.max(0, data.goals.length - visibleGoalCount)));
+      } else {
+        moveDateBy(-1);
+      }
     } else if (input === 'k') {
-      // Don't go past today
-      const next = new Date(selectedDate + 'T00:00:00');
-      next.setDate(next.getDate() + 1);
-      const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
-      if (nextStr <= today) setSelectedDate(nextStr);
+      if (isAllTab) {
+        setAllTabOffset(o => Math.max(0, o - 1));
+      } else {
+        // Don't go past today
+        const next = new Date(selectedDate + 'T00:00:00');
+        next.setDate(next.getDate() + 1);
+        const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+        if (nextStr <= today) setSelectedDate(nextStr);
+      }
     }
     else if (key.return || input === 'x') {
       if (activeGoal?.type === 'rate') {
@@ -540,12 +572,19 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
   ) : null;
 
   if (isAllTab) {
+    const visibleGoals = data.goals.slice(allTabOffset, allTabOffset + visibleGoalCount);
+    const showScrollIndicator = data.goals.length > visibleGoalCount;
     return (
       <Box flexDirection="column" flexGrow={1}>
         {tabBar}
-        {data.goals.map(goal => (
+        {visibleGoals.map(goal => (
           <GoalSection key={goal.id} goal={goal} data={data} weeks={weeks} today={today} selectedDate={selectedDate} compact />
         ))}
+        {showScrollIndicator && (
+          <Text dimColor>
+            j/k: scroll  Showing {allTabOffset + 1}-{Math.min(allTabOffset + visibleGoalCount, data.goals.length)} of {data.goals.length} goals
+          </Text>
+        )}
       </Box>
     );
   }

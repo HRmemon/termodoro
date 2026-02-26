@@ -466,7 +466,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   );
 
   return (
-    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar}>
+    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth}>
       {view === 'timer' && (
         <TimerView
           secondsLeft={timer.secondsLeft}

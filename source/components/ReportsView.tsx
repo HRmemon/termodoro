@@ -1,12 +1,16 @@
 import React, { useState, useMemo } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useStdout } from 'ink';
 import { Heatmap } from './Heatmap.js';
+import { Sparkline } from './Sparkline.js';
 import { colors } from '../lib/theme.js';
 import { BarChart } from './BarChart.js';
 import {
   getDailyStats,
   getWeeklyStats,
   getTaskBreakdown,
+  getDeepWorkRatio,
+  getStreaks,
+  getSessionsForDateRange,
 } from '../lib/stats.js';
 import { loadSessions } from '../lib/store.js';
 import { loadTasks } from '../lib/tasks.js';
@@ -41,11 +45,19 @@ function getTodayString(): string {
   return `${y}-${m}-${d}`;
 }
 
+function makeRatioBar(ratio: number, width: number): string {
+  const filled = Math.round(ratio * width);
+  const empty = width - filled;
+  return '█'.repeat(filled) + '░'.repeat(empty);
+}
+
 const SECTION_NAMES = ['Today', 'Week', 'Projects', 'Tasks', 'Recent'];
 
 export function ReportsView() {
   const [selectedSection, setSelectedSection] = useState(0);
   const totalSections = SECTION_NAMES.length;
+  const { stdout } = useStdout();
+  const termWidth = stdout?.columns ?? 80;
 
   const data = useMemo(() => {
     const today = getTodayString();
@@ -63,6 +75,26 @@ export function ReportsView() {
       projectMap.set(proj, entry);
     }
 
+    // Compute per-project recent activity sparkline (last 7 days)
+    const projectActivity = new Map<string, number[]>();
+    for (const task of tasks) {
+      if (!task.project) continue;
+      if (!projectActivity.has(task.project)) {
+        const vals: number[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const daySessions = getSessionsForDateRange(ds, ds)
+            .filter(s => s.type === 'work' && s.status === 'completed' && s.project === task.project);
+          vals.push(daySessions.length);
+        }
+        projectActivity.set(task.project, vals);
+      }
+    }
+
+    const todaySessions = getSessionsForDateRange(today, today);
+
     return {
       daily: getDailyStats(today),
       weekly: getWeeklyStats(weekStart),
@@ -74,6 +106,10 @@ export function ReportsView() {
       taskProjects: [...projectMap.entries()]
         .filter(([name]) => name !== '(none)')
         .sort((a, b) => b[1].pomodoros - a[1].pomodoros),
+      deepWork: getDeepWorkRatio(allSessions),
+      streaks: getStreaks(),
+      todaySessions,
+      projectActivity,
     };
   }, []);
 
@@ -92,14 +128,36 @@ export function ReportsView() {
     }
   });
 
-  const { daily, weekly, breakdown, recentSessions, taskProjects } = data;
+  const { daily, weekly, breakdown, recentSessions, taskProjects, deepWork, streaks, todaySessions, projectActivity } = data;
+
+  // Side-by-side layout requires at least ~72 content columns (80 - 20 sidebar - 8 padding/borders)
+  const wideLayout = termWidth >= 80;
 
   const renderSection = (): React.ReactNode => {
     switch (selectedSection) {
-      case 0: return <TodaySection daily={daily} />;
-      case 1: return <WeekSection weekly={weekly} />;
+      case 0: return (
+        <TodaySection
+          daily={daily}
+          deepWork={deepWork}
+          streaks={streaks}
+          todaySessions={todaySessions}
+          wide={wideLayout}
+        />
+      );
+      case 1: return (
+        <WeekSection
+          weekly={weekly}
+          streaks={streaks}
+          wide={wideLayout}
+        />
+      );
       case 2: return <ProjectsSection breakdown={breakdown} />;
-      case 3: return <TaskProjectsSection taskProjects={taskProjects} />;
+      case 3: return (
+        <TaskProjectsSection
+          taskProjects={taskProjects}
+          projectActivity={projectActivity}
+        />
+      );
       case 4: return <RecentSection sessions={recentSessions} />;
       default: return null;
     }
@@ -133,8 +191,44 @@ export function ReportsView() {
 
 // --- Section components ---
 
-function TodaySection({ daily }: { daily: ReturnType<typeof getDailyStats> }) {
-  return (
+type DailyStats = ReturnType<typeof getDailyStats>;
+type WeeklyStats = ReturnType<typeof getWeeklyStats>;
+type DeepWorkRatio = ReturnType<typeof getDeepWorkRatio>;
+type StreakInfo = ReturnType<typeof getStreaks>;
+
+function TodaySection({
+  daily,
+  deepWork,
+  streaks,
+  todaySessions,
+  wide,
+}: {
+  daily: DailyStats;
+  deepWork: DeepWorkRatio;
+  streaks: StreakInfo;
+  todaySessions: ReturnType<typeof getSessionsForDateRange>;
+  wide: boolean;
+}) {
+  const completionRate = daily.sessionsTotal > 0
+    ? Math.round((daily.sessionsCompleted / daily.sessionsTotal) * 100)
+    : 0;
+
+  // Hourly focus bar: group completed work sessions by hour
+  const hourlyMinutes = new Array(24).fill(0) as number[];
+  for (const s of todaySessions) {
+    if (s.type === 'work' && s.status === 'completed') {
+      const h = new Date(s.startedAt).getHours();
+      hourlyMinutes[h] = (hourlyMinutes[h] ?? 0) + s.durationActual / 60;
+    }
+  }
+  const maxHourMins = Math.max(1, ...hourlyMinutes);
+  const firstHour = hourlyMinutes.findIndex(m => m > 0);
+  const lastHour = (() => {
+    for (let i = 23; i >= 0; i--) { if ((hourlyMinutes[i] ?? 0) > 0) return i; }
+    return -1;
+  })();
+
+  const leftPanel = (
     <Box flexDirection="column">
       <Box marginBottom={1}>
         <Text bold color={colors.focus}>{formatMinutes(daily.focusMinutes)}</Text>
@@ -153,25 +247,187 @@ function TodaySection({ daily }: { daily: ReturnType<typeof getDailyStats> }) {
         <Text>{daily.sessionsCompleted}</Text>
         <Text dimColor>/{daily.sessionsTotal}</Text>
       </Box>
+      <Box>
+        <Box width={20}>
+          <Text dimColor>Completion</Text>
+        </Box>
+        <Text color={completionRate >= 80 ? 'green' : completionRate >= 50 ? 'yellow' : 'red'}>
+          {completionRate}%
+        </Text>
+      </Box>
+    </Box>
+  );
+
+  const rightPanel = (
+    <Box flexDirection="column">
+      <Text dimColor bold>Deep Work Ratio</Text>
+      <Box>
+        <Text color="cyan">{makeRatioBar(deepWork.ratio, 20)}</Text>
+        <Text> {Math.round(deepWork.ratio * 100)}%</Text>
+      </Box>
+      <Box marginTop={0}>
+        <Text dimColor>Last 7d: </Text>
+        <Sparkline values={deepWork.trendValues} color="cyan" showTrend />
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text dimColor bold>Streak</Text>
+        <Box>
+          <Box width={10}><Text dimColor>Current</Text></Box>
+          <Text color={streaks.currentStreak > 0 ? 'green' : 'gray'} bold>{streaks.currentStreak}d</Text>
+        </Box>
+        <Box>
+          <Box width={10}><Text dimColor>Best</Text></Box>
+          <Text>{streaks.personalBest}d</Text>
+        </Box>
+        <Box>
+          <Box width={10}><Text dimColor>This week</Text></Box>
+          <Text color="cyan">{formatMinutes(streaks.deepWorkHoursThisWeek * 60)}</Text>
+        </Box>
+      </Box>
+    </Box>
+  );
+
+  const hourlySection = firstHour >= 0 ? (
+    <Box flexDirection="column" marginTop={1}>
+      <Text dimColor>Focus by hour</Text>
+      {hourlyMinutes.slice(firstHour, lastHour + 1).map((mins, i) => {
+        const h = firstHour + i;
+        const barLen = Math.round((mins / maxHourMins) * 12);
+        return (
+          <Box key={h}>
+            <Box width={4}>
+              <Text dimColor>{String(h).padStart(2, '0')}</Text>
+            </Box>
+            <Text color="cyan">{'█'.repeat(barLen)}</Text>
+            {barLen === 0 && <Text dimColor>·</Text>}
+            {mins > 0 && <Text dimColor> {formatMinutes(mins)}</Text>}
+          </Box>
+        );
+      })}
+    </Box>
+  ) : null;
+
+  if (wide) {
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="row" gap={4}>
+          <Box flexDirection="column" width={30}>
+            {leftPanel}
+          </Box>
+          <Box flexDirection="column">
+            {rightPanel}
+          </Box>
+        </Box>
+        {hourlySection}
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column">
+      {leftPanel}
+      <Box marginTop={1} flexDirection="column">
+        {rightPanel}
+      </Box>
+      {hourlySection}
     </Box>
   );
 }
 
-function WeekSection({ weekly }: { weekly: ReturnType<typeof getWeeklyStats> }) {
-  return (
+function WeekSection({
+  weekly,
+  streaks,
+  wide,
+}: {
+  weekly: WeeklyStats;
+  streaks: StreakInfo;
+  wide: boolean;
+}) {
+  const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const maxDay = Math.max(1, ...weekly.heatmap.map(d => d.focusMinutes));
+
+  const bestDayIdx = weekly.heatmap.reduce(
+    (best, d, i) => d.focusMinutes > weekly.heatmap[best]!.focusMinutes ? i : best,
+    0
+  );
+  const bestDay = weekly.heatmap[bestDayIdx];
+
+  const dailyValues = weekly.heatmap.map(d => d.focusMinutes);
+  const avgPerDay = weekly.heatmap.filter(d => d.focusMinutes > 0).length > 0
+    ? weekly.totalFocusMinutes / 7
+    : 0;
+
+  const summaryPanel = (
     <Box flexDirection="column">
-      <Heatmap days={weekly.heatmap} />
-      <Box marginTop={1}>
-        <Box width={20}>
-          <Text dimColor>Total focus</Text>
-        </Box>
+      <Box>
+        <Box width={10}><Text dimColor>Total</Text></Box>
         <Text bold>{formatMinutes(weekly.totalFocusMinutes)}</Text>
       </Box>
       <Box>
-        <Box width={20}>
-          <Text dimColor>Avg session</Text>
-        </Box>
+        <Box width={10}><Text dimColor>Avg/day</Text></Box>
+        <Text>{formatMinutes(avgPerDay)}</Text>
+      </Box>
+      <Box>
+        <Box width={10}><Text dimColor>Avg sess</Text></Box>
         <Text>{formatMinutes(weekly.avgSessionLength)}</Text>
+      </Box>
+      {bestDay && bestDay.focusMinutes > 0 && (
+        <Box>
+          <Box width={10}><Text dimColor>Best day</Text></Box>
+          <Text color="green">{DAY_LABELS[bestDayIdx]} {formatMinutes(bestDay.focusMinutes)}</Text>
+        </Box>
+      )}
+      <Box>
+        <Box width={10}><Text dimColor>Streak</Text></Box>
+        <Text color={streaks.currentStreak > 0 ? 'green' : 'gray'}>{streaks.currentStreak}d</Text>
+      </Box>
+    </Box>
+  );
+
+  const leftContent = (
+    <Box flexDirection="column">
+      <Heatmap days={weekly.heatmap} />
+      <Box marginTop={1}>
+        <Text dimColor>Focus trend (7d): </Text>
+        <Sparkline values={dailyValues} color="cyan" showTrend />
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text dimColor>Daily breakdown</Text>
+        {weekly.heatmap.map((day, i) => {
+          const barLen = Math.round((day.focusMinutes / maxDay) * 14);
+          return (
+            <Box key={day.date}>
+              <Box width={5}><Text dimColor>{DAY_LABELS[i]}</Text></Box>
+              {barLen > 0
+                ? <Text color="cyan">{'█'.repeat(barLen)}</Text>
+                : <Text dimColor>·</Text>
+              }
+              {day.focusMinutes > 0 && <Text dimColor> {formatMinutes(day.focusMinutes)}</Text>}
+            </Box>
+          );
+        })}
+      </Box>
+    </Box>
+  );
+
+  if (wide) {
+    return (
+      <Box flexDirection="row" gap={4}>
+        <Box flexDirection="column" flexGrow={1}>
+          {leftContent}
+        </Box>
+        <Box flexDirection="column" width={22}>
+          {summaryPanel}
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column">
+      {leftContent}
+      <Box marginTop={1}>
+        {summaryPanel}
       </Box>
     </Box>
   );
@@ -190,24 +446,40 @@ function ProjectsSection({ breakdown }: { breakdown: ReturnType<typeof getTaskBr
   return <BarChart items={projectItems} unit="min" color="cyan" maxBarWidth={24} />;
 }
 
-function TaskProjectsSection({ taskProjects }: { taskProjects: [string, { total: number; completed: number; pomodoros: number }][] }) {
+function TaskProjectsSection({
+  taskProjects,
+  projectActivity,
+}: {
+  taskProjects: [string, { total: number; completed: number; pomodoros: number }][];
+  projectActivity: Map<string, number[]>;
+}) {
   if (taskProjects.length === 0) {
     return <Text dimColor>No projects yet. Add #project to tasks.</Text>;
   }
 
   return (
     <Box flexDirection="column">
-      {taskProjects.map(([name, stats]) => (
-        <Box key={name}>
-          <Box width={16}>
-            <Text color="cyan">#{name}</Text>
+      {taskProjects.map(([name, stats]) => {
+        const activity = projectActivity.get(name) ?? [];
+        return (
+          <Box key={name}>
+            <Box width={16}>
+              <Text color="cyan">#{name}</Text>
+            </Box>
+            <Box width={14}>
+              <Text>{stats.completed}/{stats.total} tasks</Text>
+            </Box>
+            <Box width={9}>
+              <Text dimColor>{stats.pomodoros} pom</Text>
+            </Box>
+            {activity.length > 0 && (
+              <Box>
+                <Sparkline values={activity} color="cyan" showTrend />
+              </Box>
+            )}
           </Box>
-          <Box width={14}>
-            <Text>{stats.completed}/{stats.total} tasks</Text>
-          </Box>
-          <Text dimColor>{stats.pomodoros} pom</Text>
-        </Box>
-      ))}
+        );
+      })}
     </Box>
   );
 }

@@ -33,20 +33,24 @@ function SlotCell({
   code, isActive, isCursor, pending
 }: { code: string | undefined; isActive: boolean; isCursor: boolean; pending?: PendingSuggestion }) {
   // Show pending suggestion if no confirmed code
+  // Always produce exactly COL_WIDTH (5) visual chars
   if (!code && pending) {
-    const pDisplay = pending.suggested === 'hD' ? '?½D' : `?${pending.suggested}`;
+    // pending display: space + up to 3 chars + space = 5 chars total
+    const raw = pending.suggested === 'hD' ? '?½D' : `?${pending.suggested}`;
+    const capped = raw.slice(0, 3).padEnd(3);
     if (isCursor) {
-      return <Text backgroundColor="white" color="black">{` ${pDisplay.padEnd(3)}`}</Text>;
+      return <Text backgroundColor="white" color="black">{` ${capped} `}</Text>;
     }
-    return <Text dimColor color="yellow">{` ${pDisplay.padEnd(3)}`}</Text>;
+    return <Text dimColor color="yellow">{` ${capped} `}</Text>;
   }
 
   const cat = code ? getCategoryByCode(code) : undefined;
-  const display = code ? (code === 'hD' ? '\u00bdD' : code.padEnd(2)) : ' \u00b7';
+  // Filled: space + 2-char code + space + space = 5 chars
+  const display = code ? (code === 'hD' ? '\u00bdD' : code.slice(0, 2).padEnd(2)) : ' \u00b7';
   const color = cat?.color as any ?? 'gray';
 
   if (isCursor) {
-    return <Text backgroundColor={isActive ? color : 'white'} color={isActive ? 'black' : 'black'}>{` ${display.trim().padEnd(2)} `}</Text>;
+    return <Text backgroundColor={isActive ? color : 'white'} color="black">{` ${display.trim().padEnd(2)} `}</Text>;
   }
   if (code) {
     return <Text color={color}>{` ${display.trim().padEnd(2)} `}</Text>;
@@ -143,7 +147,13 @@ export function TrackerView() {
     if (!week || !currentDate || !currentTime) return;
     setWeek(prev => prev ? setSlot(prev, currentDate, currentTime, code) : prev);
     setMode('grid');
-  }, [week, currentDate, currentTime]);
+    // Ensure cursor is visible after picker closes
+    setScrollOffset(prev => {
+      if (cursorRow < prev) return cursorRow;
+      if (cursorRow >= prev + VISIBLE_ROWS) return cursorRow - VISIBLE_ROWS + 1;
+      return prev;
+    });
+  }, [week, currentDate, currentTime, cursorRow, VISIBLE_ROWS]);
 
   useInput((input, key) => {
     if (mode === 'browse') {
@@ -196,7 +206,15 @@ export function TrackerView() {
       if (input === 'j' || key.downArrow) setPickerCursor(p => Math.min(p + 1, categories.length - 1));
       else if (input === 'k' || key.upArrow) setPickerCursor(p => Math.max(0, p - 1));
       else if (key.return) handleSetSlot(categories[pickerCursor]!.code);
-      else if (key.escape) setMode('grid');
+      else if (key.escape) {
+        setMode('grid');
+        // Ensure cursor is visible after closing picker
+        setScrollOffset(prev => {
+          if (cursorRow < prev) return cursorRow;
+          if (cursorRow >= prev + VISIBLE_ROWS) return cursorRow - VISIBLE_ROWS + 1;
+          return prev;
+        });
+      }
       else if (input === '.') handleSetSlot(null);
       else {
         // Quick type by shortcut key
@@ -315,13 +333,13 @@ export function TrackerView() {
   // Visible rows
   const visibleSlots = ALL_SLOTS.slice(scrollOffset, scrollOffset + VISIBLE_ROWS);
 
-  // When picker is open, split grid rows around cursor for inline picker
+  // When picker is open, show only rows up to cursor then picker below (no rowsBelow shift)
   if (mode === 'pick') {
-    const cursorVisIdx = cursorRow - scrollOffset;
-    const rowsAbove = visibleSlots.slice(0, Math.min(cursorVisIdx + 1, visibleSlots.length));
     const pickerHeight = categories.length + 3;
-    const rowsBelowCount = Math.max(0, VISIBLE_ROWS - rowsAbove.length - pickerHeight);
-    const rowsBelow = visibleSlots.slice(cursorVisIdx + 1, cursorVisIdx + 1 + rowsBelowCount);
+    const maxGridRows = Math.max(3, VISIBLE_ROWS - pickerHeight);
+    const pickScrollEnd = Math.min(cursorRow + 1, ALL_SLOTS.length);
+    const pickScrollStart = Math.max(0, pickScrollEnd - maxGridRows);
+    const pickVisibleSlots = ALL_SLOTS.slice(pickScrollStart, pickScrollEnd);
 
     const renderGridRow = (time: string, visIdx: number, baseOffset: number) => {
       const rowIdx = baseOffset + visIdx;
@@ -360,9 +378,9 @@ export function TrackerView() {
         </Box>
         <Text dimColor>{'\u2500\u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500'}</Text>
 
-        {/* Grid rows above cursor */}
+        {/* Grid rows up to and including cursor row */}
         <Box flexDirection="column">
-          {rowsAbove.map((time, vi) => renderGridRow(time, vi, scrollOffset))}
+          {pickVisibleSlots.map((time, vi) => renderGridRow(time, vi, pickScrollStart))}
         </Box>
 
         {/* Inline picker with [key] indicators */}
@@ -388,13 +406,6 @@ export function TrackerView() {
           ))}
           <Text dimColor>Enter:set  j/k:nav  [.]:clear  Esc:cancel</Text>
         </Box>
-
-        {/* Grid rows below picker */}
-        {rowsBelow.length > 0 && (
-          <Box flexDirection="column">
-            {rowsBelow.map((time, vi) => renderGridRow(time, vi + cursorVisIdx + 1, scrollOffset))}
-          </Box>
-        )}
       </Box>
     );
   }

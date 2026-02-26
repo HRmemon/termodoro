@@ -23,6 +23,8 @@ const DEFAULT_CONFIG: Config = {
   timerFormat: 'mm:ss',
   sounds: { ...DEFAULT_SOUND_CONFIG },
   browserTracking: false,
+  webDomainLimit: 50,
+  sidebarWidth: 20,
 };
 
 export function loadConfig(): Config {

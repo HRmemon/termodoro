@@ -29,6 +29,8 @@ export interface Config {
   timerFormat: 'mm:ss' | 'hh:mm:ss' | 'minutes';
   sounds: import('./lib/sounds.js').SoundConfig;
   browserTracking: boolean;
+  webDomainLimit: number;
+  sidebarWidth: number;
 }
 
 export interface TimeBlock {

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -8,6 +8,7 @@ import { BarChart } from './BarChart.js';
 import { getBrowserStatsForDate, getBrowserStatsForRange, getPathPatternStats, generateHtmlReport } from '../lib/browser-stats.js';
 import type { BrowserStats, DomainStats } from '../lib/browser-stats.js';
 import { loadTrackerConfigFull } from '../lib/tracker.js';
+import { loadConfig } from '../lib/config.js';
 import { useFullScreen } from '../hooks/useFullScreen.js';
 
 function formatMinutes(minutes: number): string {
@@ -59,7 +60,11 @@ export function WebView() {
   const [tab, setTab] = useState<Tab>('domains');
   const [scrollOffset, setScrollOffset] = useState(0);
   const [range, setRange] = useState<Range>('day');
+  const [reportError, setReportError] = useState<string | null>(null);
   const { rows } = useFullScreen();
+
+  const appConfig = useMemo(() => loadConfig(), []);
+  const domainLimit = Math.max(10, appConfig.webDomainLimit ?? 50);
 
   const { start, end } = useMemo(() => getRangeDates(range), [range]);
 
@@ -95,15 +100,15 @@ export function WebView() {
     return { ...stats, domains: merged };
   }, [stats, start, end]);
 
-  // For TUI display, limit domains/pages
+  // For TUI display, limit domains/pages using configurable domainLimit
   const displayStats: BrowserStats | null = useMemo(() => {
     if (!mergedStats) return null;
     return {
       ...mergedStats,
-      domains: mergedStats.domains.slice(0, 15),
+      domains: mergedStats.domains.slice(0, domainLimit),
       topPaths: mergedStats.topPaths.slice(0, 10),
     };
-  }, [mergedStats]);
+  }, [mergedStats, domainLimit]);
 
   useInput((input, key) => {
     if (key.tab || input === '\t') {
@@ -133,7 +138,21 @@ export function WebView() {
       if (html) {
         const tmpPath = path.join(os.tmpdir(), `pomodorocli-web-report-${Date.now()}.html`);
         fs.writeFileSync(tmpPath, html);
-        spawnSync('xdg-open', [tmpPath], { stdio: 'ignore' });
+        // Try multiple browser openers in order (which is sync, but open is async+detached)
+        const openers = ['xdg-open', 'open', 'sensible-browser'];
+        let opened = false;
+        for (const opener of openers) {
+          const which = spawnSync('which', [opener], { stdio: 'ignore' });
+          if (which.status === 0) {
+            spawn(opener, [tmpPath], { detached: true, stdio: 'ignore' }).unref();
+            opened = true;
+            break;
+          }
+        }
+        if (!opened) {
+          setReportError(`Report saved to: ${tmpPath} (no browser opener found)`);
+          setTimeout(() => setReportError(null), 5000);
+        }
       }
       return;
     }
@@ -154,6 +173,11 @@ export function WebView() {
         </Box>
         <Text dimColor>Make sure the Firefox extension is loaded and the native host is running.</Text>
         <Text dimColor>Run `pomodorocli track` to set up, then reload the extension.</Text>
+        {reportError && (
+          <Box marginTop={1}>
+            <Text color="yellow">{reportError}</Text>
+          </Box>
+        )}
       </Box>
     );
   }
@@ -200,6 +224,11 @@ export function WebView() {
       )}
       {tab === 'pages' && (
         <PagesTab stats={displayStats} scrollOffset={scrollOffset} maxRows={maxRows} />
+      )}
+      {reportError && (
+        <Box marginTop={1}>
+          <Text color="yellow">{reportError}</Text>
+        </Box>
       )}
     </Box>
   );
