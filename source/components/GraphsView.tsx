@@ -162,8 +162,9 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
-    setSelectedDate(`${y}-${m}-${dd}`);
-  }, [selectedDate]);
+    const str = `${y}-${m}-${dd}`;
+    if (str <= today) setSelectedDate(str);
+  }, [selectedDate, today]);
 
   useInput((input, key) => {
     if (viewMode === 'delete-confirm') {
@@ -291,11 +292,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     else if (key.leftArrow) {
       moveDateBy(-1);
     } else if (key.rightArrow) {
-      // Don't go past today
-      const next = new Date(selectedDate + 'T00:00:00');
-      next.setDate(next.getDate() + 1);
-      const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
-      if (nextStr <= today) setSelectedDate(nextStr);
+      moveDateBy(1);
     }
     // t = jump to today
     else if (input === 't') {
@@ -333,17 +330,13 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
       if (isAllTab) {
         setAllTabOffset(o => Math.min(o + 1, Math.max(0, data.goals.length - visibleGoalCount)));
       } else {
-        moveDateBy(-1);
+        moveDateBy(1);
       }
     } else if (input === 'k') {
       if (isAllTab) {
         setAllTabOffset(o => Math.max(0, o - 1));
       } else {
-        // Don't go past today
-        const next = new Date(selectedDate + 'T00:00:00');
-        next.setDate(next.getDate() + 1);
-        const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
-        if (nextStr <= today) setSelectedDate(nextStr);
+        moveDateBy(-1);
       }
     }
     else if (key.return || input === 'x') {
