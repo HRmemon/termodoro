@@ -402,6 +402,7 @@ function formatGoals(): string {
     if (g.type === 'manual') line += ' (manual)';
     else if (g.type === 'auto') line += ` (auto:${g.autoProject ?? ''})`;
     else if (g.type === 'rate') line += ` (rate:${g.rateMax ?? 5})`;
+    else if (g.type === 'note') line += ' (note)';
     line += `  %id:${g.id}`;
     lines.push(line);
   }
@@ -433,6 +434,20 @@ function formatGoals(): string {
     }
   }
 
+  // Notes section
+  const noteGoals = data.goals.filter(g => g.type === 'note');
+  if (noteGoals.length > 0) {
+    lines.push('');
+    lines.push('# Notes');
+    for (const g of noteGoals) {
+      const notes = data.notes[g.id] ?? {};
+      const entries = Object.entries(notes).sort(([a], [b]) => a.localeCompare(b));
+      for (const [date, text] of entries) {
+        if (text) lines.push(`${g.name}|${date}: ${text}`);
+      }
+    }
+  }
+
   return lines.join('\n') + '\n';
 }
 
@@ -446,6 +461,7 @@ function parseGoals(text: string): void {
   const seenIds = new Set<string>();
   const newCompletions: Record<string, string[]> = {};
   const newRatings: Record<string, Record<string, number>> = {};
+  const newNotes: Record<string, Record<string, string>> = {};
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -454,6 +470,7 @@ function parseGoals(text: string): void {
     if (trimmed === '# Goals') { section = 'goals'; continue; }
     if (trimmed === '# Completions') { section = 'completions'; continue; }
     if (trimmed === '# Ratings') { section = 'ratings'; continue; }
+    if (trimmed === '# Notes') { section = 'notes'; continue; }
 
     if (section === 'goals') {
       const idMatch = trimmed.match(/%id:(\S+)/);
@@ -468,13 +485,14 @@ function parseGoals(text: string): void {
       rest = rest.replace(/^\[\w+\]\s*/, '');
 
       // Parse type
-      let type: 'manual' | 'auto' | 'rate' = 'manual';
+      let type: 'manual' | 'auto' | 'rate' | 'note' = 'manual';
       let autoProject: string | undefined;
       let rateMax: number | undefined;
 
-      const typeMatch = rest.match(/\((manual|auto:([^)]*)|rate:(\d+))\)\s*$/);
+      const typeMatch = rest.match(/\((manual|note|auto:([^)]*)|rate:(\d+))\)\s*$/);
       if (typeMatch) {
         if (typeMatch[1] === 'manual') type = 'manual';
+        else if (typeMatch[1] === 'note') type = 'note';
         else if (typeMatch[1]!.startsWith('auto:')) {
           type = 'auto';
           autoProject = typeMatch[2] || undefined;
@@ -492,6 +510,7 @@ function parseGoals(text: string): void {
       // Preserve existing data
       newCompletions[id] = data.completions[id] ?? [];
       newRatings[id] = data.ratings[id] ?? {};
+      newNotes[id] = data.notes[id] ?? {};
     }
 
     if (section === 'completions') {
@@ -519,6 +538,21 @@ function parseGoals(text: string): void {
         }
       }
     }
+
+    if (section === 'notes') {
+      // Format: GoalName|2026-02-25: note text
+      const match = trimmed.match(/^(.+?)\|(\d{4}-\d{2}-\d{2}):\s*(.+)$/);
+      if (match) {
+        const name = match[1]!.trim();
+        const date = match[2]!;
+        const noteText = match[3]!;
+        const id = goalIdByName.get(name);
+        if (id) {
+          if (!newNotes[id]) newNotes[id] = {};
+          newNotes[id]![date] = noteText;
+        }
+      }
+    }
   }
 
   // Preserve overrides from existing data
@@ -532,6 +566,7 @@ function parseGoals(text: string): void {
     completions: newCompletions,
     overrides,
     ratings: newRatings,
+    notes: newNotes,
   });
 }
 
