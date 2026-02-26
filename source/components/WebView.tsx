@@ -4,7 +4,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { Box, Text, useInput } from 'ink';
-import { BarChart } from './BarChart.js';
 import { getBrowserStatsForDate, getBrowserStatsForRange, getPathPatternStats, generateHtmlReport } from '../lib/browser-stats.js';
 import type { BrowserStats, DomainStats } from '../lib/browser-stats.js';
 import { loadTrackerConfigFull } from '../lib/tracker.js';
@@ -29,6 +28,9 @@ function getTodayString(): string {
 function dateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+const ACTIVE_COLOR = 'magenta';
+const AUDIBLE_COLOR = 'blue';
 
 type Tab = 'domains' | 'pages';
 type Range = 'day' | 'week' | 'month' | 'all';
@@ -175,7 +177,7 @@ export function WebView() {
         <Text dimColor>Run `pomodorocli track` to set up, then reload the extension.</Text>
         {reportError && (
           <Box marginTop={1}>
-            <Text color="yellow">{reportError}</Text>
+            <Text color="cyan">{reportError}</Text>
           </Box>
         )}
       </Box>
@@ -192,9 +194,9 @@ export function WebView() {
       {/* Summary bar */}
       <Box marginBottom={1}>
         <Text dimColor>Active </Text>
-        <Text bold color="magenta">{formatMinutes(displayStats.activeMinutes)}</Text>
+        <Text bold color={ACTIVE_COLOR}>{formatMinutes(displayStats.activeMinutes)}</Text>
         <Text dimColor>  Audible </Text>
-        <Text bold color="yellow">{formatMinutes(displayStats.audibleMinutes)}</Text>
+        <Text bold color={AUDIBLE_COLOR}>{formatMinutes(displayStats.audibleMinutes)}</Text>
         <Text dimColor>  Total </Text>
         <Text bold>{formatMinutes(displayStats.totalMinutes)}</Text>
       </Box>
@@ -227,7 +229,7 @@ export function WebView() {
       )}
       {reportError && (
         <Box marginTop={1}>
-          <Text color="yellow">{reportError}</Text>
+          <Text color="cyan">{reportError}</Text>
         </Box>
       )}
     </Box>
@@ -259,38 +261,50 @@ function RangeBar({ range }: { range: Range }) {
 function DomainsTab({ stats, scrollOffset, maxRows }: { stats: BrowserStats; scrollOffset: number; maxRows: number }) {
   const domains = stats.domains;
   const visible = domains.slice(scrollOffset, scrollOffset + maxRows);
-  const barItems = visible.map(d => ({
-    label: d.domain.length > 24 ? d.domain.slice(0, 23) + '..' : d.domain,
-    value: d.totalMinutes,
-  }));
+
+  const domW = 20;
+  const barW = 28;
+  const actW = 8;
+  const audW = 8;
+  const globalMax = Math.max(...visible.map(d => d.totalMinutes), 1);
 
   return (
     <Box flexDirection="column">
-      <BarChart items={barItems} unit="min" color="magenta" maxBarWidth={20} />
-      {visible.length > 0 && (
-        <Box marginTop={1} flexDirection="column">
-          <Text dimColor bold>{'  Domain'.padEnd(27)}{'Active'.padEnd(10)}{'Audible'.padEnd(10)}Total</Text>
-          {visible.map(d => (
-            <Box key={d.domain}>
-              <Text dimColor>  </Text>
-              <Box width={25}>
-                <Text>{d.domain.length > 24 ? d.domain.slice(0, 23) + '..' : d.domain}</Text>
-              </Box>
-              <Box width={10}>
-                <Text color="magenta">{formatMinutes(d.activeMinutes)}</Text>
-              </Box>
-              <Box width={10}>
-                {d.audibleMinutes > 0 ? (
-                  <Text color="yellow">{formatMinutes(d.audibleMinutes)} &#9834;</Text>
-                ) : (
-                  <Text dimColor>-</Text>
-                )}
-              </Box>
-              <Text>{formatMinutes(d.totalMinutes)}</Text>
+      {/* Header */}
+      <Box>
+        <Box width={domW}><Text dimColor bold>Domain</Text></Box>
+        <Box width={barW + 1}><Text dimColor> █ active ░ audible</Text></Box>
+        <Box width={actW}><Text dimColor bold>{'Active'.padStart(actW)}</Text></Box>
+        <Box width={audW}><Text dimColor bold>{'Audible'.padStart(audW)}</Text></Box>
+        <Text dimColor bold>  Total</Text>
+      </Box>
+      {visible.map(d => {
+        const label = d.domain.length > domW ? d.domain.slice(0, domW - 2) + '..' : d.domain;
+        const aFill = Math.round((d.activeMinutes / globalMax) * barW);
+        const bFill = Math.min(Math.round((d.audibleMinutes / globalMax) * barW), barW - aFill);
+        const empty = barW - aFill - bFill;
+
+        return (
+          <Box key={d.domain}>
+            <Box width={domW}><Text>{label}</Text></Box>
+            <Box width={barW + 1}>
+              <Text>
+                <Text color={ACTIVE_COLOR}>{'█'.repeat(aFill)}</Text>
+                <Text color={AUDIBLE_COLOR}>{'░'.repeat(bFill)}</Text>
+                <Text dimColor>{'·'.repeat(empty)}</Text>
+              </Text>
             </Box>
-          ))}
-        </Box>
-      )}
+            <Box width={actW}><Text color={ACTIVE_COLOR}>{formatMinutes(d.activeMinutes).padStart(actW)}</Text></Box>
+            <Box width={audW}>
+              {d.audibleMinutes > 0
+                ? <Text color={AUDIBLE_COLOR}>{formatMinutes(d.audibleMinutes).padStart(audW)}</Text>
+                : <Text color="gray">{'-'.padStart(audW)}</Text>
+              }
+            </Box>
+            <Text color="white" bold>{'  '}{formatMinutes(d.totalMinutes)}</Text>
+          </Box>
+        );
+      })}
       {domains.length > maxRows && (
         <Box marginTop={1}>
           <Text dimColor>Showing {scrollOffset + 1}-{Math.min(scrollOffset + maxRows, domains.length)} of {domains.length}  j/k to scroll</Text>
