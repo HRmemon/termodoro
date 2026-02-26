@@ -6,6 +6,7 @@ import { CategoryManager } from './config/CategoryManager.js';
 import { DomainRuleManager } from './config/DomainRuleManager.js';
 import { SequenceManager } from './config/SequenceManager.js';
 import { KeybindingsManager } from './config/KeybindingsManager.js';
+import { ThemeManager } from './config/ThemeManager.js';
 import { ConfigFieldList } from './config/ConfigFieldList.js';
 import type { Keymap } from '../lib/keymap.js';
 
@@ -18,7 +19,7 @@ interface ConfigViewProps {
   keymap?: Keymap;
 }
 
-type SubMode = 'main' | 'categories' | 'rules' | 'sequences' | 'keybindings';
+type SubMode = 'main' | 'categories' | 'rules' | 'sequences' | 'keybindings' | 'themes';
 
 export function ConfigView({ config, onConfigChange, setIsTyping, initialSeqMode, onSeqModeConsumed, keymap }: ConfigViewProps) {
   const [subMode, setSubMode] = useState<SubMode>(initialSeqMode ? 'sequences' : 'main');
@@ -31,12 +32,13 @@ export function ConfigView({ config, onConfigChange, setIsTyping, initialSeqMode
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load counts for display in main list (recalculated when returning from sub-modes)
-  const { catCount, ruleCount, seqCount, keybindingCount } = useMemo(() => ({
+  const { catCount, ruleCount, seqCount, keybindingCount, themeCount } = useMemo(() => ({
     catCount: loadTrackerConfig().categories.length,
     ruleCount: loadTrackerConfigFull().domainRules.length,
     seqCount: loadSequences().length,
     keybindingCount: Object.keys(config.keybindings ?? {}).length,
-  }), [subMode, config.keybindings]);
+    themeCount: Object.keys(config.customThemes ?? {}).length,
+  }), [subMode, config.keybindings, config.customThemes]);
 
   switch (subMode) {
     case 'categories':
@@ -69,6 +71,15 @@ export function ConfigView({ config, onConfigChange, setIsTyping, initialSeqMode
           onBack={() => setSubMode('main')}
         />
       );
+    case 'themes':
+      return (
+        <ThemeManager
+          config={config}
+          onConfigChange={onConfigChange}
+          setIsTyping={setIsTyping}
+          onBack={() => setSubMode('main')}
+        />
+      );
     default:
       return (
         <ConfigFieldList
@@ -82,7 +93,9 @@ export function ConfigView({ config, onConfigChange, setIsTyping, initialSeqMode
           onOpenRules={() => setSubMode('rules')}
           onOpenSequences={() => setSubMode('sequences')}
           onOpenKeybindings={() => setSubMode('keybindings')}
+          onOpenThemes={() => setSubMode('themes')}
           keybindingCount={keybindingCount}
+          themeCount={themeCount}
           keymap={keymap}
         />
       );

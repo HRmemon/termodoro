@@ -3,7 +3,7 @@ import type { Config, ThemeColors } from '../types.js';
 
 // ─── Presets ─────────────────────────────────────────────────────────────────
 
-const PRESETS: Record<string, ThemeColors> = {
+export const PRESETS: Record<string, ThemeColors> = {
   default: {
     focus: '#00C853',
     break: '#FFB300',
@@ -36,14 +36,6 @@ const PRESETS: Record<string, ThemeColors> = {
     dim: '#44475A',
     bg: '#282A36',
   },
-  custom1: {
-    focus: '#00C853',
-    break: '#FFB300',
-    highlight: '#00BCD4',
-    text: '#E0E0E0',
-    dim: '#444444',
-    bg: '#111111',
-  },
 };
 
 // ─── Mutable module-level state ───────────────────────────────────────────────
@@ -64,7 +56,7 @@ export let SESSION_COLORS: Record<SessionType, string> = {
 
 export function initTheme(config: Config): void {
   const preset = config.theme?.preset ?? 'default';
-  const base = PRESETS[preset] ?? PRESETS.default!;
+  const base = config.customThemes?.[preset] ?? PRESETS[preset] ?? PRESETS.default!;
 
   // Apply user color overrides on top of preset
   const resolved: ThemeColors = {
