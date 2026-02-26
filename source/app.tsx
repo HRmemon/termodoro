@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useInput, useApp, Box, Text } from 'ink';
 import { nanoid } from 'nanoid';
 import type { Config, View } from './types.js';
@@ -6,8 +6,8 @@ import { loadSessions } from './lib/store.js';
 import { loadTasks, addTask } from './lib/tasks.js';
 import { loadReminders, updateReminder, addReminder } from './lib/reminders.js';
 import { notifyReminder } from './lib/notify.js';
-import { parseSequenceString, PRESET_SEQUENCES } from './hooks/useSequence.js';
-import { loadCustomSequences } from './lib/sequences.js';
+import { parseSequenceString } from './hooks/useSequence.js';
+import { loadSequences } from './lib/sequences.js';
 import { useDaemonConnection } from './hooks/useDaemonConnection.js';
 import { Layout } from './components/Layout.js';
 import { StatusLine } from './components/StatusLine.js';
@@ -83,25 +83,20 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       actions.setProject(initialProject);
     }
     if (initialSequence) {
-      // Try preset name first, then custom sequences, then inline format
-      const preset = PRESET_SEQUENCES[initialSequence];
-      if (preset) {
+      // Try named sequence first, then inline format
+      const named = loadSequences().find(s => s.name === initialSequence);
+      if (named) {
         actions.activateSequence(initialSequence);
       } else {
-        const custom = loadCustomSequences().find(s => s.name === initialSequence);
-        if (custom) {
-          actions.activateSequence(initialSequence);
-        } else {
-          const parsed = parseSequenceString(initialSequence);
-          if (parsed) actions.activateSequenceInline(initialSequence);
-        }
+        const parsed = parseSequenceString(initialSequence);
+        if (parsed) actions.activateSequenceInline(initialSequence);
       }
     }
   }, [connectionStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allSequences = useMemo(() => {
-    return [...Object.values(PRESET_SEQUENCES), ...loadCustomSequences()];
-  }, []);
+    return loadSequences();
+  }, [view]);
 
   const todayStats = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -190,8 +185,8 @@ export function App({ config: initialConfig, initialView, initialProject, initia
         setShowInsights(true);
         break;
       case 'session': {
-        const preset = PRESET_SEQUENCES[args.trim()];
-        if (preset) {
+        const named = loadSequences().find(s => s.name === args.trim());
+        if (named) {
           actions.activateSequence(args.trim());
         } else {
           const seq = parseSequenceString(args);

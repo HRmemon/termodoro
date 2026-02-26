@@ -3,8 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { loadTasks } from '../lib/tasks.js';
 import { loadReminders } from '../lib/reminders.js';
-import { PRESET_SEQUENCES } from '../hooks/useSequence.js';
-import { loadCustomSequences } from '../lib/sequences.js';
+import { loadSequences } from '../lib/sequences.js';
 import { fuzzyMatch, fuzzyMatchAny } from '../lib/fuzzy.js';
 import type { View } from '../types.js';
 
@@ -99,7 +98,7 @@ export function GlobalSearch({ onNavigate, onDismiss }: GlobalSearchProps) {
     // Sequences
     if (!typeFilter || typeFilter === 'sequence') {
       if (!projectFilter) {
-        const allSeqs = [...Object.values(PRESET_SEQUENCES), ...loadCustomSequences()];
+        const allSeqs = loadSequences();
         for (const s of allSeqs) {
           if (!text) {
             out.push({ type: 'sequence', id: s.name, label: s.name, sublabel: 'Sequence', view: 'plan', score: 0 });

@@ -44,42 +44,6 @@ export function parseSequenceString(input: string): SessionSequence | null {
   return { name: 'custom', blocks };
 }
 
-export const PRESET_SEQUENCES: Record<string, SessionSequence> = {
-  'deep-work': {
-    name: 'deep-work',
-    blocks: [
-      { type: 'work', durationMinutes: 45 },
-      { type: 'short-break', durationMinutes: 15 },
-      { type: 'work', durationMinutes: 45 },
-      { type: 'short-break', durationMinutes: 15 },
-      { type: 'work', durationMinutes: 45 },
-      { type: 'long-break', durationMinutes: 30 },
-    ],
-  },
-  'standard': {
-    name: 'standard',
-    blocks: [
-      { type: 'work', durationMinutes: 25 },
-      { type: 'short-break', durationMinutes: 5 },
-      { type: 'work', durationMinutes: 25 },
-      { type: 'short-break', durationMinutes: 5 },
-      { type: 'work', durationMinutes: 25 },
-      { type: 'short-break', durationMinutes: 5 },
-      { type: 'work', durationMinutes: 25 },
-      { type: 'long-break', durationMinutes: 15 },
-    ],
-  },
-  'sprint': {
-    name: 'sprint',
-    blocks: [
-      { type: 'work', durationMinutes: 50 },
-      { type: 'short-break', durationMinutes: 10 },
-      { type: 'work', durationMinutes: 50 },
-      { type: 'long-break', durationMinutes: 30 },
-    ],
-  },
-};
-
 export function useSequence(initialState?: SequenceInitialState): [SequenceState, SequenceActions] {
   const [sequence, setSequenceState] = useState<SessionSequence | null>(initialState?.sequence ?? null);
   const [currentBlockIndex, setCurrentBlockIndex] = useState(initialState?.blockIndex ?? 0);

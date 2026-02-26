@@ -5,8 +5,8 @@ import * as path from 'node:path';
 import { PomodoroEngine } from '../engine/timer-engine.js';
 import { loadConfig } from '../lib/config.js';
 import { loadTimerState, clearTimerState, loadStickyProject } from '../lib/store.js';
-import { loadCustomSequences } from '../lib/sequences.js';
-import { PRESET_SEQUENCES, parseSequenceString } from '../hooks/useSequence.js';
+import { loadSequences } from '../lib/sequences.js';
+import { parseSequenceString } from '../hooks/useSequence.js';
 import type { DaemonCommand, DaemonResponse, DaemonEvent, DaemonEventType } from './protocol.js';
 import { DAEMON_SOCKET_PATH, DAEMON_PID_PATH } from './protocol.js';
 import { writeStatusFile, clearStatusFile, invalidateTodayStats } from './status-writer.js';
@@ -33,12 +33,7 @@ function broadcast(event: DaemonEventType, data: unknown): void {
 }
 
 function resolveSequence(name: string) {
-  // Try preset first
-  if (PRESET_SEQUENCES[name]) return PRESET_SEQUENCES[name];
-  // Try custom sequences
-  const custom = loadCustomSequences().find(s => s.name === name);
-  if (custom) return custom;
-  return null;
+  return loadSequences().find(s => s.name === name) ?? null;
 }
 
 export function startDaemon(): void {
