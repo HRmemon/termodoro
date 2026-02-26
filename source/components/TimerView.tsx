@@ -25,6 +25,7 @@ interface TimerViewProps {
   activeSequence: SessionSequence | null;
   onActivateSequence: (seq: SessionSequence) => void;
   onClearSequence: () => void;
+  onEditSequences: () => void;
 }
 
 export function TimerView({
@@ -40,6 +41,7 @@ export function TimerView({
   activeSequence,
   onActivateSequence,
   onClearSequence,
+  onEditSequences,
 }: TimerViewProps) {
   const [isSettingDuration, setIsSettingDuration] = useState(false);
   const [durationInput, setDurationInput] = useState('');
@@ -164,6 +166,11 @@ export function TimerView({
         setSeqCursor(prev => Math.max(prev - 1, 0));
         return;
       }
+      if (input === 'E' || input === 'e') {
+        setShowSeqPicker(false);
+        onEditSequences();
+        return;
+      }
       if (key.return && sequences.length > 0) {
         const selected = sequences[seqCursor];
         if (selected) {
@@ -213,7 +220,7 @@ export function TimerView({
         <Box borderStyle="round" borderColor={colors.highlight} flexDirection="column" paddingX={1}>
           <Box marginBottom={1}>
             <Text bold color={colors.highlight}>Select Sequence</Text>
-            <Text dimColor>  (j/k navigate, Enter select, Esc close)</Text>
+            <Text dimColor>  (j/k navigate, Enter select, e:edit, Esc close)</Text>
           </Box>
           {sequences.map((seq, i) => {
             const isCursor = i === seqCursor;

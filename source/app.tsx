@@ -491,6 +491,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           activeSequence={sequence.sequenceName ? { name: sequence.sequenceName, blocks: sequence.sequenceBlocks ?? [] } : null}
           onActivateSequence={handleActivateSequence}
           onClearSequence={handleClearSequence}
+          onEditSequences={() => setView('config')}
         />
       )}
       {view === 'plan' && (

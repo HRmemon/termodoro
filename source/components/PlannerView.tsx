@@ -1,9 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { FilterInput } from './FilterInput.js';
 import type { SessionSequence } from '../types.js';
-import { parseSequenceString } from '../hooks/useSequence.js';
-import { loadSequences, saveSequence, deleteSequence, importDefaultSequences } from '../lib/sequences.js';
+import { loadSequences } from '../lib/sequences.js';
 import { colors } from '../lib/theme.js';
 
 interface PlannerViewProps {
@@ -24,55 +22,11 @@ function totalMinutes(seq: SessionSequence): number {
   return seq.blocks.reduce((s, b) => s + b.durationMinutes, 0);
 }
 
-export function PlannerView({ activeSequence, onActivateSequence, onClearSequence, setIsTyping }: PlannerViewProps) {
-  const [sequences, setSequences] = useState<SessionSequence[]>(() => loadSequences());
+export function PlannerView({ activeSequence, onActivateSequence, onClearSequence }: PlannerViewProps) {
+  const [sequences] = useState<SessionSequence[]>(() => loadSequences());
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const [editing, setEditing] = useState<'add' | 'edit' | null>(null);
-  const [editStep, setEditStep] = useState<'name' | 'blocks'>('name');
-  const [editName, setEditName] = useState('');
-  const [editBlocks, setEditBlocks] = useState('');
-  const [error, setError] = useState('');
-
-  const refresh = useCallback(() => {
-    setSequences(loadSequences());
-  }, []);
-
-  const handleNameSubmit = useCallback((value: string) => {
-    const name = value.trim();
-    if (!name) { setError('Name cannot be empty'); return; }
-    setEditName(name);
-    setEditStep('blocks');
-    setEditBlocks('');
-    setError('');
-  }, []);
-
-  const handleBlocksSubmit = useCallback((value: string) => {
-    const seq = parseSequenceString(value.trim());
-    if (!seq) { setError('Invalid format. Use: 45w 15b 45w'); return; }
-
-    if (editing === 'add') {
-      seq.name = editName;
-      saveSequence(seq);
-    } else if (editing === 'edit') {
-      const existing = sequences[selectedIdx];
-      if (existing) {
-        seq.name = existing.name;
-        saveSequence(seq);
-      }
-    }
-
-    refresh();
-    setEditing(null);
-    setIsTyping(false);
-    setError('');
-  }, [editing, editName, selectedIdx, sequences, refresh, setIsTyping]);
 
   useInput((input, key) => {
-    if (editing) {
-      if (key.escape) { setEditing(null); setIsTyping(false); setError(''); }
-      return;
-    }
-
     if (input === 'j' || key.downArrow) {
       setSelectedIdx(i => Math.min(i + 1, sequences.length - 1));
       return;
@@ -92,80 +46,7 @@ export function PlannerView({ activeSequence, onActivateSequence, onClearSequenc
       onClearSequence();
       return;
     }
-
-    if (input === 'a') {
-      setEditing('add');
-      setEditStep('name');
-      setEditName('');
-      setEditBlocks('');
-      setError('');
-      setIsTyping(true);
-      return;
-    }
-
-    if (input === 'e' && sequences.length > 0) {
-      const seq = sequences[selectedIdx]!;
-      setEditing('edit');
-      setEditStep('blocks');
-      setEditName(seq.name);
-      setEditBlocks(seq.blocks.map(b => `${b.durationMinutes}${b.type === 'work' ? 'w' : 'b'}`).join(' '));
-      setError('');
-      setIsTyping(true);
-      return;
-    }
-
-    if (input === 'd' && sequences.length > 0) {
-      const seq = sequences[selectedIdx]!;
-      if (activeSequence?.name === seq.name) {
-        onClearSequence();
-      }
-      deleteSequence(seq.name);
-      refresh();
-      setSelectedIdx(i => Math.min(i, Math.max(0, sequences.length - 2)));
-      return;
-    }
-
-    if (input === 'i') {
-      importDefaultSequences();
-      refresh();
-      return;
-    }
   });
-
-  if (editing) {
-    return (
-      <Box flexDirection="column" flexGrow={1}>
-        <Text bold color="cyan">{editing === 'add' ? 'Add' : 'Edit'} Sequence</Text>
-        <Text dimColor>Esc to cancel</Text>
-        <Box marginTop={1} flexDirection="column">
-          {editStep === 'name' && (
-            <FilterInput
-              label="Name: "
-              value={editName}
-              onChange={setEditName}
-              onSubmit={handleNameSubmit}
-              placeholder="my-flow"
-            />
-          )}
-          {editStep === 'blocks' && (
-            <Box flexDirection="column">
-              <Text>Name: <Text bold>{editName}</Text></Text>
-              <FilterInput
-                label="Blocks: "
-                value={editBlocks}
-                onChange={setEditBlocks}
-                onSubmit={handleBlocksSubmit}
-                placeholder="e.g. 45w 15b 45w"
-              />
-            </Box>
-          )}
-        </Box>
-        {error !== '' && (
-          <Box marginTop={1}><Text color="red">{error}</Text></Box>
-        )}
-      </Box>
-    );
-  }
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -187,7 +68,7 @@ export function PlannerView({ activeSequence, onActivateSequence, onClearSequenc
       })}
 
       {sequences.length === 0 && (
-        <Text dimColor>  No sequences. Press i to import presets or a to add one.</Text>
+        <Text dimColor>  No sequences. Manage sequences in [7] Config.</Text>
       )}
 
       {activeSequence && (
@@ -198,7 +79,7 @@ export function PlannerView({ activeSequence, onActivateSequence, onClearSequenc
       )}
 
       <Box marginTop={1}>
-        <Text dimColor>a:add  e:edit  d:delete  i:import presets  Enter:activate  c:clear</Text>
+        <Text dimColor>Enter:activate  c:clear  Manage in [7] Config</Text>
       </Box>
     </Box>
   );
