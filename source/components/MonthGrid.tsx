@@ -92,12 +92,8 @@ export function MonthGrid({
   const headerRows = 2; // month title + day names
   const availForWeeks = maxRows - headerRows;
   // Each week: 1 border + 1 day number + event lines. Plus 1 final border
-  const bordersUsed = weeks.length + 1;
-  const rowsPerWeek = Math.max(2, Math.floor((availForWeeks - bordersUsed) / weeks.length));
+  const rowsPerWeek = Math.max(2, Math.floor(availForWeeks / weeks.length));
   const eventLines = Math.max(0, rowsPerWeek - 1);
-
-  // Build horizontal border line
-  const hBorder = buildHBorder(cellWidth, showWeekNumbers);
 
   return (
     <Box flexDirection="column">
@@ -124,9 +120,6 @@ export function MonthGrid({
         })}
       </Box>
 
-      {/* Top border */}
-      <Text color={colors.dim}>{hBorder}</Text>
-
       {/* Week rows */}
       {weeks.map((week, wi) => {
         const firstDayInWeek = week.find(d => d !== null);
@@ -139,15 +132,11 @@ export function MonthGrid({
             {/* Day numbers row */}
             <Box>
               {showWeekNumbers && (
-                <Text dimColor>{wn > 0 ? String(wn).padStart(3, ' ') + '│' : '   │'}</Text>
+                <Text dimColor>{wn > 0 ? String(wn).padStart(3, ' ') + ' ' : '    '}</Text>
               )}
               {week.map((cell, ci) => {
                 if (!cell) {
-                  return (
-                    <Text key={`empty-${ci}`}>
-                      {' '.repeat(cellWidth - 1)}{'│'}
-                    </Text>
-                  );
+                  return <Text key={`empty-${ci}`}>{' '.repeat(cellWidth)}</Text>;
                 }
 
                 const isToday = cell.dateStr === today;
@@ -168,14 +157,13 @@ export function MonthGrid({
                   : '';
 
                 const labelLen = dayStr.length + todayMark.length + hmChar.length;
-                const padLen = Math.max(0, cellWidth - 1 - labelLen);
+                const padLen = Math.max(0, cellWidth - labelLen);
 
                 return (
                   <Text key={cell.dateStr}>
                     <Text color={dayColor} bold={isToday || isSelected}>{dayStr}{todayMark}</Text>
                     {hmChar && <Text color="green">{hmChar}</Text>}
                     <Text>{' '.repeat(padLen)}</Text>
-                    <Text color={colors.dim}>│</Text>
                   </Text>
                 );
               })}
@@ -184,14 +172,10 @@ export function MonthGrid({
             {/* Event lines inside cells */}
             {Array.from({ length: eventLines }).map((_, lineIdx) => (
               <Box key={`ev-${wi}-${lineIdx}`}>
-                {showWeekNumbers && <Text>{'   │'}</Text>}
+                {showWeekNumbers && <Text>{'    '}</Text>}
                 {week.map((cell, ci) => {
                   if (!cell) {
-                    return (
-                      <Text key={`empty-ev-${ci}`}>
-                        {' '.repeat(cellWidth - 1)}{'│'}
-                      </Text>
-                    );
+                    return <Text key={`empty-ev-${ci}`}>{' '.repeat(cellWidth)}</Text>;
                   }
 
                   const events = eventsByDate.get(cell.dateStr) ?? [];
@@ -200,26 +184,19 @@ export function MonthGrid({
                   if (lineIdx === eventLines - 1 && events.length > eventLines) {
                     const hidden = events.length - eventLines + 1;
                     const overflow = `+${hidden}`;
-                    const pad = ' '.repeat(Math.max(0, cellWidth - 1 - overflow.length));
+                    const pad = ' '.repeat(Math.max(0, cellWidth - overflow.length));
                     return (
-                      <Text key={`overflow-${cell.dateStr}`}>
-                        <Text dimColor>{overflow}{pad}</Text>
-                        <Text color={colors.dim}>│</Text>
-                      </Text>
+                      <Text key={`overflow-${cell.dateStr}`} dimColor>{overflow}{pad}</Text>
                     );
                   }
 
                   const event = events[lineIdx];
                   if (!event) {
-                    return (
-                      <Text key={`noev-${ci}-${lineIdx}`}>
-                        {' '.repeat(cellWidth - 1)}{'│'}
-                      </Text>
-                    );
+                    return <Text key={`noev-${ci}-${lineIdx}`}>{' '.repeat(cellWidth)}</Text>;
                   }
 
                   const icon = getEventIcon(event, calendarConfig, isGlobalPrivacy);
-                  const maxLen = cellWidth - 3; // icon + space + border
+                  const maxLen = cellWidth - 2; // icon + space
                   let display: string;
                   if (isGlobalPrivacy || event.privacy) {
                     display = getPrivacyDisplay(event.title).slice(0, maxLen);
@@ -236,21 +213,18 @@ export function MonthGrid({
                   if (event.source === 'ics') eventColor = colors.break;
 
                   const content = `${prefix} ${display}`;
-                  const pad = ' '.repeat(Math.max(0, cellWidth - 1 - content.length));
+                  const pad = ' '.repeat(Math.max(0, cellWidth - content.length));
 
                   return (
                     <Text key={`ev-${cell.dateStr}-${lineIdx}`}>
                       <Text color={eventColor}>{content}</Text>
                       <Text>{pad}</Text>
-                      <Text color={colors.dim}>│</Text>
                     </Text>
                   );
                 })}
               </Box>
             ))}
 
-            {/* Horizontal border after each week */}
-            <Text color={colors.dim}>{hBorder}</Text>
           </Box>
         );
       })}
@@ -258,9 +232,3 @@ export function MonthGrid({
   );
 }
 
-function buildHBorder(cellWidth: number, showWeekNumbers?: boolean): string {
-  const prefix = showWeekNumbers ? '───┼' : '';
-  const cellLine = '─'.repeat(cellWidth - 1) + '┼';
-  const cells = cellLine.repeat(6) + '─'.repeat(cellWidth - 1) + '┤';
-  return prefix + cells;
-}
