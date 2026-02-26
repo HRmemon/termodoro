@@ -72,7 +72,7 @@ function formatView(view: View): { content: string; tmpPath: string } {
 function formatTasks(): string {
   const tasks = loadTasks();
   return tasks.map(t => {
-    const check = t.active ? '[*]' : (t.completed ? '[x]' : '[ ]');
+    const check = t.completed ? '[x]' : '[ ]';
     let line = `${check} ${t.text}`;
     if (t.project) line += ` #${t.project}`;
     line += ` /${t.expectedPomodoros}`;
@@ -94,11 +94,10 @@ function parseTasks(text: string): void {
     const id = idMatch ? idMatch[1]! : nanoid();
     seenIds.add(id);
 
-    const checkMatch = line.match(/^\[([x *])\]/);
+    const checkMatch = line.match(/^\[([x ])\]/);
     const completed = checkMatch?.[1] === 'x';
-    const active = checkMatch?.[1] === '*';
 
-    let rest = line.replace(/%id:\S+/, '').replace(/^\[[x *]\]\s*/, '').trim();
+    let rest = line.replace(/%id:\S+/, '').replace(/^\[[x ]\]\s*/, '').trim();
 
     // Parse (M/N) progress
     let completedPomodoros = 0;
@@ -129,7 +128,7 @@ function parseTasks(text: string): void {
       id,
       text: rest,
       completed,
-      active,
+      description: old?.description,
       project,
       expectedPomodoros,
       completedPomodoros: completedPomodoros || (old?.completedPomodoros ?? 0),

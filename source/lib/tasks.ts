@@ -6,16 +6,17 @@ import type { Task } from '../types.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const TASKS_PATH = path.join(DATA_DIR, 'tasks.json');
+const PROJECTS_PATH = path.join(DATA_DIR, 'projects.json');
 
 function ensureDir(): void {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function atomicWrite(data: unknown): void {
+function atomicWrite(filePath: string, data: unknown): void {
   ensureDir();
-  const tmp = TASKS_PATH + '.tmp';
+  const tmp = filePath + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf-8');
-  fs.renameSync(tmp, TASKS_PATH);
+  fs.renameSync(tmp, filePath);
 }
 
 export function loadTasks(): Task[] {
@@ -30,15 +31,16 @@ export function loadTasks(): Task[] {
 }
 
 export function saveTasks(tasks: Task[]): void {
-  atomicWrite(tasks);
+  atomicWrite(TASKS_PATH, tasks);
 }
 
-export function addTask(text: string, expectedPomodoros: number = 1, project?: string): Task {
+export function addTask(text: string, expectedPomodoros: number = 1, project?: string, description?: string): Task {
   const tasks = loadTasks();
   const task: Task = {
     id: nanoid(),
     text,
     completed: false,
+    description,
     project,
     expectedPomodoros,
     completedPomodoros: 0,
@@ -73,7 +75,7 @@ export function incrementTaskPomodoro(id: string): void {
   }
 }
 
-export function updateTask(id: string, updates: Partial<Pick<Task, 'text' | 'expectedPomodoros' | 'project'>>): void {
+export function updateTask(id: string, updates: Partial<Pick<Task, 'text' | 'expectedPomodoros' | 'project' | 'description'>>): void {
   const tasks = loadTasks();
   const task = tasks.find(t => t.id === id);
   if (task) {
@@ -85,16 +87,91 @@ export function updateTask(id: string, updates: Partial<Pick<Task, 'text' | 'exp
 export function getProjects(): string[] {
   const tasks = loadTasks();
   const projects = new Set<string>();
+  // From tasks
   for (const t of tasks) {
     if (t.project) projects.add(t.project);
+  }
+  // From explicit projects file
+  for (const p of loadProjects()) {
+    projects.add(p);
   }
   return [...projects].sort();
 }
 
-export function setActiveTask(id: string | null): void {
-  const tasks = loadTasks();
-  for (const t of tasks) {
-    t.active = t.id === id;
+// ─── Project CRUD ─────────────────────────────────────────────────────────────
+
+export function loadProjects(): string[] {
+  try {
+    if (fs.existsSync(PROJECTS_PATH)) {
+      return JSON.parse(fs.readFileSync(PROJECTS_PATH, 'utf-8')) as string[];
+    }
+  } catch {
+    // corrupt file
   }
+  return [];
+}
+
+export function saveProjects(projects: string[]): void {
+  atomicWrite(PROJECTS_PATH, projects);
+}
+
+export function addProject(name: string): void {
+  const projects = loadProjects();
+  if (!projects.includes(name)) {
+    projects.push(name);
+    projects.sort();
+    saveProjects(projects);
+  }
+}
+
+export function renameProject(oldName: string, newName: string): void {
+  // Update all tasks with this project
+  const tasks = loadTasks();
+  let changed = false;
+  for (const t of tasks) {
+    if (t.project === oldName) {
+      t.project = newName;
+      changed = true;
+    }
+  }
+  if (changed) saveTasks(tasks);
+
+  // Update explicit projects list
+  const projects = loadProjects();
+  const idx = projects.indexOf(oldName);
+  if (idx >= 0) {
+    projects[idx] = newName;
+    projects.sort();
+    saveProjects(projects);
+  } else if (!projects.includes(newName)) {
+    // Old name was only task-derived, add new name explicitly
+    projects.push(newName);
+    projects.sort();
+    saveProjects(projects);
+  }
+}
+
+export function removeProjectTag(project: string): void {
+  const tasks = loadTasks();
+  let changed = false;
+  for (const t of tasks) {
+    if (t.project === project) {
+      t.project = undefined;
+      changed = true;
+    }
+  }
+  if (changed) saveTasks(tasks);
+
+  // Remove from explicit projects
+  const projects = loadProjects().filter(p => p !== project);
+  saveProjects(projects);
+}
+
+export function deleteProjectTasks(project: string): void {
+  const tasks = loadTasks().filter(t => t.project !== project);
   saveTasks(tasks);
+
+  // Remove from explicit projects
+  const projects = loadProjects().filter(p => p !== project);
+  saveProjects(projects);
 }

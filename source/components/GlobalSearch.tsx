@@ -77,7 +77,7 @@ export function GlobalSearch({ onNavigate, onDismiss }: GlobalSearchProps) {
             type: 'task',
             id: t.id,
             label: t.text,
-            sublabel: `Task [${t.completedPomodoros}/${t.expectedPomodoros}]${t.active ? ' ▶' : ''}${t.project ? ` #${t.project}` : ''}`,
+            sublabel: `Task [${t.completedPomodoros}/${t.expectedPomodoros}]${t.project ? ` #${t.project}` : ''}`,
             view: 'tasks',
             score,
           });
@@ -87,7 +87,7 @@ export function GlobalSearch({ onNavigate, onDismiss }: GlobalSearchProps) {
             type: 'task',
             id: t.id,
             label: t.text,
-            sublabel: `Task [${t.completedPomodoros}/${t.expectedPomodoros}]${t.active ? ' ▶' : ''}${t.project ? ` #${t.project}` : ''}`,
+            sublabel: `Task [${t.completedPomodoros}/${t.expectedPomodoros}]${t.project ? ` #${t.project}` : ''}`,
             view: 'tasks',
             score: 0,
           });

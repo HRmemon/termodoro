@@ -53,11 +53,12 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
 
   if (view === 'tasks') {
     actionHints.push({ key: 'j/k', label: 'Navigate' });
-    actionHints.push({ key: 'Enter', label: 'Toggle active' });
+    actionHints.push({ key: 'Enter', label: 'View' });
     actionHints.push({ key: 'x', label: 'Done/Undo' });
     actionHints.push({ key: 'a', label: 'Add' });
     actionHints.push({ key: 'e', label: 'Edit' });
     actionHints.push({ key: 'd', label: 'Delete' });
+    actionHints.push({ key: 'P', label: 'Projects' });
   }
 
   if (view === 'reminders') {

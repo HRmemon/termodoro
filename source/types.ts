@@ -58,7 +58,7 @@ export interface Task {
   id: string;
   text: string;
   completed: boolean;
-  active?: boolean;
+  description?: string;
   project?: string;
   expectedPomodoros: number;
   completedPomodoros: number;

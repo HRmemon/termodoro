@@ -37,13 +37,14 @@ const page1 = [
     title: '[2] Tasks',
     hints: [
       ['j/k', 'Navigate'],
-      ['Enter', 'Toggle active'],
+      ['Enter', 'View description'],
       ['x', 'Complete / Undo'],
       ['a', 'Add task'],
       ['e', 'Edit task'],
       ['d', 'Delete task'],
       ['u', 'Undo last completion'],
       ['/', 'Filter (fuzzy search)'],
+      ['P', 'Projects manager'],
     ],
   },
   {
