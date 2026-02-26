@@ -25,7 +25,7 @@ export type KeyAction =
   | 'calendar.toggle_view' | 'calendar.goto_today'
   | 'calendar.toggle_done' | 'calendar.toggle_important'
   | 'calendar.toggle_privacy' | 'calendar.toggle_global_privacy'
-  | 'calendar.reload_ics';
+  | 'calendar.reload_ics' | 'calendar.delete';
 
 export type KeybindingConfig = Partial<Record<KeyAction, string>>;
 
@@ -65,8 +65,9 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, string> = {
   'stats.next_tab': 'l',
   'config.save': 's',
   'calendar.toggle_view': 'v',
-  'calendar.goto_today': 'R',
-  'calendar.toggle_done': 'd',
+  'calendar.goto_today': 't',
+  'calendar.toggle_done': 'x',
+  'calendar.delete': 'd',
   'calendar.toggle_important': 'i',
   'calendar.toggle_privacy': '.',
   'calendar.toggle_global_privacy': '*',

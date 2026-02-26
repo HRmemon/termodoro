@@ -9,12 +9,14 @@ import { loadReminders } from '../lib/reminders.js';
 import { MonthGrid } from './MonthGrid.js';
 import { DayAgenda } from './DayAgenda.js';
 import { TasksPanel } from './TasksPanel.js';
+import type { PaneId } from './TasksPanel.js';
 import { EventForm } from './EventForm.js';
 import { colors } from '../lib/theme.js';
 import type { Keymap } from '../lib/keymap.js';
 
 type ViewMode = 'monthly' | 'daily' | 'add' | 'edit';
 
+const PANES: PaneId[] = ['calendar', 'today', 'tasks'];
 
 interface CalendarViewProps {
   setIsTyping: (v: boolean) => void;
@@ -56,6 +58,9 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   const [eventVersion, setEventVersion] = useState(0);
   const [editTarget, setEditTarget] = useState<CalendarEvent | null>(null);
   const [dailySelectedIdx, setDailySelectedIdx] = useState(0);
+  const [focusedPane, setFocusedPane] = useState<PaneId>('calendar');
+  const [todayCollapsed, setTodayCollapsed] = useState(false);
+  const [tasksCollapsed, setTasksCollapsed] = useState(false);
 
   const { stdout } = useStdout();
   const termRows = stdout?.rows ?? 24;
@@ -133,7 +138,19 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   // All tasks for the right panel
   const allTasks = useMemo(() => loadTasks(), [eventVersion]);
 
-  // Reset cursor when selected date changes (avoids stale index on new day)
+  // Today's events and tasks for the Today box
+  const todayEvents = useMemo(() => {
+    const rangeStart = today;
+    const rangeEnd = today;
+    const expanded = expandRecurring(allEvents, rangeStart, rangeEnd);
+    return getEventsForDate(expanded, today);
+  }, [allEvents, today]);
+
+  const todayTasks = useMemo(() => {
+    return loadTasks().filter((t: { deadline?: string }) => t.deadline === today);
+  }, [today, eventVersion]);
+
+  // Reset cursor when selected date changes
   useEffect(() => { setDailySelectedIdx(0); }, [selectedDate]);
 
   const reloadEvents = useCallback(() => setEventVersion(v => v + 1), []);
@@ -165,7 +182,7 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
     }
   }, [dailySelectedIdx, dayEvents, reloadEvents]);
 
-  // Navigation: day-by-day (like calcure)
+  // Navigation
   const navigateDay = useCallback((delta: number) => {
     setSelectedDate(prev => addDays(prev, delta));
   }, []);
@@ -174,122 +191,154 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
     setSelectedDate(prev => addDays(prev, delta * 7));
   }, []);
 
+  // Tab cycling between panes
+  const cyclePane = useCallback((direction: 1 | -1) => {
+    setFocusedPane(prev => {
+      const idx = PANES.indexOf(prev);
+      const next = (idx + direction + PANES.length) % PANES.length;
+      return PANES[next]!;
+    });
+  }, []);
+
   // Input handling
   useInput((input, key) => {
     if (viewMode === 'add' || viewMode === 'edit') return;
 
+    // Tab / Shift-Tab to switch panes
+    if (key.tab) {
+      cyclePane(key.shift ? -1 : 1);
+      return;
+    }
+
+    // Global: privacy toggle, ICS reload
     if (keymap.matches('calendar.toggle_global_privacy', input, key)) {
       setIsGlobalPrivacy(prev => !prev);
       return;
     }
-
     if (keymap.matches('calendar.reload_ics', input, key)) {
       reloadIcs();
       reloadEvents();
       return;
     }
 
-    if (viewMode === 'monthly') {
-      // h/l = days, j/k = weeks (like calcure)
-      if (keymap.matches('nav.left', input, key)) { navigateDay(-1); return; }
-      if (keymap.matches('nav.right', input, key)) { navigateDay(1); return; }
-      if (keymap.matches('nav.down', input, key)) { navigateWeek(1); return; }
-      if (keymap.matches('nav.up', input, key)) { navigateWeek(-1); return; }
-
-      if (key.return) { setViewMode('daily'); setDailySelectedIdx(0); return; }
-
-      if (keymap.matches('list.add', input, key)) {
-        prevModeRef.current = 'monthly';
-        setViewMode('add');
-        return;
-      }
-
-      if (keymap.matches('calendar.goto_today', input, key)) { setSelectedDate(getTodayStr()); return; }
-      if (keymap.matches('calendar.toggle_view', input, key)) { setViewMode('daily'); return; }
-
+    // Go to today (works in any pane)
+    if (keymap.matches('calendar.goto_today', input, key)) {
+      setSelectedDate(getTodayStr());
       return;
     }
 
-    if (viewMode === 'daily') {
-      // h/l = days
-      if (keymap.matches('nav.left', input, key)) { navigateDay(-1); return; }
-      if (keymap.matches('nav.right', input, key)) { navigateDay(1); return; }
-
-      // j/k = scroll event list
-      if (keymap.matches('nav.down', input, key)) {
-        setDailySelectedIdx(prev => Math.max(0, Math.min(prev + 1, dayEvents.length + dayTasks.length - 1)));
-        return;
-      }
-      if (keymap.matches('nav.up', input, key)) {
-        setDailySelectedIdx(prev => Math.max(prev - 1, 0));
-        return;
-      }
-
-      if (key.escape || keymap.matches('calendar.toggle_view', input, key)) {
-        setViewMode('monthly');
-        return;
-      }
-
-      if (keymap.matches('list.add', input, key)) {
-        prevModeRef.current = 'daily';
-        setViewMode('add');
-        return;
-      }
-
-      if (keymap.matches('list.edit', input, key)) {
-        if (dailySelectedIdx < dayEvents.length) {
-          const event = dayEvents[dailySelectedIdx];
-          if (event && event.source === 'user') {
-            setEditTarget(event);
-            setViewMode('edit');
-          }
-        }
-        return;
-      }
-
-      if (keymap.matches('calendar.toggle_done', input, key)) {
-        applyToSelected(event => {
-          updateEvent(event.id, { status: event.status === 'done' ? 'normal' : 'done' });
-        });
-        return;
-      }
-
-      if (keymap.matches('calendar.toggle_important', input, key)) {
-        applyToSelected(event => {
-          updateEvent(event.id, { status: event.status === 'important' ? 'normal' : 'important' });
-        });
-        return;
-      }
-
-      if (keymap.matches('calendar.toggle_privacy', input, key)) {
-        applyToSelected(event => {
-          updateEvent(event.id, { privacy: !event.privacy });
-        });
-        return;
-      }
-
-      if (input === 'x') {
-        if (dailySelectedIdx < dayEvents.length) {
-          const event = dayEvents[dailySelectedIdx];
-          if (event && event.source === 'user') {
-            deleteEvent(event.id);
-            reloadEvents();
-            setDailySelectedIdx(prev => Math.max(0, prev - 1));
-          }
-        }
-        return;
-      }
-
+    // Toggle collapse on focused right-side pane with Enter
+    if (focusedPane === 'today' && key.return) {
+      setTodayCollapsed(prev => !prev);
       return;
     }
+    if (focusedPane === 'tasks' && key.return) {
+      setTasksCollapsed(prev => !prev);
+      return;
+    }
+
+    // Calendar pane focused
+    if (focusedPane === 'calendar') {
+      if (viewMode === 'monthly') {
+        if (keymap.matches('nav.left', input, key)) { navigateDay(-1); return; }
+        if (keymap.matches('nav.right', input, key)) { navigateDay(1); return; }
+        if (keymap.matches('nav.down', input, key)) { navigateWeek(1); return; }
+        if (keymap.matches('nav.up', input, key)) { navigateWeek(-1); return; }
+
+        if (key.return) { setViewMode('daily'); setDailySelectedIdx(0); return; }
+
+        if (keymap.matches('list.add', input, key)) {
+          prevModeRef.current = 'monthly';
+          setViewMode('add');
+          return;
+        }
+
+        if (keymap.matches('calendar.toggle_view', input, key)) { setViewMode('daily'); return; }
+        return;
+      }
+
+      if (viewMode === 'daily') {
+        if (keymap.matches('nav.left', input, key)) { navigateDay(-1); return; }
+        if (keymap.matches('nav.right', input, key)) { navigateDay(1); return; }
+
+        if (keymap.matches('nav.down', input, key)) {
+          setDailySelectedIdx(prev => Math.max(0, Math.min(prev + 1, dayEvents.length + dayTasks.length - 1)));
+          return;
+        }
+        if (keymap.matches('nav.up', input, key)) {
+          setDailySelectedIdx(prev => Math.max(prev - 1, 0));
+          return;
+        }
+
+        if (key.escape || keymap.matches('calendar.toggle_view', input, key)) {
+          setViewMode('monthly');
+          return;
+        }
+
+        if (keymap.matches('list.add', input, key)) {
+          prevModeRef.current = 'daily';
+          setViewMode('add');
+          return;
+        }
+
+        if (keymap.matches('list.edit', input, key)) {
+          if (dailySelectedIdx < dayEvents.length) {
+            const event = dayEvents[dailySelectedIdx];
+            if (event && event.source === 'user') {
+              setEditTarget(event);
+              setViewMode('edit');
+            }
+          }
+          return;
+        }
+
+        // x = toggle done
+        if (keymap.matches('calendar.toggle_done', input, key)) {
+          applyToSelected(event => {
+            updateEvent(event.id, { status: event.status === 'done' ? 'normal' : 'done' });
+          });
+          return;
+        }
+
+        // d = delete
+        if (keymap.matches('calendar.delete', input, key)) {
+          if (dailySelectedIdx < dayEvents.length) {
+            const event = dayEvents[dailySelectedIdx];
+            if (event && event.source === 'user') {
+              deleteEvent(event.id);
+              reloadEvents();
+              setDailySelectedIdx(prev => Math.max(0, prev - 1));
+            }
+          }
+          return;
+        }
+
+        if (keymap.matches('calendar.toggle_important', input, key)) {
+          applyToSelected(event => {
+            updateEvent(event.id, { status: event.status === 'important' ? 'normal' : 'important' });
+          });
+          return;
+        }
+
+        if (keymap.matches('calendar.toggle_privacy', input, key)) {
+          applyToSelected(event => {
+            updateEvent(event.id, { privacy: !event.privacy });
+          });
+          return;
+        }
+
+        return;
+      }
+    }
+
+    // Today/Tasks panes: no special keys yet (just Tab to switch, Enter to collapse)
   });
 
   // Layout calculations
   const sidebarW = config.sidebarWidth ?? 20;
   const totalContentWidth = termCols - sidebarW - 4;
-  // Split: calendar ~72%, tasks panel ~28%
   const tasksPanelWidth = Math.max(16, Math.floor(totalContentWidth * 0.28));
-  const calendarWidth = totalContentWidth - tasksPanelWidth - 3; // separator + margins
+  const calendarWidth = totalContentWidth - tasksPanelWidth - 3;
   const maxGridRows = termRows - 8;
 
   if (viewMode === 'add') {
@@ -314,6 +363,21 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
     );
   }
 
+  const rightPanel = (
+    <TasksPanel
+      todayEvents={todayEvents}
+      todayTasks={todayTasks}
+      allTasks={allTasks}
+      width={tasksPanelWidth}
+      maxRows={maxGridRows}
+      isGlobalPrivacy={isGlobalPrivacy}
+      focusedPane={focusedPane}
+      todayCollapsed={todayCollapsed}
+      tasksCollapsed={tasksCollapsed}
+      calendarConfig={calendarConfig}
+    />
+  );
+
   if (viewMode === 'daily') {
     return (
       <Box>
@@ -332,17 +396,12 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
         <Box width={1} marginX={1}>
           <Text color={colors.dim}>│</Text>
         </Box>
-        <TasksPanel
-          tasks={allTasks}
-          width={tasksPanelWidth}
-          maxRows={maxGridRows}
-          isGlobalPrivacy={isGlobalPrivacy}
-        />
+        {rightPanel}
       </Box>
     );
   }
 
-  // Monthly view with split layout: calendar | tasks
+  // Monthly view with split layout
   return (
     <Box>
       <Box flexDirection="column" flexGrow={1}>
@@ -363,12 +422,7 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
       <Box width={1} marginX={1}>
         <Text color={colors.dim}>│</Text>
       </Box>
-      <TasksPanel
-        tasks={allTasks}
-        width={tasksPanelWidth}
-        maxRows={maxGridRows}
-        isGlobalPrivacy={isGlobalPrivacy}
-      />
+      {rightPanel}
     </Box>
   );
 }

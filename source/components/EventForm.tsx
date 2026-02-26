@@ -78,8 +78,12 @@ export function EventForm({ initialDate, editEvent, onSubmit, onCancel, setIsTyp
     // Validate YYYY-MM-DD and check it's a real date
     if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
       const parsed = new Date(val + 'T00:00:00');
-      if (!isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === val) {
-        setDate(val);
+      if (!isNaN(parsed.getTime())) {
+        // Verify the date didn't roll over (e.g. Feb 30 → Mar 2)
+        const [, pm, pd] = val.split('-').map(Number);
+        if (parsed.getMonth() + 1 === pm && parsed.getDate() === pd) {
+          setDate(val);
+        }
       }
     }
     setStep('time');

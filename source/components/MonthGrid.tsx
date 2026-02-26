@@ -91,9 +91,11 @@ export function MonthGrid({
   // Calculate how many event lines fit per cell
   const headerRows = 2; // month title + day names
   const availForWeeks = maxRows - headerRows;
-  // Each week: 1 border + 1 day number + event lines. Plus 1 final border
-  const rowsPerWeek = Math.max(2, Math.floor(availForWeeks / weeks.length));
+  // Each week uses 1 separator row (dim border) + content rows
+  const separatorRows = weeks.length - 1; // no separator after last week
+  const rowsPerWeek = Math.max(2, Math.floor((availForWeeks - separatorRows) / weeks.length));
   const eventLines = Math.max(0, rowsPerWeek - 1);
+  const dimBorder = '·'.repeat(cellWidth * 7 + wnWidth);
 
   return (
     <Box flexDirection="column">
@@ -128,7 +130,7 @@ export function MonthGrid({
           : 0;
 
         return (
-          <Box key={wi} flexDirection="column">
+          <Box key={wi} flexDirection="column" gap={0}>
             {/* Day numbers row */}
             <Box>
               {showWeekNumbers && (
@@ -225,6 +227,7 @@ export function MonthGrid({
               </Box>
             ))}
 
+            {wi < weeks.length - 1 && <Text color={colors.dim}>{dimBorder}</Text>}
           </Box>
         );
       })}
