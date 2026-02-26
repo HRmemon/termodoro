@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
+import { openSessionsInNvim } from '../lib/nvim-edit.js';
 import { Heatmap } from './Heatmap.js';
 import { Sparkline } from './Sparkline.js';
 import { colors } from '../lib/theme.js';
@@ -55,6 +56,7 @@ const SECTION_NAMES = ['Today', 'Week', 'Projects', 'Tasks', 'Recent'];
 
 export function ReportsView() {
   const [selectedSection, setSelectedSection] = useState(0);
+  const [dataVersion, setDataVersion] = useState(0);
   const totalSections = SECTION_NAMES.length;
   const { stdout } = useStdout();
   const termWidth = stdout?.columns ?? 80;
@@ -111,7 +113,7 @@ export function ReportsView() {
       todaySessions,
       projectActivity,
     };
-  }, []);
+  }, [dataVersion]);
 
   useInput((input, key) => {
     if (input === 'l' || key.rightArrow) {
@@ -125,6 +127,10 @@ export function ReportsView() {
     }
     if (input === 'k' || key.upArrow) {
       setSelectedSection(prev => Math.max(0, prev - 1));
+    }
+    if (input === 'e') {
+      openSessionsInNvim();
+      setDataVersion(v => v + 1);
     }
   });
 

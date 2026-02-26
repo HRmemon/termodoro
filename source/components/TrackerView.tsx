@@ -368,15 +368,22 @@ export function TrackerView() {
           {todayDayName && <Text dimColor>{'  '}[Today: {todayDayName}]</Text>}
           <Text dimColor>{'  '}Day {dayNum}/7</Text>
         </Box>
-        <Box marginTop={1}>
-          <Text dimColor>{'Time  '}</Text>
-          {DAY_NAMES.map((name, i) => (
-            <Text key={name} color={i === cursorCol ? 'cyan' : i === todayCol ? 'yellow' : undefined} bold={i === cursorCol}>
-              {name.padEnd(COL_WIDTH)}
-            </Text>
-          ))}
+        {/* Column headers + divider */}
+        <Box marginTop={1} flexDirection="column">
+          <Text>
+            <Text dimColor>{'Time  '}</Text>
+            {DAY_NAMES.map((name, i) => (
+              <Text
+                key={name}
+                color={i === cursorCol ? 'cyan' : i === todayCol ? 'yellow' : 'gray'}
+                bold={i === cursorCol}
+              >
+                {name.padEnd(COL_WIDTH)}
+              </Text>
+            ))}
+          </Text>
+          <Text dimColor>{'      ' + DAY_NAMES.map(() => '\u2500'.repeat(COL_WIDTH)).join('')}</Text>
         </Box>
-        <Text dimColor>{'\u2500\u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500'}</Text>
 
         {/* Grid rows up to and including cursor row */}
         <Box flexDirection="column">
@@ -419,20 +426,10 @@ export function TrackerView() {
         <Text dimColor>{'  '}Day {dayNum}/7</Text>
       </Box>
 
-      {/* Column headers */}
-      <Box marginTop={1}>
-        <Text dimColor>{'Time  '}</Text>
-        {DAY_NAMES.map((name, i) => (
-          <Text
-            key={name}
-            color={i === cursorCol ? 'cyan' : i === todayCol ? 'yellow' : undefined}
-            bold={i === cursorCol}
-          >
-            {name.padEnd(COL_WIDTH)}
-          </Text>
-        ))}
-      </Box>
-      <Text dimColor>{'\u2500\u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500  \u2500\u2500\u2500\u2500'}</Text>
+      {/* Column headers + divider */}
+      <Text>{' '}</Text>
+      <Text dimColor>{'Time  ' + DAY_NAMES.map(n => n.padEnd(COL_WIDTH)).join('')}</Text>
+      <Text dimColor>{'      ' + DAY_NAMES.map(() => '\u2500'.repeat(COL_WIDTH)).join('')}</Text>
 
       {/* Grid rows */}
       <Box flexDirection="column">

@@ -4,6 +4,7 @@ import type { SessionSequence } from '../../types.js';
 import { loadSequences, saveSequence, deleteSequence as deleteSeq, importDefaultSequences } from '../../lib/sequences.js';
 import { parseSequenceString } from '../../hooks/useSequence.js';
 import { FilterInput } from '../FilterInput.js';
+import { openSequencesInNvim } from '../../lib/nvim-edit.js';
 
 interface SequenceManagerProps {
   setIsTyping: (v: boolean) => void;
@@ -85,6 +86,9 @@ export function SequenceManager({ setIsTyping, onBack }: SequenceManagerProps) {
     } else if (input === 'i') {
       importDefaultSequences();
       refreshSeqs();
+    } else if (input === 'n') {
+      openSequencesInNvim();
+      refreshSeqs();
     }
   });
 
@@ -128,7 +132,7 @@ export function SequenceManager({ setIsTyping, onBack }: SequenceManagerProps) {
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text bold color="cyan">Sequences</Text>
-      <Text dimColor>a:add  e:edit  d:delete  i:import presets  Esc:back</Text>
+      <Text dimColor>a:add  e:edit  d:delete  i:import presets  n:nvim  Esc:back</Text>
       <Box flexDirection="column" marginTop={1}>
         {seqList.map((seq, i) => {
           const formatBlocks = seq.blocks.map(b => `${b.durationMinutes}${b.type === 'work' ? 'w' : 'b'}`).join(' ');
