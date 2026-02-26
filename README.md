@@ -335,7 +335,7 @@ Track daily habits and goals with heatmap visualization.
 | `e` | Edit goal |
 | `d` | Delete goal |
 
-**Goal types**: Manual (toggle), Auto (count by `#project` pomodoros), Rate (daily rating).
+**Goal types**: Manual (toggle), Auto (count by `#project` pomodoros), Rate (daily rating), Note (daily text note).
 
 ---
 
