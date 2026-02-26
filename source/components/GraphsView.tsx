@@ -6,13 +6,13 @@ import {
   loadGoals, addGoal, removeGoal, updateGoal, toggleCompletion,
   isGoalComplete, computeStreak, getTodayStr, getRecentWeeks,
   getAllProjects, GOAL_COLORS, GoalsData, TrackedGoal,
-  setRating, getRating,
+  setRating, getRating, setNote, getNote,
 } from '../lib/goals.js';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKS_TO_SHOW = 8;
 
-type ViewMode = 'main' | 'add' | 'edit' | 'delete-confirm' | 'rate-picker';
+type ViewMode = 'main' | 'add' | 'edit' | 'delete-confirm' | 'rate-picker' | 'note-editor';
 type AddStep = 'name' | 'type' | 'project' | 'rateMax' | 'color';
 
 export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void }) {
@@ -27,13 +27,16 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
   // Add goal state
   const [addStep, setAddStep] = useState<AddStep>('name');
   const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<'manual' | 'auto' | 'rate'>('manual');
+  const [newType, setNewType] = useState<'manual' | 'auto' | 'rate' | 'note'>('manual');
   const [newProject, setNewProject] = useState('');
   const [newRateMax, setNewRateMax] = useState('5');
   const [newColorIdx, setNewColorIdx] = useState(0);
 
   // Rate picker state
   const [pickerValue, setPickerValue] = useState(0);
+
+  // Note editor state
+  const [noteValue, setNoteValue] = useState('');
 
   // Project autocomplete (Part 5)
   const allProjects = useMemo(() => getAllProjects(), [data]);
@@ -88,7 +91,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     setViewMode('edit');
     setAddStep('name');
     setNewName(activeGoal.name);
-    setNewType(activeGoal.type);
+    setNewType(activeGoal.type as 'manual' | 'auto' | 'rate' | 'note');
     setNewProject(activeGoal.autoProject ?? '');
     setNewRateMax(String(activeGoal.rateMax ?? 5));
     setNewColorIdx(Math.max(0, GOAL_COLORS.indexOf(activeGoal.color)));
@@ -196,6 +199,20 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
       return;
     }
 
+    // Note editor mode
+    if (viewMode === 'note-editor') {
+      // TextInput handles input; Esc saves and closes
+      if (key.escape) {
+        if (activeGoal) {
+          const updated = setNote(activeGoal.id, selectedDate, noteValue, { ...data });
+          setData(updated);
+        }
+        setViewMode('main');
+        setIsTyping(false);
+      }
+      return;
+    }
+
     if (viewMode === 'add' || viewMode === 'edit') {
       if (key.escape) { setViewMode('main'); setIsTyping(false); return; }
 
@@ -206,12 +223,13 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
         if (input === 'm' || input === 'M') { setNewType('manual'); setAddStep('color'); }
         else if (input === 'a' || input === 'A') { setNewType('auto'); setAddStep('project'); setIsTyping(true); }
         else if (input === 'r' || input === 'R') { setNewType('rate'); setAddStep('rateMax'); setIsTyping(true); }
+        else if (input === 'n' || input === 'N') { setNewType('note'); setAddStep('color'); }
         else if (key.return) {
           if (newType === 'auto') { setAddStep('project'); setIsTyping(true); }
           else if (newType === 'rate') { setAddStep('rateMax'); setIsTyping(true); }
           else setAddStep('color');
         }
-        else if (key.tab) setNewType(t => t === 'manual' ? 'auto' : t === 'auto' ? 'rate' : 'manual');
+        else if (key.tab) setNewType(t => t === 'manual' ? 'auto' : t === 'auto' ? 'rate' : t === 'rate' ? 'note' : 'manual');
         return;
       }
       if (addStep === 'rateMax') {
@@ -302,6 +320,11 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
         setPickerValue(getRating(activeGoal, selectedDate, data));
         setViewMode('rate-picker');
         setIsTyping(true);
+      } else if (activeGoal?.type === 'note') {
+        // Open inline note editor
+        setNoteValue(getNote(activeGoal, selectedDate, data));
+        setViewMode('note-editor');
+        setIsTyping(true);
       } else {
         handleToggleDate();
       }
@@ -351,6 +374,8 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
                 <Text color={newType === 'auto' ? 'cyan' : 'gray'} bold={newType === 'auto'}>[a] auto</Text>
                 <Text>  </Text>
                 <Text color={newType === 'rate' ? 'cyan' : 'gray'} bold={newType === 'rate'}>[r] rate</Text>
+                <Text>  </Text>
+                <Text color={newType === 'note' ? 'cyan' : 'gray'} bold={newType === 'note'}>[n] note</Text>
               </Box>
               <Text dimColor>Tab to toggle, Enter to confirm</Text>
             </Box>
@@ -493,6 +518,27 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
     );
   })() : null;
 
+  // Inline note editor
+  const noteEditor = viewMode === 'note-editor' && activeGoal?.type === 'note' ? (
+    <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginTop={1}>
+      <Text bold color="cyan">{activeGoal.name} — {selDateLabel}</Text>
+      <Box marginTop={1}>
+        <Text>Note: </Text>
+        <TextInput
+          value={noteValue}
+          onChange={setNoteValue}
+          onSubmit={() => {
+            const updated = setNote(activeGoal.id, selectedDate, noteValue, { ...data });
+            setData(updated);
+            setViewMode('main');
+            setIsTyping(false);
+          }}
+        />
+      </Box>
+      <Text dimColor>Enter:save  Esc:save+close</Text>
+    </Box>
+  ) : null;
+
   if (isAllTab) {
     return (
       <Box flexDirection="column" flexGrow={1}>
@@ -509,6 +555,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
       {tabBar}
       {activeGoal && <GoalSection goal={activeGoal} data={data} weeks={weeks} today={today} selectedDate={selectedDate} />}
       {ratePicker}
+      {noteEditor}
     </Box>
   );
 }
@@ -628,6 +675,9 @@ function GoalSection({
           <Text>This week: <Text bold>{thisWeekDone}/7</Text></Text>
           {isRate && selectedDate && (
             <Text dimColor>Selected: {getRating(goal, selectedDate, data)}/{rateMax}  (Enter to rate)</Text>
+          )}
+          {goal.type === 'note' && selectedDate && (
+            <Text dimColor>Note: {getNote(goal, selectedDate, data) || '(empty)'}  (Enter to edit)</Text>
           )}
         </Box>
       )}
