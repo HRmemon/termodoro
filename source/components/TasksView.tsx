@@ -13,12 +13,13 @@ interface TasksViewProps {
   onFocusConsumed?: () => void;
 }
 
-type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered';
+type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
 
 /** Parse `text #project /N` from input string */
-function parseTaskInput(value: string): { text: string; project?: string; expectedPomodoros: number } {
+function parseTaskInput(value: string): { text: string; project?: string; unknownProject?: string; expectedPomodoros: number } {
   let text = value.trim();
   let project: string | undefined;
+  let unknownProject: string | undefined;
   let expectedPomodoros = 1;
 
   // Extract /N pomodoros suffix
@@ -28,18 +29,20 @@ function parseTaskInput(value: string): { text: string; project?: string; expect
     expectedPomodoros = parseInt(pomMatch[2]!, 10);
   }
 
-  // Extract #project — only accept existing projects
+  // Extract #project
   const projMatch = text.match(/^(.+?)\s+#(\S+)\s*$/);
   if (projMatch) {
     const candidate = projMatch[2]!;
     const existing = getProjects();
+    text = projMatch[1]!.trim();
     if (existing.includes(candidate)) {
-      text = projMatch[1]!.trim();
       project = candidate;
+    } else {
+      unknownProject = candidate;
     }
   }
 
-  return { text, project, expectedPomodoros };
+  return { text, project, unknownProject, expectedPomodoros };
 }
 
 export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewProps) {
@@ -53,7 +56,10 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
   const [filterQuery, setFilterQuery] = useState('');
 
   // Pending add data (for two-step add)
-  const [pendingAdd, setPendingAdd] = useState<{ text: string; project?: string; expectedPomodoros: number } | null>(null);
+  const [pendingAdd, setPendingAdd] = useState<{ text: string; project?: string; unknownProject?: string; expectedPomodoros: number } | null>(null);
+  // For confirm-project prompt (unknown #tag)
+  const [confirmProjectName, setConfirmProjectName] = useState('');
+  const [confirmProjectFrom, setConfirmProjectFrom] = useState<'add' | 'edit'>('add');
 
   // Task detail view
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
@@ -309,6 +315,63 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
       return;
     }
 
+    // ─── Confirm unknown project prompt ────────────────────────────────
+    if (inputMode === 'confirm-project') {
+      if (input === 'a' && pendingAdd?.unknownProject) {
+        // Add as new project and continue
+        addProject(pendingAdd.unknownProject);
+        const updated = { ...pendingAdd, project: pendingAdd.unknownProject, unknownProject: undefined };
+        if (confirmProjectFrom === 'edit') {
+          const task = incompleteTasks[selectedIdx];
+          if (task) {
+            updateTask(task.id, { text: updated.text, project: updated.project, expectedPomodoros: updated.expectedPomodoros });
+            refresh();
+            setDescInputValue(task.description ?? '');
+            setInputMode('edit-desc');
+          } else {
+            setInputMode('none');
+            setIsTyping(false);
+          }
+        } else {
+          setPendingAdd(updated);
+          setInputMode('add-desc');
+          setDescInputValue('');
+        }
+        setConfirmProjectName('');
+        return;
+      }
+      if (input === 'u') {
+        // Untag — drop the project
+        const updated = pendingAdd ? { ...pendingAdd, unknownProject: undefined } : null;
+        if (confirmProjectFrom === 'edit') {
+          const task = incompleteTasks[selectedIdx];
+          if (task && updated) {
+            updateTask(task.id, { text: updated.text, project: undefined, expectedPomodoros: updated.expectedPomodoros });
+            refresh();
+            setDescInputValue(task.description ?? '');
+            setInputMode('edit-desc');
+          } else {
+            setInputMode('none');
+            setIsTyping(false);
+          }
+        } else {
+          setPendingAdd(updated);
+          setInputMode('add-desc');
+          setDescInputValue('');
+        }
+        setConfirmProjectName('');
+        return;
+      }
+      if (key.escape) {
+        setInputMode('none');
+        setIsTyping(false);
+        setConfirmProjectName('');
+        setPendingAdd(null);
+        return;
+      }
+      return;
+    }
+
     // ─── Add/Edit text input ────────────────────────────────────────────
     if (inputMode === 'add' || inputMode === 'edit') {
       if (key.escape) {
@@ -326,7 +389,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
           setSuggestionIdx(i => Math.max(i - 1, 0));
           return;
         }
-        if (key.tab) {
+        if (key.tab || key.return) {
           acceptSuggestion();
           return;
         }
@@ -439,10 +502,20 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
   });
 
   const handleAddSubmit = useCallback((value: string) => {
+    // If project menu is open, Enter was consumed by autocomplete — skip submit
+    if (projectMenu) return;
     if (value.trim()) {
       const parsed = parseTaskInput(value);
-      // Move to description step
       setPendingAdd(parsed);
+      if (parsed.unknownProject) {
+        setConfirmProjectName(parsed.unknownProject);
+        setConfirmProjectFrom('add');
+        setInputMode('confirm-project');
+        setIsTyping(false);
+        setInputValue('');
+        return;
+      }
+      // Move to description step
       setInputMode('add-desc');
       setInputValue('');
       setDescInputValue('');
@@ -451,7 +524,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
     setInputMode('none');
     setIsTyping(false);
     setInputValue('');
-  }, [setIsTyping]);
+  }, [setIsTyping, projectMenu]);
 
   const handleAddDescSubmit = useCallback((value: string) => {
     if (pendingAdd) {
@@ -466,10 +539,21 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
   }, [pendingAdd, refresh, setIsTyping]);
 
   const handleEditSubmit = useCallback((value: string) => {
+    // If project menu is open, Enter was consumed by autocomplete — skip submit
+    if (projectMenu) return;
     const task = incompleteTasks[selectedIdx];
     if (task && value.trim()) {
-      const { text, project, expectedPomodoros } = parseTaskInput(value);
-      updateTask(task.id, { text, project, expectedPomodoros });
+      const parsed = parseTaskInput(value);
+      if (parsed.unknownProject) {
+        setPendingAdd({ ...parsed });
+        setConfirmProjectName(parsed.unknownProject);
+        setConfirmProjectFrom('edit');
+        setInputMode('confirm-project');
+        setIsTyping(false);
+        setInputValue('');
+        return;
+      }
+      updateTask(task.id, { text: parsed.text, project: parsed.project, expectedPomodoros: parsed.expectedPomodoros });
       refresh();
       // Move to description edit step
       setDescInputValue(task.description ?? '');
@@ -479,7 +563,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
     setInputMode('none');
     setIsTyping(false);
     setInputValue('');
-  }, [incompleteTasks, selectedIdx, refresh, setIsTyping]);
+  }, [incompleteTasks, selectedIdx, refresh, setIsTyping, projectMenu]);
 
   const handleEditDescSubmit = useCallback((value: string) => {
     const task = incompleteTasks[selectedIdx];
@@ -701,6 +785,15 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
         );
       })}
 
+      {inputMode === 'confirm-project' && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="yellow">#{confirmProjectName}</Text>
+          <Text dimColor> is not an existing project.</Text>
+          <Box marginTop={0}>
+            <Text dimColor>a:add as new project  u:untag  Esc:cancel</Text>
+          </Box>
+        </Box>
+      )}
       {inputMode === 'add' && renderInput('> ', handleAddSubmit, 'Task name #project /N')}
       {inputMode === 'add-desc' && (
         <Box flexDirection="column" marginTop={1}>
