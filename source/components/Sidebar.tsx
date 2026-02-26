@@ -12,12 +12,11 @@ const VIEWS: { key: View; num: string; label: string }[] = [
   { key: 'tasks',     num: '2', label: 'Tasks' },
   { key: 'reminders', num: '3', label: 'Reminders' },
   { key: 'clock',     num: '4', label: 'Clock' },
-  { key: 'plan',      num: '5', label: 'Sequences' },
-  { key: 'stats',     num: '6', label: 'Stats' },
-  { key: 'config',    num: '7', label: 'Config' },
-  { key: 'web',       num: '8', label: 'Web Time' },
-  { key: 'tracker',   num: '9', label: 'Tracker' },
-  { key: 'graphs',    num: '0', label: 'Goals' },
+  { key: 'stats',     num: '5', label: 'Stats' },
+  { key: 'config',    num: '6', label: 'Config' },
+  { key: 'web',       num: '7', label: 'Web Time' },
+  { key: 'tracker',   num: '8', label: 'Tracker' },
+  { key: 'graphs',    num: '9', label: 'Goals' },
 ];
 
 export function Sidebar({ activeView }: SidebarProps) {

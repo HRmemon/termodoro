@@ -101,11 +101,11 @@ export function GlobalSearch({ onNavigate, onDismiss }: GlobalSearchProps) {
         const allSeqs = loadSequences();
         for (const s of allSeqs) {
           if (!text) {
-            out.push({ type: 'sequence', id: s.name, label: s.name, sublabel: 'Sequence', view: 'plan', score: 0 });
+            out.push({ type: 'sequence', id: s.name, label: s.name, sublabel: 'Sequence', view: 'config', score: 0 });
           } else {
             const score = fuzzyMatch(text, s.name);
             if (score !== null) {
-              out.push({ type: 'sequence', id: s.name, label: s.name, sublabel: 'Sequence', view: 'plan', score });
+              out.push({ type: 'sequence', id: s.name, label: s.name, sublabel: 'Sequence', view: 'config', score });
             }
           }
         }

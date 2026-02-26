@@ -14,7 +14,6 @@ import { StatusLine } from './components/StatusLine.js';
 import { KeysBar } from './components/KeysBar.js';
 import { TimerView } from './components/TimerView.js';
 import { ZenMode } from './components/ZenMode.js';
-import { PlannerView } from './components/PlannerView.js';
 import { ReportsView } from './components/ReportsView.js';
 import { ConfigView } from './components/ConfigView.js';
 import { ClockView } from './components/ClockView.js';
@@ -64,6 +63,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   const [editGeneration, setEditGeneration] = useState(0);
   const [taskFocusId, setTaskFocusId] = useState<string | null>(null);
   const [reminderFocusId, setReminderFocusId] = useState<string | null>(null);
+  const [configSeqMode, setConfigSeqMode] = useState(false);
 
   const { exit } = useApp();
 
@@ -167,9 +167,6 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     switch (cmd) {
       case 'stats':
         setView('stats');
-        break;
-      case 'plan':
-        setView('plan');
         break;
       case 'reminders':
         setView('reminders');
@@ -327,12 +324,11 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       if (input === '2') { setView('tasks'); return; }
       if (input === '3') { setView('reminders'); return; }
       if (input === '4') { setView('clock'); return; }
-      if (input === '5') { setView('plan'); return; }
-      if (input === '6') { setView('stats'); return; }
-      if (input === '7') { setView('config'); return; }
-      if (input === '8') { setView('web'); return; }
-      if (input === '9') { setView('tracker'); return; }
-      if (input === '0') { setView('graphs'); return; }
+      if (input === '5') { setView('stats'); return; }
+      if (input === '6') { setView('config'); return; }
+      if (input === '7') { setView('web'); return; }
+      if (input === '8') { setView('tracker'); return; }
+      if (input === '9') { setView('graphs'); return; }
     }
 
     if (input === ':' && !isZen) {
@@ -491,16 +487,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           activeSequence={sequence.sequenceName ? { name: sequence.sequenceName, blocks: sequence.sequenceBlocks ?? [] } : null}
           onActivateSequence={handleActivateSequence}
           onClearSequence={handleClearSequence}
-          onEditSequences={() => setView('config')}
-        />
-      )}
-      {view === 'plan' && (
-        <PlannerView
-          key={editGeneration}
-          activeSequence={sequence.sequenceName ? { name: sequence.sequenceName, blocks: sequence.sequenceBlocks ?? [] } : null}
-          onActivateSequence={handleActivateSequence}
-          onClearSequence={handleClearSequence}
-          setIsTyping={setIsTyping}
+          onEditSequences={() => { setConfigSeqMode(true); setView('config'); }}
         />
       )}
       {view === 'stats' && <ReportsView />}
@@ -513,6 +500,8 @@ export function App({ config: initialConfig, initialView, initialProject, initia
             actions.updateConfig();
           }}
           setIsTyping={setIsTyping}
+          initialSeqMode={configSeqMode}
+          onSeqModeConsumed={() => setConfigSeqMode(false)}
         />
       )}
       {view === 'clock' && <ClockView />}

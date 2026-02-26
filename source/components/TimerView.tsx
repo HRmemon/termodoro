@@ -166,7 +166,7 @@ export function TimerView({
         setSeqCursor(prev => Math.max(prev - 1, 0));
         return;
       }
-      if (input === 'E' || input === 'e') {
+      if (input === 'E') {
         setShowSeqPicker(false);
         onEditSequences();
         return;
@@ -220,7 +220,7 @@ export function TimerView({
         <Box borderStyle="round" borderColor={colors.highlight} flexDirection="column" paddingX={1}>
           <Box marginBottom={1}>
             <Text bold color={colors.highlight}>Select Sequence</Text>
-            <Text dimColor>  (j/k navigate, Enter select, e:edit, Esc close)</Text>
+            <Text dimColor>  (j/k navigate, Enter select, E:edit, Esc close)</Text>
           </Box>
           {sequences.map((seq, i) => {
             const isCursor = i === seqCursor;

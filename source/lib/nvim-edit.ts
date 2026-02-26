@@ -60,7 +60,6 @@ function tmpFile(view: string): string {
 function formatView(view: View): { content: string; tmpPath: string } {
   switch (view) {
     case 'tasks': return { content: formatTasks(), tmpPath: tmpFile('tasks') };
-    case 'plan': return { content: formatPlan(), tmpPath: tmpFile('plan') };
     case 'reminders': return { content: formatReminders(), tmpPath: tmpFile('reminders') };
     case 'tracker': return { content: formatTracker(), tmpPath: tmpFile('tracker') };
     case 'graphs': return { content: formatGoals(), tmpPath: tmpFile('goals') };
@@ -541,7 +540,6 @@ function parseGoals(text: string): void {
 function parseAndSave(view: View, text: string): void {
   switch (view) {
     case 'tasks': parseTasks(text); break;
-    case 'plan': parsePlan(text); break;
     case 'reminders': parseReminders(text); break;
     case 'tracker': parseTracker(text); break;
     case 'graphs': parseGoals(text); break;

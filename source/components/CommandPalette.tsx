@@ -14,7 +14,6 @@ interface CommandDef {
 
 const COMMANDS: CommandDef[] = [
   { name: 'stats',     args: false, description: 'View session statistics' },
-  { name: 'plan',      args: false, description: 'Open day planner' },
   { name: 'tasks',     args: false, description: 'Navigate to tasks view' },
   { name: 'task',      args: true,  description: 'Create a task (e.g. :task Fix bug #work /3)' },
   { name: 'reminders', args: false, description: 'Navigate to reminders view' },

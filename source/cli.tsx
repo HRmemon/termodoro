@@ -19,7 +19,6 @@ const cli = meow(`
   Commands
     start         Start TUI (default)
     stats         View stats
-    plan          View planner
     backup        Backup session data
     export        Export sessions to CSV
     import        Import sessions from file
@@ -305,7 +304,6 @@ await ensureDaemon();
 const viewMap: Record<string, View> = {
   start: 'timer',
   stats: 'stats',
-  plan: 'plan',
   config: 'config',
   clock: 'clock',
   web: 'web',

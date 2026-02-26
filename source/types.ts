@@ -90,7 +90,7 @@ export type SessionStatus = Session['status'];
 export type EnergyLevel = NonNullable<Session['energyLevel']>;
 export type Priority = TimeBlock['priority'];
 
-export type View = 'timer' | 'plan' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks' | 'web' | 'tracker' | 'graphs';
+export type View = 'timer' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks' | 'web' | 'tracker' | 'graphs';
 
 export interface TagInfo {
   label?: string;

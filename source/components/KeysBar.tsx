@@ -73,12 +73,6 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     actionHints.push({ key: 'z', label: 'Zen' });
   }
 
-  if (view === 'plan') {
-    actionHints.push({ key: 'j/k', label: 'Navigate' });
-    actionHints.push({ key: 'Enter', label: 'Activate' });
-    if (hasActiveSequence) actionHints.push({ key: 'c', label: 'Clear' });
-  }
-
   if (view === 'stats') {
     actionHints.push({ key: 'h/l', label: 'Sections' });
   }
@@ -119,7 +113,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
 
   // Global nav hints (bottom row)
   const globalHints: KeyHint[] = [
-    { key: '1-9,0', label: 'Views' },
+    { key: '1-9', label: 'Views' },
     { key: '/', label: 'Search' },
     { key: ':', label: 'Cmd' },
     { key: '?', label: 'Help' },

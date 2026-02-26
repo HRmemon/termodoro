@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Config, SessionSequence } from '../types.js';
@@ -15,6 +15,8 @@ interface ConfigViewProps {
   config: Config;
   onConfigChange: (config: Config) => void;
   setIsTyping: (isTyping: boolean) => void;
+  initialSeqMode?: boolean;
+  onSeqModeConsumed?: () => void;
 }
 
 type FieldType = 'number' | 'boolean' | 'cycle' | 'sound-event' | 'sound-duration' | 'sound-volume';
@@ -52,7 +54,7 @@ const FIELDS: ConfigField[] = [
 
 type CatEditStep = 'code' | 'label' | 'color' | 'key';
 
-export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewProps) {
+export function ConfigView({ config, onConfigChange, setIsTyping, initialSeqMode, onSeqModeConsumed }: ConfigViewProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -81,7 +83,7 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
   const [domainSugIdx, setDomainSugIdx] = useState(0);
 
   // Sequence CRUD sub-mode
-  const [seqMode, setSeqMode] = useState(false);
+  const [seqMode, setSeqMode] = useState(!!initialSeqMode);
   const [seqList, setSeqList] = useState<SessionSequence[]>(() => loadSequences());
   const [seqCursor, setSeqCursor] = useState(0);
   const [seqEditing, setSeqEditing] = useState<'add' | 'edit' | null>(null);
@@ -93,6 +95,13 @@ export function ConfigView({ config, onConfigChange, setIsTyping }: ConfigViewPr
   const refreshSeqs = useCallback(() => {
     setSeqList(loadSequences());
   }, []);
+
+  // Consume initialSeqMode flag after opening
+  useEffect(() => {
+    if (initialSeqMode && onSeqModeConsumed) {
+      onSeqModeConsumed();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveRules = useCallback((rules: DomainRule[]) => {
     setRuleList(rules);

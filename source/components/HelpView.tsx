@@ -10,7 +10,7 @@ const page1 = [
   {
     title: 'Global',
     hints: [
-      ['1-0', 'Switch view (1=Timer … 0=Goals)'],
+      ['1-9', 'Switch view (1=Timer … 9=Goals)'],
       ['/', 'Global search'],
       [':', 'Command palette'],
       ['Ctrl+G', 'Open view in $EDITOR'],
@@ -57,26 +57,18 @@ const page1 = [
       ['r', 'Toggle recurring'],
     ],
   },
-  {
-    title: '[5] Sequences',
-    hints: [
-      ['j/k', 'Navigate'],
-      ['Enter', 'Activate sequence'],
-      ['c', 'Clear active'],
-    ],
-  },
 ];
 
 const page2 = [
   {
-    title: '[6] Stats',
+    title: '[5] Stats',
     hints: [
       ['h/l', 'Switch tab'],
       ['j/k', 'Switch tab'],
     ],
   },
   {
-    title: '[7] Config',
+    title: '[6] Config',
     hints: [
       ['j/k', 'Navigate'],
       ['Enter', 'Edit / toggle'],
@@ -86,7 +78,7 @@ const page2 = [
     ],
   },
   {
-    title: '[8] Web Tracking',
+    title: '[7] Web Tracking',
     hints: [
       ['h/l', 'Change time range'],
       ['Tab', 'Domains / Pages tab'],
@@ -95,7 +87,7 @@ const page2 = [
     ],
   },
   {
-    title: '[9] Tracker',
+    title: '[8] Tracker',
     hints: [
       ['hjkl', 'Navigate grid'],
       ['Tab', 'Next day'],
@@ -109,7 +101,7 @@ const page2 = [
     ],
   },
   {
-    title: '[0] Goals',
+    title: '[9] Goals',
     hints: [
       ['Tab/h/l', 'Switch goal'],
       ['←/→', 'Navigate dates'],
