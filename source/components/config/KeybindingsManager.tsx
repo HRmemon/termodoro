@@ -48,6 +48,13 @@ const ACTION_LABELS: Record<KeyAction, string> = {
   'stats.prev_tab': 'Previous Tab',
   'stats.next_tab': 'Next Tab',
   'config.save': 'Save Config',
+  'calendar.toggle_view': 'Toggle Calendar View',
+  'calendar.goto_today': 'Go to Today',
+  'calendar.toggle_done': 'Toggle Done',
+  'calendar.toggle_important': 'Toggle Important',
+  'calendar.toggle_privacy': 'Toggle Privacy',
+  'calendar.toggle_global_privacy': 'Toggle All Privacy',
+  'calendar.reload_ics': 'Reload ICS Files',
 };
 
 const ACTIONS = Object.keys(DEFAULT_KEYBINDINGS) as KeyAction[];
@@ -61,6 +68,7 @@ const GROUPS: { label: string; prefix: string }[] = [
   { label: 'Tracker', prefix: 'tracker.' },
   { label: 'Stats', prefix: 'stats.' },
   { label: 'Config', prefix: 'config.' },
+  { label: 'Calendar', prefix: 'calendar.' },
 ];
 
 function formatBinding(binding: string): string {

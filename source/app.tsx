@@ -29,6 +29,7 @@ import { ResetModal } from './components/ResetModal.js';
 import { WebView } from './components/WebView.js';
 import { TrackerView } from './components/TrackerView.js';
 import { GraphsView } from './components/GraphsView.js';
+import { CalendarView } from './components/CalendarView.js';
 import { getStreaks } from './lib/stats.js';
 import { openInNvim } from './lib/nvim-edit.js';
 import { loadConfig } from './lib/config.js';
@@ -552,6 +553,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       {view === 'web' && <WebView keymap={keymap} />}
       {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
       {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
+      {view === 'calendar' && <CalendarView setIsTyping={setIsTyping} config={config} keymap={keymap} />}
     </Layout>
   );
 }

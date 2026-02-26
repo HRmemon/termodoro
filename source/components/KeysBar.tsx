@@ -124,6 +124,21 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     actionHints.push({ key: jkLabel, label: 'Scroll weeks' });
   }
 
+  if (view === 'calendar') {
+    const hlLabel = km ? `${km.label('nav.left')}/${km.label('nav.right')}` : 'h/l';
+    const jkLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
+    actionHints.push({ key: hlLabel, label: 'Month' });
+    actionHints.push({ key: jkLabel, label: 'Week' });
+    actionHints.push({ key: 'Enter', label: 'Day view' });
+    actionHints.push({ key: km ? km.label('list.add') : 'a', label: 'Add' });
+    actionHints.push({ key: km ? km.label('list.edit') : 'e', label: 'Edit' });
+    actionHints.push({ key: 'x', label: 'Delete' });
+    actionHints.push({ key: km ? km.label('calendar.toggle_done') : 'd', label: 'Done' });
+    actionHints.push({ key: km ? km.label('calendar.toggle_privacy') : '.', label: 'Privacy' });
+    actionHints.push({ key: km ? km.label('calendar.toggle_view') : 'v', label: 'View' });
+    actionHints.push({ key: km ? km.label('calendar.goto_today') : 'R', label: 'Today' });
+  }
+
   if (view === 'config') {
     const navLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
     actionHints.push({ key: navLabel, label: 'Navigate' });

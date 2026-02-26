@@ -3,6 +3,7 @@ import type { Config, View, ViewEntry } from '../types.js';
 export type { ViewEntry };
 
 export const DEFAULT_VIEWS: ViewEntry[] = [
+  { id: 'calendar',  label: 'Calendar',  shortcut: '0' },
   { id: 'timer',     label: 'Timer',     shortcut: '1' },
   { id: 'tasks',     label: 'Tasks',     shortcut: '2' },
   { id: 'reminders', label: 'Reminders', shortcut: '3' },

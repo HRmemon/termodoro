@@ -35,6 +35,7 @@ export interface Config {
   layout?: LayoutConfig;
   views?: ViewEntry[];
   keybindings?: import('./lib/keymap.js').KeybindingConfig;
+  calendar?: CalendarConfig;
 }
 
 export interface TimeBlock {
@@ -70,6 +71,7 @@ export interface Task {
   completedPomodoros: number;
   createdAt: string;
   completedAt?: string;
+  deadline?: string;  // YYYY-MM-DD
 }
 
 export interface ScheduledNotification {
@@ -96,7 +98,7 @@ export type SessionStatus = Session['status'];
 export type EnergyLevel = NonNullable<Session['energyLevel']>;
 export type Priority = TimeBlock['priority'];
 
-export type View = 'timer' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks' | 'web' | 'tracker' | 'graphs';
+export type View = 'calendar' | 'timer' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks' | 'web' | 'tracker' | 'graphs';
 
 export interface ThemeColors {
   focus: string;
@@ -123,6 +125,37 @@ export interface ViewEntry {
   label: string;
   shortcut?: string;
   hidden?: boolean;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string;           // YYYY-MM-DD
+  endDate?: string;       // YYYY-MM-DD for multi-day events
+  time?: string;          // HH:MM
+  endTime?: string;       // HH:MM
+  status: 'normal' | 'done' | 'important';
+  privacy: boolean;
+  frequency?: 'once' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+  repeatCount?: number;   // 0 = infinite
+  rrule?: string;         // RFC 5545 RRULE for .ics imports
+  icon?: string;          // override auto-icon
+  calendarId?: string;    // for ICS calendar grouping
+  color?: string;         // per-event color override
+  source: 'user' | 'ics';
+}
+
+export interface CalendarConfig {
+  icsFiles?: string[];
+  defaultView?: 'monthly' | 'daily';
+  weekStartsOn?: 0 | 1;          // 0=Sunday, 1=Monday
+  showWeekNumbers?: boolean;
+  showSessionHeatmap?: boolean;
+  showTaskDeadlines?: boolean;
+  showReminders?: boolean;
+  privacyMode?: boolean;
+  icons?: Record<string, string>;
+  icsColors?: string[];
 }
 
 export interface TagInfo {

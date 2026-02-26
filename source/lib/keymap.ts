@@ -20,7 +20,12 @@ export type KeyAction =
   // Stats
   | 'stats.prev_tab' | 'stats.next_tab'
   // Config
-  | 'config.save';
+  | 'config.save'
+  // Calendar
+  | 'calendar.toggle_view' | 'calendar.goto_today'
+  | 'calendar.toggle_done' | 'calendar.toggle_important'
+  | 'calendar.toggle_privacy' | 'calendar.toggle_global_privacy'
+  | 'calendar.reload_ics';
 
 export type KeybindingConfig = Partial<Record<KeyAction, string>>;
 
@@ -59,6 +64,13 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, string> = {
   'stats.prev_tab': 'h',
   'stats.next_tab': 'l',
   'config.save': 's',
+  'calendar.toggle_view': 'v',
+  'calendar.goto_today': 'R',
+  'calendar.toggle_done': 'd',
+  'calendar.toggle_important': 'i',
+  'calendar.toggle_privacy': '.',
+  'calendar.toggle_global_privacy': '*',
+  'calendar.reload_ics': 'Q',
 };
 
 export class Keymap {
