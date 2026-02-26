@@ -41,7 +41,6 @@ export const FIELDS: ConfigField[] = [
   { key: 'browserTracking', label: 'Browser Tracking', type: 'boolean' },
   { key: 'webDomainLimit', label: 'Web Domain Limit', type: 'number', unit: 'domains' },
   { key: 'sidebarWidth', label: 'Sidebar Width', type: 'number', unit: 'chars' },
-  { key: 'theme.preset', label: 'Theme', type: 'cycle', values: ['default', 'gruvbox', 'nord', 'dracula', 'custom1'] },
   { key: 'layout.sidebar', label: 'Sidebar', type: 'cycle', values: ['visible', 'hidden'] },
   { key: 'layout.showKeysBar', label: 'Keys Bar', type: 'boolean' },
   { key: 'layout.compact', label: 'Compact Mode', type: 'boolean' },
@@ -58,7 +57,9 @@ interface ConfigFieldListProps {
   onOpenRules: () => void;
   onOpenSequences: () => void;
   onOpenKeybindings: () => void;
+  onOpenThemes: () => void;
   keybindingCount: number;
+  themeCount: number;
   keymap?: Keymap;
 }
 
@@ -90,7 +91,9 @@ export function ConfigFieldList({
   onOpenRules,
   onOpenSequences,
   onOpenKeybindings,
+  onOpenThemes,
   keybindingCount,
+  themeCount,
   keymap,
 }: ConfigFieldListProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -162,9 +165,8 @@ export function ConfigFieldList({
     setIsTyping(false);
   }, [selectedIdx, config, onConfigChange, setIsTyping]);
 
-  // Total items = FIELDS.length + 3 (Tracker Categories, Domain Rules, Sequences)
-  // FIELDS + Tracker Categories + Domain Rules + Sequences + Keybindings
-  const totalItems = FIELDS.length + 4;
+  // FIELDS + Tracker Categories + Domain Rules + Sequences + Keybindings + Themes
+  const totalItems = FIELDS.length + 5;
 
   useInput((input, key) => {
     // If sound picker is open, let it handle input
@@ -193,6 +195,7 @@ export function ConfigFieldList({
       if (selectedIdx === FIELDS.length + 1) { onOpenRules(); return; }
       if (selectedIdx === FIELDS.length + 2) { onOpenSequences(); return; }
       if (selectedIdx === FIELDS.length + 3) { onOpenKeybindings(); return; }
+      if (selectedIdx === FIELDS.length + 4) { onOpenThemes(); return; }
 
       const field = FIELDS[selectedIdx]!;
       if (field.type === 'boolean') {
@@ -374,6 +377,20 @@ export function ConfigFieldList({
           {keybindingCount > 0 ? `${keybindingCount} custom` : 'defaults'}
         </Text>
         {selectedIdx === FIELDS.length + 3 && <Text dimColor>  Enter to manage</Text>}
+      </Box>
+
+      {/* Themes entry */}
+      <Box>
+        <Text color={selectedIdx === FIELDS.length + 4 ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length + 4}>
+          {selectedIdx === FIELDS.length + 4 ? '> ' : '  '}
+        </Text>
+        <Box width={22}>
+          <Text color={selectedIdx === FIELDS.length + 4 ? 'white' : 'gray'}>Themes</Text>
+        </Box>
+        <Text color="cyan" bold={selectedIdx === FIELDS.length + 4}>
+          {themeCount > 0 ? `${themeCount} custom` : 'built-in only'}
+        </Text>
+        {selectedIdx === FIELDS.length + 4 && <Text dimColor>  Enter to manage</Text>}
       </Box>
 
       {saved && (

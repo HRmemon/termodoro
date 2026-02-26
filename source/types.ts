@@ -32,6 +32,7 @@ export interface Config {
   webDomainLimit: number;
   sidebarWidth: number;
   theme?: ThemeConfig;
+  customThemes?: Record<string, ThemeColors>;
   layout?: LayoutConfig;
   views?: ViewEntry[];
   keybindings?: import('./lib/keymap.js').KeybindingConfig;
@@ -111,7 +112,7 @@ export interface ThemeColors {
 
 export interface ThemeConfig {
   colors?: Partial<ThemeColors>;
-  preset?: 'default' | 'gruvbox' | 'nord' | 'dracula';
+  preset?: string;
 }
 
 export interface LayoutConfig {
