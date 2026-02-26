@@ -58,10 +58,14 @@ function dateToNum(d: string): number {
   return parseInt(d.replace(/-/g, ''), 10);
 }
 
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function addDaysToDate(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 function getMonthEnd(year: number, month: number): number {
@@ -92,7 +96,10 @@ export function expandRecurring(
     }
 
     // Recurring: generate instances
-    const maxInstances = event.repeatCount && event.repeatCount > 0 ? event.repeatCount : 365;
+    // For infinite recurrence, derive cap from distance to range end
+    const maxInstances = event.repeatCount && event.repeatCount > 0
+      ? event.repeatCount
+      : Math.max(365, Math.ceil((new Date(rangeEnd + 'T00:00:00').getTime() - new Date(event.date + 'T00:00:00').getTime()) / 86400000) + 1);
     let count = 0;
     let current = event.date;
 
@@ -145,7 +152,7 @@ export function expandRecurring(
           d.setFullYear(d.getFullYear() + 1);
           break;
       }
-      current = d.toISOString().slice(0, 10);
+      current = localDateStr(d);
     }
   }
 
