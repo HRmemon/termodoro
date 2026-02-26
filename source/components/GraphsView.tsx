@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
+import type { Keymap } from '../lib/keymap.js';
 import { nanoid } from 'nanoid';
 import {
   loadGoals, addGoal, removeGoal, updateGoal, toggleCompletion,
@@ -15,7 +16,7 @@ const WEEKS_TO_SHOW = 8;
 type ViewMode = 'main' | 'add' | 'edit' | 'delete-confirm' | 'rate-picker' | 'note-editor';
 type AddStep = 'name' | 'type' | 'project' | 'rateMax' | 'color';
 
-export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void }) {
+export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) => void; keymap?: Keymap }) {
   const [data, setData] = useState<GoalsData>(() => loadGoals());
   const [activeTab, setActiveTab] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('main');
@@ -167,6 +168,8 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
   }, [selectedDate, today]);
 
   useInput((input, key) => {
+    const km = keymap;
+
     if (viewMode === 'delete-confirm') {
       if (input === 'y' || input === 'Y') handleConfirmDelete();
       else if (input === 'n' || input === 'N' || key.escape) { setDeleteTarget(null); setViewMode('main'); }
@@ -275,13 +278,13 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
       });
     }
     // h/l tab switching
-    else if (input === 'h') {
+    else if (km ? km.matches('nav.left', input, key) : input === 'h') {
       setActiveTab(t => {
         const next = Math.max(0, t - 1);
         if (next !== tabs.length - 1) setAllTabOffset(0);
         return next;
       });
-    } else if (input === 'l') {
+    } else if (km ? km.matches('nav.right', input, key) : input === 'l') {
       setActiveTab(t => {
         const next = Math.min(tabs.length - 1, t + 1);
         if (next !== tabs.length - 1) setAllTabOffset(0);
@@ -326,13 +329,13 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
       }
     }
     // j/k: on All tab scroll goals, on individual tabs navigate dates
-    else if (input === 'j') {
+    else if (km ? km.matches('nav.down', input, key) : input === 'j') {
       if (isAllTab) {
         setAllTabOffset(o => Math.min(o + 1, Math.max(0, data.goals.length - visibleGoalCount)));
       } else {
         moveDateBy(1);
       }
-    } else if (input === 'k') {
+    } else if (km ? km.matches('nav.up', input, key) : input === 'k') {
       if (isAllTab) {
         setAllTabOffset(o => Math.max(0, o - 1));
       } else {
@@ -353,14 +356,14 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void 
       } else {
         handleToggleDate();
       }
-    } else if (input === 'a') {
+    } else if (km ? km.matches('list.add', input, key) : input === 'a') {
       handleStartAdd();
     }
     // edit goal
-    else if (input === 'e') {
+    else if (km ? km.matches('list.edit', input, key) : input === 'e') {
       if (activeGoal) handleStartEdit();
     }
-    else if (input === 'd') {
+    else if (km ? km.matches('list.delete', input, key) : input === 'd') {
       if (activeGoal) {
         setDeleteTarget(activeGoal.id);
         setViewMode('delete-confirm');

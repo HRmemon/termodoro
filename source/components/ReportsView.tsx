@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
+import type { Keymap } from '../lib/keymap.js';
 import { openSessionsInNvim } from '../lib/nvim-edit.js';
 import { Heatmap } from './Heatmap.js';
 import { Sparkline } from './Sparkline.js';
@@ -54,7 +55,7 @@ function makeRatioBar(ratio: number, width: number): string {
 
 const SECTION_NAMES = ['Today', 'Week', 'Projects', 'Tasks', 'Recent'];
 
-export function ReportsView() {
+export function ReportsView({ keymap }: { keymap?: Keymap }) {
   const [selectedSection, setSelectedSection] = useState(0);
   const [dataVersion, setDataVersion] = useState(0);
   const totalSections = SECTION_NAMES.length;
@@ -116,16 +117,17 @@ export function ReportsView() {
   }, [dataVersion]);
 
   useInput((input, key) => {
-    if (input === 'l' || key.rightArrow) {
+    const km = keymap;
+    if ((km ? km.matches('stats.next_tab', input, key) : input === 'l') || key.rightArrow) {
       setSelectedSection(prev => Math.min(prev + 1, totalSections - 1));
     }
-    if (input === 'h' || key.leftArrow) {
+    if ((km ? km.matches('stats.prev_tab', input, key) : input === 'h') || key.leftArrow) {
       setSelectedSection(prev => Math.max(0, prev - 1));
     }
-    if (input === 'j' || key.downArrow) {
+    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
       setSelectedSection(prev => Math.min(prev + 1, totalSections - 1));
     }
-    if (input === 'k' || key.upArrow) {
+    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
       setSelectedSection(prev => Math.max(0, prev - 1));
     }
     if (input === 'e') {

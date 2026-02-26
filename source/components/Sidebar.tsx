@@ -1,36 +1,28 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { View } from '../types.js';
+import type { View, Config } from '../types.js';
 import { colors } from '../lib/theme.js';
+import { getVisibleViews, DEFAULT_VIEWS } from '../lib/views.js';
 
 interface SidebarProps {
   activeView: View;
+  config?: Config;
 }
 
-const VIEWS: { key: View; num: string; label: string }[] = [
-  { key: 'timer',     num: '1', label: 'Timer' },
-  { key: 'tasks',     num: '2', label: 'Tasks' },
-  { key: 'reminders', num: '3', label: 'Reminders' },
-  { key: 'clock',     num: '4', label: 'Clock' },
-  { key: 'stats',     num: '5', label: 'Stats' },
-  { key: 'config',    num: '6', label: 'Config' },
-  { key: 'web',       num: '7', label: 'Web Time' },
-  { key: 'tracker',   num: '8', label: 'Tracker' },
-  { key: 'graphs',    num: '9', label: 'Goals' },
-];
+export function Sidebar({ activeView, config }: SidebarProps) {
+  const views = config ? getVisibleViews(config) : DEFAULT_VIEWS;
 
-export function Sidebar({ activeView }: SidebarProps) {
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}>
         <Text bold color={colors.text}>VIEWS</Text>
       </Box>
-      {VIEWS.map(v => {
-        const active = v.key === activeView;
+      {views.map(v => {
+        const active = v.id === activeView;
         return (
-          <Box key={v.key}>
+          <Box key={v.id}>
             <Text color={active ? colors.highlight : colors.dim} bold={active}>
-              {active ? '█ ' : '  '}{v.num} {v.label}
+              {active ? '█ ' : '  '}{v.shortcut ?? ' '} {v.label}
             </Text>
           </Box>
         );

@@ -1,8 +1,10 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { View } from '../types.js';
+import type { View, Config } from '../types.js';
 import { colors } from '../lib/theme.js';
 import { getCategories } from '../lib/tracker.js';
+import type { Keymap } from '../lib/keymap.js';
+import { getVisibleViews, DEFAULT_VIEWS } from '../lib/views.js';
 
 interface KeysBarProps {
   view: View;
@@ -12,6 +14,8 @@ interface KeysBarProps {
   isZen: boolean;
   hasActiveSequence: boolean;
   hasActiveProject: boolean;
+  config?: Config;
+  keymap?: Keymap;
 }
 
 interface KeyHint {
@@ -19,106 +23,132 @@ interface KeyHint {
   label: string;
 }
 
-export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence, hasActiveProject }: KeysBarProps) {
+export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence, hasActiveProject, config, keymap }: KeysBarProps) {
   // Zen mode: minimal
   if (isZen) {
     const hint = isRunning && !isPaused ? 'Pause' : isPaused ? 'Resume' : 'Start';
+    const toggleLabel = keymap ? keymap.label('timer.toggle') : 'Space';
     return (
       <Box paddingX={1}>
-        <Text color={colors.highlight}>Space</Text><Text color={colors.dim}>: {hint}</Text>
+        <Text color={colors.highlight}>{toggleLabel}</Text><Text color={colors.dim}>: {hint}</Text>
       </Box>
     );
   }
+
+  const km = keymap;
 
   // Build action hints (top row)
   const actionHints: KeyHint[] = [];
 
   if (view === 'timer') {
     if (!strictMode) {
-      if (isRunning && !isPaused) actionHints.push({ key: 'Space', label: 'Pause' });
-      else if (isPaused) actionHints.push({ key: 'Space', label: 'Resume' });
-      else actionHints.push({ key: 'Space', label: 'Start' });
+      const toggleLabel = km ? km.label('timer.toggle') : 'Space';
+      if (isRunning && !isPaused) actionHints.push({ key: toggleLabel, label: 'Pause' });
+      else if (isPaused) actionHints.push({ key: toggleLabel, label: 'Resume' });
+      else actionHints.push({ key: toggleLabel, label: 'Start' });
     } else if (!isRunning) {
-      actionHints.push({ key: 'Space', label: 'Start' });
+      actionHints.push({ key: km ? km.label('timer.toggle') : 'Space', label: 'Start' });
     }
-    if (isRunning && !strictMode) actionHints.push({ key: 's', label: 'Skip' });
-    actionHints.push({ key: 'z', label: 'Zen' });
-    actionHints.push({ key: 't', label: 'Set duration' });
-    actionHints.push({ key: 'p', label: 'Project' });
-    if (hasActiveProject) actionHints.push({ key: 'P', label: 'Clear project' });
-    actionHints.push({ key: 'S', label: 'Sequences' });
-    actionHints.push({ key: 'r', label: 'Reset+log' });
-    if (hasActiveSequence) actionHints.push({ key: 'c', label: 'Clear seq' });
+    if (isRunning && !strictMode) actionHints.push({ key: km ? km.label('timer.skip') : 's', label: 'Skip' });
+    actionHints.push({ key: km ? km.label('global.zen') : 'z', label: 'Zen' });
+    actionHints.push({ key: km ? km.label('timer.set_duration') : 't', label: 'Set duration' });
+    actionHints.push({ key: km ? km.label('timer.set_project') : 'p', label: 'Project' });
+    if (hasActiveProject) actionHints.push({ key: km ? km.label('timer.clear_project') : 'P', label: 'Clear project' });
+    actionHints.push({ key: km ? km.label('timer.sequences') : 'S', label: 'Sequences' });
+    actionHints.push({ key: km ? km.label('timer.reset') : 'r', label: 'Reset+log' });
+    if (hasActiveSequence) actionHints.push({ key: km ? km.label('timer.clear_sequence') : 'c', label: 'Clear seq' });
   }
 
   if (view === 'tasks') {
-    actionHints.push({ key: 'j/k', label: 'Navigate' });
+    const navLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
+    actionHints.push({ key: navLabel, label: 'Navigate' });
     actionHints.push({ key: 'Enter', label: 'View' });
     actionHints.push({ key: 'x', label: 'Done/Undo' });
-    actionHints.push({ key: 'a', label: 'Add' });
-    actionHints.push({ key: 'e', label: 'Edit' });
-    actionHints.push({ key: 'd', label: 'Delete' });
+    actionHints.push({ key: km ? km.label('list.add') : 'a', label: 'Add' });
+    actionHints.push({ key: km ? km.label('list.edit') : 'e', label: 'Edit' });
+    actionHints.push({ key: km ? km.label('list.delete') : 'd', label: 'Delete' });
     actionHints.push({ key: 'P', label: 'Projects' });
   }
 
   if (view === 'reminders') {
-    actionHints.push({ key: 'j/k', label: 'Navigate' });
-    actionHints.push({ key: 'a', label: 'Add' });
-    actionHints.push({ key: 'e', label: 'Edit' });
-    actionHints.push({ key: 'd', label: 'Delete' });
+    const navLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
+    actionHints.push({ key: navLabel, label: 'Navigate' });
+    actionHints.push({ key: km ? km.label('list.add') : 'a', label: 'Add' });
+    actionHints.push({ key: km ? km.label('list.edit') : 'e', label: 'Edit' });
+    actionHints.push({ key: km ? km.label('list.delete') : 'd', label: 'Delete' });
     actionHints.push({ key: 'Enter', label: 'On/Off' });
     actionHints.push({ key: 'r', label: 'Recurring' });
   }
 
   if (view === 'clock') {
-    actionHints.push({ key: 'z', label: 'Zen' });
+    actionHints.push({ key: km ? km.label('global.zen') : 'z', label: 'Zen' });
   }
 
   if (view === 'stats') {
-    actionHints.push({ key: 'h/l', label: 'Sections' });
+    const hlLabel = km ? `${km.label('stats.prev_tab')}/${km.label('stats.next_tab')}` : 'h/l';
+    actionHints.push({ key: hlLabel, label: 'Sections' });
   }
 
   if (view === 'web') {
-    actionHints.push({ key: 'j/k', label: 'Scroll' });
+    const navLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
+    actionHints.push({ key: navLabel, label: 'Scroll' });
     actionHints.push({ key: 'Tab', label: 'Domains/Pages' });
   }
 
   if (view === 'tracker') {
-    actionHints.push({ key: 'j/k', label: 'Scroll' });
-    actionHints.push({ key: 'h/l', label: 'Days' });
-    actionHints.push({ key: 'e', label: 'Picker' });
+    const navLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
+    const hlLabel = km ? `${km.label('nav.left')}/${km.label('nav.right')}` : 'h/l';
+    actionHints.push({ key: navLabel, label: 'Scroll' });
+    actionHints.push({ key: hlLabel, label: 'Days' });
+    actionHints.push({ key: km ? km.label('tracker.pick') : 'e', label: 'Picker' });
     const quickKeys = getCategories().filter(c => c.key).map(c => c.key).join('/');
     if (quickKeys) actionHints.push({ key: quickKeys, label: 'Quick set' });
-    actionHints.push({ key: '.', label: 'Clear' });
-    actionHints.push({ key: 'r', label: 'Review' });
-    actionHints.push({ key: 'd/w', label: 'Summary' });
-    actionHints.push({ key: 'n', label: 'New week' });
-    actionHints.push({ key: 'b', label: 'Browse' });
+    actionHints.push({ key: km ? km.label('tracker.clear') : '.', label: 'Clear' });
+    actionHints.push({ key: km ? km.label('tracker.review') : 'r', label: 'Review' });
+    const daySummaryLabel = km ? km.label('tracker.day_summary') : 'D';
+    const weekSummaryLabel = km ? km.label('tracker.week_summary') : 'w';
+    actionHints.push({ key: `${daySummaryLabel}/${weekSummaryLabel}`, label: 'Summary' });
+    actionHints.push({ key: km ? km.label('tracker.new_week') : 'n', label: 'New week' });
+    actionHints.push({ key: km ? km.label('tracker.browse') : 'b', label: 'Browse' });
   }
 
   if (view === 'graphs') {
-    actionHints.push({ key: 'h/l', label: 'Switch' });
+    const hlLabel = km ? `${km.label('nav.left')}/${km.label('nav.right')}` : 'h/l';
+    actionHints.push({ key: hlLabel, label: 'Switch' });
     actionHints.push({ key: '\u2190\u2192', label: 'Select date' });
     actionHints.push({ key: 'Enter', label: 'Toggle/Rate' });
-    actionHints.push({ key: 'a', label: 'Add' });
-    actionHints.push({ key: 'e', label: 'Edit' });
-    actionHints.push({ key: 'd', label: 'Delete' });
-    actionHints.push({ key: 'j/k', label: 'Scroll weeks' });
+    actionHints.push({ key: km ? km.label('list.add') : 'a', label: 'Add' });
+    actionHints.push({ key: km ? km.label('list.edit') : 'e', label: 'Edit' });
+    actionHints.push({ key: km ? km.label('list.delete') : 'd', label: 'Delete' });
+    const jkLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
+    actionHints.push({ key: jkLabel, label: 'Scroll weeks' });
   }
 
   if (view === 'config') {
-    actionHints.push({ key: 'j/k', label: 'Navigate' });
+    const navLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
+    actionHints.push({ key: navLabel, label: 'Navigate' });
     actionHints.push({ key: 'Enter', label: 'Edit/Toggle' });
-    actionHints.push({ key: 's', label: 'Save' });
+    actionHints.push({ key: km ? km.label('config.save') : 's', label: 'Save' });
   }
 
-  // Global nav hints (bottom row)
+  // Global nav hints (bottom row) — build shortcut range dynamically
+  const visibleViews = config ? getVisibleViews(config) : DEFAULT_VIEWS;
+  const shortcuts = visibleViews.map(v => v.shortcut).filter(Boolean) as string[];
+  let viewsHint = '1-9';
+  if (shortcuts.length > 0) {
+    if (shortcuts.length === 1) {
+      viewsHint = shortcuts[0]!;
+    } else {
+      viewsHint = `${shortcuts[0]}-${shortcuts[shortcuts.length - 1]}`;
+    }
+  }
+
   const globalHints: KeyHint[] = [
-    { key: '1-9', label: 'Views' },
-    { key: '/', label: 'Search' },
-    { key: ':', label: 'Cmd' },
-    { key: '?', label: 'Help' },
-    { key: 'q', label: 'Quit' },
+    { key: viewsHint, label: 'Views' },
+    { key: km ? km.label('global.search') : '/', label: 'Search' },
+    { key: km ? km.label('global.command_palette') : ':', label: 'Cmd' },
+    { key: km ? km.label('global.help') : '?', label: 'Help' },
+    { key: km ? km.label('global.quit') : 'q', label: 'Quit' },
   ];
 
   return (

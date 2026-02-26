@@ -32,6 +32,10 @@ import { GraphsView } from './components/GraphsView.js';
 import { getStreaks } from './lib/stats.js';
 import { openInNvim } from './lib/nvim-edit.js';
 import { loadConfig } from './lib/config.js';
+import { initTheme } from './lib/theme.js';
+import { getShortcutMap } from './lib/views.js';
+import { createKeymap } from './lib/keymap.js';
+import type { LayoutConfig } from './types.js';
 
 interface AppProps {
   config: Config;
@@ -51,6 +55,12 @@ function Connecting({ status }: { status: 'connecting' | 'disconnected' }) {
 export function App({ config: initialConfig, initialView, initialProject, initialSequence }: AppProps) {
   const [config, setConfig] = useState(initialConfig);
   const [view, setView] = useState<View>(initialView ?? 'timer');
+
+  // Initialize theme from config
+  useMemo(() => initTheme(config), [config]);
+
+  // Runtime sidebar toggle state — starts from config layout setting
+  const [sidebarOverride, setSidebarOverride] = useState<'visible' | 'hidden' | null>(null);
   const [isZen, setIsZen] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -279,9 +289,12 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     }
   }, []);
 
+  const keymap = useMemo(() => createKeymap(config), [config]);
+  const shortcutMap = useMemo(() => getShortcutMap(config), [config]);
+
   useInput((input, key) => {
     // Let q close any open overlay or exit zen mode
-    if (input === 'q') {
+    if (keymap.matches('global.quit', input, key)) {
       if (showHelp) { setShowHelp(false); return; }
       if (showInsights) { setShowInsights(false); return; }
       if (showGlobalSearch) { setShowGlobalSearch(false); return; }
@@ -293,21 +306,21 @@ export function App({ config: initialConfig, initialView, initialProject, initia
 
     if (showCommandPalette || showSearch || showInsights || showGlobalSearch || showHelp || showResetModal || isTyping) return;
 
-    if (input === 'z' && (view === 'timer' || view === 'clock')) {
+    if (keymap.matches('global.zen', input, key) && (view === 'timer' || view === 'clock')) {
       setIsZen(prev => !prev);
       return;
     }
-    if ((key.escape || input === 'q') && isZen) {
+    if ((key.escape || keymap.matches('global.quit', input, key)) && isZen) {
       setIsZen(false);
       return;
     }
 
-    if (input === '?' && !isZen) {
+    if (keymap.matches('global.help', input, key) && !isZen) {
       setShowHelp(true);
       return;
     }
 
-    if (input === 'g' && key.ctrl && !isZen) {
+    if (keymap.matches('global.editor', input, key) && !isZen) {
       const changed = openInNvim(view);
       if (changed) {
         setEditGeneration(g => g + 1);
@@ -319,36 +332,38 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       return;
     }
 
-    if (!isZen) {
-      if (input === '1') { setView('timer'); return; }
-      if (input === '2') { setView('tasks'); return; }
-      if (input === '3') { setView('reminders'); return; }
-      if (input === '4') { setView('clock'); return; }
-      if (input === '5') { setView('stats'); return; }
-      if (input === '6') { setView('config'); return; }
-      if (input === '7') { setView('web'); return; }
-      if (input === '8') { setView('tracker'); return; }
-      if (input === '9') { setView('graphs'); return; }
+    if (keymap.matches('global.toggle_sidebar', input, key) && !isZen) {
+      setSidebarOverride(prev => {
+        // Resolve effective current state: override takes precedence, then config
+        const current = prev ?? config.layout?.sidebar ?? 'visible';
+        return current === 'hidden' ? 'visible' : 'hidden';
+      });
+      return;
     }
 
-    if (input === ':' && !isZen) {
+    if (!isZen) {
+      const shortcutView = shortcutMap.get(input);
+      if (shortcutView) { setView(shortcutView); return; }
+    }
+
+    if (keymap.matches('global.command_palette', input, key) && !isZen) {
       setShowCommandPalette(true);
       return;
     }
 
-    if (input === '/' && !isZen) {
+    if (keymap.matches('global.search', input, key) && !isZen) {
       if (view !== 'tasks') {
         setShowGlobalSearch(true);
       }
       return;
     }
 
-    if (input === 'c' && view === 'timer' && sequence.sequenceIsActive) {
+    if (keymap.matches('timer.clear_sequence', input, key) && view === 'timer' && sequence.sequenceIsActive) {
       handleClearSequence();
       return;
     }
 
-    if (input === 'r' && view === 'timer') {
+    if (keymap.matches('timer.reset', input, key) && view === 'timer') {
       if (timer.elapsed === 0 && engine.sessionType !== 'work') {
         actions.advanceSession();
         return;
@@ -358,11 +373,11 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     }
 
     if (view === 'timer' || isZen) {
-      if (input === ' ') {
+      if (keymap.matches('timer.toggle', input, key)) {
         actions.toggle();
         return;
       }
-      if (input === 's' && !engine.isStrictMode && timer.isRunning && !isZen) {
+      if (keymap.matches('timer.skip', input, key) && !engine.isStrictMode && timer.isRunning && !isZen) {
         actions.skip();
         return;
       }
@@ -453,7 +468,13 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     />
   );
 
-  const keysBar = (
+  // Resolve effective layout — runtime sidebar override takes precedence
+  const baseLayout = config.layout ?? { sidebar: 'visible', showKeysBar: true, compact: false };
+  const effectiveLayout: LayoutConfig = sidebarOverride !== null
+    ? { ...baseLayout, sidebar: sidebarOverride }
+    : baseLayout;
+
+  const keysBar = effectiveLayout.showKeysBar ? (
     <KeysBar
       view={view}
       isRunning={timer.isRunning}
@@ -462,11 +483,13 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       isZen={false}
       hasActiveSequence={sequence.sequenceIsActive}
       hasActiveProject={!!engine.currentProject}
+      config={config}
+      keymap={keymap}
     />
-  );
+  ) : null;
 
   return (
-    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth}>
+    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config}>
       {view === 'timer' && (
         <TimerView
           secondsLeft={timer.secondsLeft}
@@ -488,9 +511,10 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           onActivateSequence={handleActivateSequence}
           onClearSequence={handleClearSequence}
           onEditSequences={() => { setConfigSeqMode(true); setView('config'); }}
+          keymap={keymap}
         />
       )}
-      {view === 'stats' && <ReportsView />}
+      {view === 'stats' && <ReportsView keymap={keymap} />}
       {view === 'config' && (
         <ConfigView
           key={editGeneration}
@@ -502,6 +526,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           setIsTyping={setIsTyping}
           initialSeqMode={configSeqMode}
           onSeqModeConsumed={() => setConfigSeqMode(false)}
+          keymap={keymap}
         />
       )}
       {view === 'clock' && <ClockView />}
@@ -512,6 +537,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           compactTime={config.compactTime}
           focusId={reminderFocusId}
           onFocusConsumed={() => setReminderFocusId(null)}
+          keymap={keymap}
         />
       )}
       {view === 'tasks' && (
@@ -520,11 +546,12 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           setIsTyping={setIsTyping}
           focusId={taskFocusId}
           onFocusConsumed={() => setTaskFocusId(null)}
+          keymap={keymap}
         />
       )}
-      {view === 'web' && <WebView />}
-      {view === 'tracker' && <TrackerView key={editGeneration} />}
-      {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} />}
+      {view === 'web' && <WebView keymap={keymap} />}
+      {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
+      {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
     </Layout>
   );
 }

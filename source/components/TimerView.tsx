@@ -5,6 +5,7 @@ import type { SessionType, SequenceBlock, SessionSequence } from '../types.js';
 import { BigTimer } from './BigTimer.js';
 import { getProjects } from '../lib/tasks.js';
 import { colors } from '../lib/theme.js';
+import type { Keymap } from '../lib/keymap.js';
 
 interface TimerViewProps {
   secondsLeft: number;
@@ -26,6 +27,7 @@ interface TimerViewProps {
   onActivateSequence: (seq: SessionSequence) => void;
   onClearSequence: () => void;
   onEditSequences: () => void;
+  keymap?: Keymap;
 }
 
 export function TimerView({
@@ -42,6 +44,7 @@ export function TimerView({
   onActivateSequence,
   onClearSequence,
   onEditSequences,
+  keymap,
 }: TimerViewProps) {
   const [isSettingDuration, setIsSettingDuration] = useState(false);
   const [durationInput, setDurationInput] = useState('');
@@ -158,11 +161,11 @@ export function TimerView({
         setShowSeqPicker(false);
         return;
       }
-      if (input === 'j' || key.downArrow) {
+      if ((keymap ? keymap.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
         setSeqCursor(prev => Math.min(prev + 1, sequences.length - 1));
         return;
       }
-      if (input === 'k' || key.upArrow) {
+      if ((keymap ? keymap.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
         setSeqCursor(prev => Math.max(prev - 1, 0));
         return;
       }
@@ -186,14 +189,16 @@ export function TimerView({
       return;
     }
 
-    if (input === 't') {
+    const km = keymap;
+
+    if (km ? km.matches('timer.set_duration', input, key) : input === 't') {
       setIsSettingDuration(true);
       setIsTyping(true);
       setDurationInput('');
       return;
     }
 
-    if (input === 'p') {
+    if (km ? km.matches('timer.set_project', input, key) : input === 'p') {
       setShowProjectInput(true);
       setIsTyping(true);
       setProjectInput(currentProject ?? '');
@@ -201,12 +206,12 @@ export function TimerView({
       return;
     }
 
-    if (input === 'P' && currentProject) {
+    if ((km ? km.matches('timer.clear_project', input, key) : input === 'P') && currentProject) {
       onSetProject('');
       return;
     }
 
-    if (input === 'S') {
+    if (km ? km.matches('timer.sequences', input, key) : input === 'S') {
       setShowSeqPicker(true);
       setSeqCursor(0);
       return;

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import type { Keymap } from '../lib/keymap.js';
 import { spawnSync, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -58,7 +59,7 @@ function getRangeDates(range: Range): { start: string; end: string; label: strin
   }
 }
 
-export function WebView() {
+export function WebView({ keymap }: { keymap?: Keymap }) {
   const [tab, setTab] = useState<Tab>('domains');
   const [scrollOffset, setScrollOffset] = useState(0);
   const [range, setRange] = useState<Range>('day');
@@ -113,12 +114,13 @@ export function WebView() {
   }, [mergedStats, domainLimit]);
 
   useInput((input, key) => {
+    const km = keymap;
     if (key.tab || input === '\t') {
       setTab(prev => prev === 'domains' ? 'pages' : 'domains');
       setScrollOffset(0);
       return;
     }
-    if (input === 'h') {
+    if (km ? km.matches('nav.left', input, key) : input === 'h') {
       setRange(prev => {
         const idx = RANGES.indexOf(prev);
         return RANGES[Math.max(0, idx - 1)]!;
@@ -126,7 +128,7 @@ export function WebView() {
       setScrollOffset(0);
       return;
     }
-    if (input === 'l') {
+    if (km ? km.matches('nav.right', input, key) : input === 'l') {
       setRange(prev => {
         const idx = RANGES.indexOf(prev);
         return RANGES[Math.min(RANGES.length - 1, idx + 1)]!;
@@ -158,10 +160,10 @@ export function WebView() {
       }
       return;
     }
-    if (input === 'j' || key.downArrow) {
+    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
       setScrollOffset(prev => prev + 1);
     }
-    if (input === 'k' || key.upArrow) {
+    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
       setScrollOffset(prev => Math.max(0, prev - 1));
     }
   });

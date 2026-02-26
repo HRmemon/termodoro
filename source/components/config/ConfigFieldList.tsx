@@ -4,7 +4,9 @@ import TextInput from 'ink-text-input';
 import type { Config } from '../../types.js';
 import { saveConfig } from '../../lib/config.js';
 import { ALL_SOUND_CHOICES, SOUND_LABELS, previewSound } from '../../lib/sounds.js';
-import type { SoundEvent } from '../../lib/sounds.js';
+import type { SoundEvent, SoundChoice } from '../../lib/sounds.js';
+import { SoundPicker } from './SoundPicker.js';
+import type { Keymap } from '../../lib/keymap.js';
 
 type FieldType = 'number' | 'boolean' | 'cycle' | 'sound-event' | 'sound-duration' | 'sound-volume';
 
@@ -39,6 +41,10 @@ export const FIELDS: ConfigField[] = [
   { key: 'browserTracking', label: 'Browser Tracking', type: 'boolean' },
   { key: 'webDomainLimit', label: 'Web Domain Limit', type: 'number', unit: 'domains' },
   { key: 'sidebarWidth', label: 'Sidebar Width', type: 'number', unit: 'chars' },
+  { key: 'theme.preset', label: 'Theme', type: 'cycle', values: ['default', 'gruvbox', 'nord', 'dracula', 'custom1'] },
+  { key: 'layout.sidebar', label: 'Sidebar', type: 'cycle', values: ['visible', 'hidden'] },
+  { key: 'layout.showKeysBar', label: 'Keys Bar', type: 'boolean' },
+  { key: 'layout.compact', label: 'Compact Mode', type: 'boolean' },
 ];
 
 interface ConfigFieldListProps {
@@ -51,6 +57,26 @@ interface ConfigFieldListProps {
   onOpenCategories: () => void;
   onOpenRules: () => void;
   onOpenSequences: () => void;
+  onOpenKeybindings: () => void;
+  keybindingCount: number;
+  keymap?: Keymap;
+}
+
+function getNestedValue(obj: Record<string, any>, path: string): any {
+  const parts = path.split('.');
+  let cur = obj;
+  for (const p of parts) {
+    if (cur == null) return undefined;
+    cur = cur[p];
+  }
+  return cur;
+}
+
+function setNestedValue(obj: Record<string, any>, path: string, value: any): Record<string, any> {
+  const parts = path.split('.');
+  if (parts.length === 1) return { ...obj, [parts[0]!]: value };
+  const [head, ...rest] = parts;
+  return { ...obj, [head!]: setNestedValue(obj[head!] ?? {}, rest.join('.'), value) };
 }
 
 export function ConfigFieldList({
@@ -63,11 +89,15 @@ export function ConfigFieldList({
   onOpenCategories,
   onOpenRules,
   onOpenSequences,
+  onOpenKeybindings,
+  keybindingCount,
+  keymap,
 }: ConfigFieldListProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [saved, setSaved] = useState(false);
+  const [soundPickerEvent, setSoundPickerEvent] = useState<SoundEvent | null>(null);
 
   const getFieldValue = (field: ConfigField): string => {
     if (field.type === 'sound-event' && field.soundEvent) {
@@ -84,7 +114,7 @@ export function ConfigFieldList({
     if (field.type === 'sound-volume') {
       return `${config.sounds.volume}%`;
     }
-    return String((config as unknown as Record<string, unknown>)[field.key]);
+    return String(getNestedValue(config as any, field.key));
   };
 
   const cycleSoundChoice = useCallback((field: ConfigField, direction: 1 | -1 = 1) => {
@@ -123,7 +153,7 @@ export function ConfigFieldList({
         let clamped = num;
         if (field.key === 'sidebarWidth') clamped = Math.min(Math.max(num, 8), 30);
         else if (field.key === 'webDomainLimit') clamped = Math.min(Math.max(num, 10), 500);
-        const newConfig = { ...config, [field.key]: clamped };
+        const newConfig = setNestedValue(config as any, field.key, clamped) as Config;
         onConfigChange(newConfig);
         saveConfig(newConfig);
       }
@@ -133,9 +163,13 @@ export function ConfigFieldList({
   }, [selectedIdx, config, onConfigChange, setIsTyping]);
 
   // Total items = FIELDS.length + 3 (Tracker Categories, Domain Rules, Sequences)
-  const totalItems = FIELDS.length + 3;
+  // FIELDS + Tracker Categories + Domain Rules + Sequences + Keybindings
+  const totalItems = FIELDS.length + 4;
 
   useInput((input, key) => {
+    // If sound picker is open, let it handle input
+    if (soundPickerEvent !== null) return;
+
     if (isEditing) {
       if (key.escape) {
         setIsEditing(false);
@@ -144,11 +178,12 @@ export function ConfigFieldList({
       return;
     }
 
-    if (input === 'j' || key.downArrow) {
+    const km = keymap;
+    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
       setSelectedIdx(i => Math.min(i + 1, totalItems - 1));
       return;
     }
-    if (input === 'k' || key.upArrow) {
+    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
       setSelectedIdx(i => Math.max(i - 1, 0));
       return;
     }
@@ -157,20 +192,26 @@ export function ConfigFieldList({
       if (selectedIdx === FIELDS.length) { onOpenCategories(); return; }
       if (selectedIdx === FIELDS.length + 1) { onOpenRules(); return; }
       if (selectedIdx === FIELDS.length + 2) { onOpenSequences(); return; }
+      if (selectedIdx === FIELDS.length + 3) { onOpenKeybindings(); return; }
 
       const field = FIELDS[selectedIdx]!;
       if (field.type === 'boolean') {
-        const newConfig = { ...config, [field.key]: !(config as unknown as Record<string, unknown>)[field.key] };
+        const current = getNestedValue(config as any, field.key);
+        const newConfig = setNestedValue(config as any, field.key, !current) as Config;
         onConfigChange(newConfig);
         saveConfig(newConfig);
       } else if (field.type === 'cycle' && field.values) {
-        const currentIdx = field.values.indexOf(String((config as unknown as Record<string, unknown>)[field.key]));
+        const currentIdx = field.values.indexOf(String(getNestedValue(config as any, field.key)));
         const nextIdx = (currentIdx + 1) % field.values.length;
-        const newConfig = { ...config, [field.key]: field.values[nextIdx] };
+        const newConfig = setNestedValue(config as any, field.key, field.values[nextIdx]) as Config;
         onConfigChange(newConfig);
         saveConfig(newConfig);
       } else if (field.type === 'sound-event') {
-        cycleSoundChoice(field);
+        if (field.soundEvent) {
+          setSoundPickerEvent(field.soundEvent);
+        } else {
+          cycleSoundChoice(field);
+        }
       } else if (field.type === 'sound-duration') {
         setEditValue(String(config.sounds.alarmDuration));
         setIsEditing(true);
@@ -180,7 +221,7 @@ export function ConfigFieldList({
         setIsEditing(true);
         setIsTyping(true);
       } else {
-        setEditValue(String((config as unknown as Record<string, unknown>)[field.key]));
+        setEditValue(String(getNestedValue(config as any, field.key)));
         setIsEditing(true);
         setIsTyping(true);
       }
@@ -197,13 +238,44 @@ export function ConfigFieldList({
       return;
     }
 
-    if (input === 's') {
+    if (km ? km.matches('config.save', input, key) : input === 's') {
       saveConfig(config);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       return;
     }
   });
+
+  const handleSoundPickerSelect = useCallback((choice: SoundChoice, customPath?: string) => {
+    if (!soundPickerEvent) return;
+    const newSounds = { ...config.sounds, [soundPickerEvent]: choice };
+    if (customPath !== undefined) {
+      newSounds.customPaths = { ...newSounds.customPaths, [soundPickerEvent]: customPath };
+    }
+    const newConfig = { ...config, sounds: newSounds };
+    onConfigChange(newConfig);
+    saveConfig(newConfig);
+    setSoundPickerEvent(null);
+  }, [soundPickerEvent, config, onConfigChange]);
+
+  // When sound picker is open, render it in place of the field list
+  if (soundPickerEvent !== null) {
+    const currentChoice = config.sounds[soundPickerEvent];
+    const customPath = config.sounds.customPaths[soundPickerEvent];
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <SoundPicker
+          soundEvent={soundPickerEvent}
+          currentChoice={currentChoice}
+          volume={config.sounds.volume}
+          customPath={customPath}
+          onSelect={handleSoundPickerSelect}
+          onCancel={() => setSoundPickerEvent(null)}
+          keymap={keymap}
+        />
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -212,11 +284,11 @@ export function ConfigFieldList({
         let displayValue: string;
         let valueColor: string;
         if (field.type === 'boolean') {
-          const val = (config as unknown as Record<string, unknown>)[field.key];
+          const val = getNestedValue(config as any, field.key);
           displayValue = val ? 'ON' : 'OFF';
           valueColor = val ? 'green' : 'red';
         } else if (field.type === 'cycle') {
-          displayValue = String((config as unknown as Record<string, unknown>)[field.key]);
+          displayValue = String(getNestedValue(config as any, field.key));
           valueColor = 'cyan';
         } else if (field.type === 'sound-event') {
           displayValue = getFieldValue(field);
@@ -225,7 +297,7 @@ export function ConfigFieldList({
           displayValue = getFieldValue(field);
           valueColor = 'cyan';
         } else {
-          const val = (config as unknown as Record<string, unknown>)[field.key];
+          const val = getNestedValue(config as any, field.key);
           displayValue = `${val}${field.unit ? ` ${field.unit}` : ''}`;
           valueColor = 'white';
         }
@@ -288,6 +360,20 @@ export function ConfigFieldList({
         </Box>
         <Text color="cyan" bold={selectedIdx === FIELDS.length + 2}>{seqCount} sequences</Text>
         {selectedIdx === FIELDS.length + 2 && <Text dimColor>  Enter to manage</Text>}
+      </Box>
+
+      {/* Keybindings entry */}
+      <Box>
+        <Text color={selectedIdx === FIELDS.length + 3 ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length + 3}>
+          {selectedIdx === FIELDS.length + 3 ? '> ' : '  '}
+        </Text>
+        <Box width={22}>
+          <Text color={selectedIdx === FIELDS.length + 3 ? 'white' : 'gray'}>Keybindings</Text>
+        </Box>
+        <Text color="cyan" bold={selectedIdx === FIELDS.length + 3}>
+          {keybindingCount > 0 ? `${keybindingCount} custom` : 'defaults'}
+        </Text>
+        {selectedIdx === FIELDS.length + 3 && <Text dimColor>  Enter to manage</Text>}
       </Box>
 
       {saved && (

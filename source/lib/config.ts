@@ -25,14 +25,30 @@ const DEFAULT_CONFIG: Config = {
   browserTracking: false,
   webDomainLimit: 50,
   sidebarWidth: 20,
+  theme: { preset: 'default' },
+  layout: { sidebar: 'visible', showKeysBar: true, compact: false },
 };
+
+function deepMerge<T extends Record<string, any>>(base: T, override: Partial<T>): T {
+  const result = { ...base } as any;
+  for (const key of Object.keys(override)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    const val = (override as any)[key];
+    if (val && typeof val === 'object' && !Array.isArray(val) && typeof (base as any)[key] === 'object') {
+      result[key] = deepMerge((base as any)[key], val);
+    } else if (val !== undefined) {
+      result[key] = val;
+    }
+  }
+  return result;
+}
 
 export function loadConfig(): Config {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
       const userConfig = JSON.parse(raw) as Partial<Config>;
-      return { ...DEFAULT_CONFIG, ...userConfig };
+      return deepMerge(DEFAULT_CONFIG, userConfig);
     }
   } catch {
     // Fall through to defaults

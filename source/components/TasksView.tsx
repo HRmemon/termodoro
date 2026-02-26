@@ -6,11 +6,13 @@ import { loadTasks, saveTasks, addTask, completeTask, deleteTask, updateTask, ge
 import { colors } from '../lib/theme.js';
 import { fuzzyMatchAny } from '../lib/fuzzy.js';
 import { FilterInput } from './FilterInput.js';
+import type { Keymap } from '../lib/keymap.js';
 
 interface TasksViewProps {
   setIsTyping: (v: boolean) => void;
   focusId?: string | null;
   onFocusConsumed?: () => void;
+  keymap?: Keymap;
 }
 
 type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
@@ -45,7 +47,7 @@ function parseTaskInput(value: string): { text: string; project?: string; unknow
   return { text, project, unknownProject, expectedPomodoros };
 }
 
-export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewProps) {
+export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: TasksViewProps) {
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [inputMode, setInputMode] = useState<InputMode>('none');
@@ -194,11 +196,11 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
         setProjectMode(false);
         return;
       }
-      if (input === 'j' || key.downArrow) {
+      if ((keymap ? keymap.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
         setProjectCursor(i => Math.min(i + 1, projectList.length - 1));
         return;
       }
-      if (input === 'k' || key.upArrow) {
+      if ((keymap ? keymap.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
         setProjectCursor(i => Math.max(i - 1, 0));
         return;
       }
@@ -397,17 +399,19 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
       return;
     }
 
+    const km = keymap;
+
     // ─── Normal navigation ──────────────────────────────────────────────
-    if (input === 'j' || key.downArrow) {
+    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
       setSelectedIdx(i => Math.min(i + 1, allNavItems.length - 1));
       return;
     }
-    if (input === 'k' || key.upArrow) {
+    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
       setSelectedIdx(i => Math.max(i - 1, 0));
       return;
     }
 
-    if (input === '/') {
+    if (km ? km.matches('list.filter', input, key) : input === '/') {
       setFilterQuery('');
       setInputMode('filter');
       setIsTyping(true);
@@ -425,14 +429,14 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
       return;
     }
 
-    if (input === 'a' && inputMode !== 'filtered') {
+    if ((km ? km.matches('list.add', input, key) : input === 'a') && inputMode !== 'filtered') {
       setInputValue('');
       setInputMode('add');
       setIsTyping(true);
       return;
     }
 
-    if (input === 'e' && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+    if ((km ? km.matches('list.edit', input, key) : input === 'e') && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
       const task = incompleteTasks[selectedIdx];
       if (task) {
         let editValue = task.text;
@@ -481,7 +485,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed }: TasksViewPr
       return;
     }
 
-    if (input === 'd' && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+    if ((km ? km.matches('list.delete', input, key) : input === 'd') && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
       const task = incompleteTasks[selectedIdx];
       if (task) {
         deleteTask(task.id);

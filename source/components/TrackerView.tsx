@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
+import type { Keymap } from '../lib/keymap.js';
 import {
   ALL_SLOTS, DAY_NAMES, WeekData,
   getCategoryByCode, getCategories, getISOWeekStr, getMondayOfWeek, getWeekDates,
@@ -60,7 +61,7 @@ function SlotCell({
 
 type Mode = 'grid' | 'pick' | 'day' | 'week' | 'browse' | 'review';
 
-export function TrackerView() {
+export function TrackerView({ keymap }: { keymap?: Keymap }) {
   const { stdout } = useStdout();
   const termHeight = stdout?.rows ?? 24;
   const VISIBLE_ROWS = Math.max(6, termHeight - 16);
@@ -156,9 +157,11 @@ export function TrackerView() {
   }, [week, currentDate, currentTime, cursorRow, VISIBLE_ROWS]);
 
   useInput((input, key) => {
+    const km = keymap;
+
     if (mode === 'browse') {
-      if (input === 'j' || key.downArrow) setBrowseCursor(p => Math.min(p + 1, browseList.length - 1));
-      else if (input === 'k' || key.upArrow) setBrowseCursor(p => Math.max(0, p - 1));
+      if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) setBrowseCursor(p => Math.min(p + 1, browseList.length - 1));
+      else if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) setBrowseCursor(p => Math.max(0, p - 1));
       else if (key.return && browseList[browseCursor]) {
         const ws = browseList[browseCursor]!;
         const w = loadWeek(ws);
@@ -203,8 +206,8 @@ export function TrackerView() {
     }
 
     if (mode === 'pick') {
-      if (input === 'j' || key.downArrow) setPickerCursor(p => Math.min(p + 1, categories.length - 1));
-      else if (input === 'k' || key.upArrow) setPickerCursor(p => Math.max(0, p - 1));
+      if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) setPickerCursor(p => Math.min(p + 1, categories.length - 1));
+      else if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) setPickerCursor(p => Math.max(0, p - 1));
       else if (key.return) handleSetSlot(categories[pickerCursor]!.code);
       else if (key.escape) {
         setMode('grid');
@@ -225,40 +228,43 @@ export function TrackerView() {
     }
 
     if (mode === 'day' || mode === 'week') {
-      if (key.escape || input === 'q' || input === 'd' || input === 'w') setMode('grid');
+      if (key.escape || input === 'q'
+        || (km ? km.matches('tracker.day_summary', input, key) : input === 'D')
+        || (km ? km.matches('tracker.week_summary', input, key) : input === 'w')
+      ) setMode('grid');
       return;
     }
 
     // Grid mode
-    if (input === 'j' || key.downArrow) {
+    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
       const next = Math.min(cursorRow + 1, ALL_SLOTS.length - 1);
       setCursorRow(next);
       if (next >= scrollOffset + VISIBLE_ROWS) setScrollOffset(next - VISIBLE_ROWS + 1);
-    } else if (input === 'k' || key.upArrow) {
+    } else if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
       const next = Math.max(0, cursorRow - 1);
       setCursorRow(next);
       if (next < scrollOffset) setScrollOffset(next);
-    } else if (input === 'h' || key.leftArrow) {
+    } else if ((km ? km.matches('nav.left', input, key) : input === 'h') || key.leftArrow) {
       setCursorCol(p => Math.max(0, p - 1));
-    } else if (input === 'l' || key.rightArrow) {
+    } else if ((km ? km.matches('nav.right', input, key) : input === 'l') || key.rightArrow) {
       setCursorCol(p => Math.min(6, p + 1));
     } else if (key.tab) {
       setCursorCol(p => (p + 1) % 7);
-    } else if (input === 'e' || key.return) {
+    } else if ((km ? km.matches('tracker.pick', input, key) : input === 'e') || key.return) {
       if (week) { setPickerCursor(0); setMode('pick'); }
-    } else if (input === '.') {
+    } else if (km ? km.matches('tracker.clear', input, key) : input === '.') {
       handleSetSlot(null);
     }
     // Dynamic quick-set by shortcut key
     else {
       const cat = categories.find(c => c.key && c.key === input);
       if (cat) handleSetSlot(cat.code);
-      else if (input === 'r' && pendingCount > 0) {
+      else if ((km ? km.matches('tracker.review', input, key) : input === 'r') && pendingCount > 0) {
         setReviewIdx(0);
         setMode('review');
       } else if (input === 'A' && pendingCount > 0) {
         setWeek(prev => prev ? acceptAllPending(prev) : prev);
-      } else if (input === 'n') {
+      } else if (km ? km.matches('tracker.new_week', input, key) : input === 'n') {
         const existing = loadWeek(currentWeekStr);
         if (existing) {
           setWeek(existing);
@@ -269,12 +275,12 @@ export function TrackerView() {
           setWeekStr(w.week);
         }
         setMode('grid');
-      } else if (input === 'b') {
+      } else if (km ? km.matches('tracker.browse', input, key) : input === 'b') {
         setMode('browse');
         setBrowseCursor(0);
-      } else if (input === 'd') {
+      } else if (km ? km.matches('tracker.day_summary', input, key) : input === 'D') {
         setMode(m => m === 'day' ? 'grid' : 'day');
-      } else if (input === 'w') {
+      } else if (km ? km.matches('tracker.week_summary', input, key) : input === 'w') {
         setMode(m => m === 'week' ? 'grid' : 'week');
       }
     }

@@ -31,6 +31,10 @@ export interface Config {
   browserTracking: boolean;
   webDomainLimit: number;
   sidebarWidth: number;
+  theme?: ThemeConfig;
+  layout?: LayoutConfig;
+  views?: ViewEntry[];
+  keybindings?: import('./lib/keymap.js').KeybindingConfig;
 }
 
 export interface TimeBlock {
@@ -93,6 +97,33 @@ export type EnergyLevel = NonNullable<Session['energyLevel']>;
 export type Priority = TimeBlock['priority'];
 
 export type View = 'timer' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks' | 'web' | 'tracker' | 'graphs';
+
+export interface ThemeColors {
+  focus: string;
+  break: string;
+  highlight: string;
+  text: string;
+  dim: string;
+  bg: string;
+}
+
+export interface ThemeConfig {
+  colors?: Partial<ThemeColors>;
+  preset?: 'default' | 'gruvbox' | 'nord' | 'dracula';
+}
+
+export interface LayoutConfig {
+  sidebar: 'visible' | 'hidden' | 'auto';
+  showKeysBar: boolean;
+  compact: boolean;
+}
+
+export interface ViewEntry {
+  id: View;
+  label: string;
+  shortcut?: string;
+  hidden?: boolean;
+}
 
 export interface TagInfo {
   label?: string;

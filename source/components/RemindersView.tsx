@@ -5,12 +5,14 @@ import { nanoid } from 'nanoid';
 import type { ScheduledNotification, Task } from '../types.js';
 import { loadReminders, addReminder, deleteReminder, updateReminder } from '../lib/reminders.js';
 import { loadTasks } from '../lib/tasks.js';
+import type { Keymap } from '../lib/keymap.js';
 
 interface RemindersViewProps {
   setIsTyping: (v: boolean) => void;
   compactTime: boolean;
   focusId?: string | null;
   onFocusConsumed?: () => void;
+  keymap?: Keymap;
 }
 
 type InputStep = 'none' | 'time' | 'title' | 'task';
@@ -38,7 +40,7 @@ function parseTimeInput(input: string, compact: boolean): string | null {
   return null;
 }
 
-export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsumed }: RemindersViewProps) {
+export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsumed, keymap }: RemindersViewProps) {
   const [reminders, setReminders] = useState<ScheduledNotification[]>(loadReminders);
   const [tasks] = useState<Task[]>(() => loadTasks().filter(t => !t.completed));
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -63,6 +65,8 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
   }, [focusId, onFocusConsumed]);
 
   useInput((input, key) => {
+    const km = keymap;
+
     if (step === 'task') {
       if (key.escape) {
         // Skip task linking, save reminder without task
@@ -74,10 +78,10 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
         finalizeReminder(t?.id ?? null);
         return;
       }
-      if (input === 'j' || key.downArrow) {
+      if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
         setTaskIdx(i => Math.min(i + 1, tasks.length - 1));
       }
-      if (input === 'k' || key.upArrow) {
+      if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
         setTaskIdx(i => Math.max(i - 1, 0));
       }
       return;
@@ -92,16 +96,16 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
       return;
     }
 
-    if (input === 'j' || key.downArrow) {
+    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
       setSelectedIdx(i => Math.min(i + 1, reminders.length - 1));
       return;
     }
-    if (input === 'k' || key.upArrow) {
+    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
       setSelectedIdx(i => Math.max(i - 1, 0));
       return;
     }
 
-    if (input === 'a') {
+    if (km ? km.matches('list.add', input, key) : input === 'a') {
       setEditingId(null);
       setInputValue('');
       setPendingTime('');
@@ -112,7 +116,7 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
       return;
     }
 
-    if (input === 'e' && reminders.length > 0) {
+    if ((km ? km.matches('list.edit', input, key) : input === 'e') && reminders.length > 0) {
       const r = reminders[selectedIdx];
       if (r) {
         setEditingId(r.id);
@@ -126,7 +130,7 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
       return;
     }
 
-    if (input === 'd' && reminders.length > 0) {
+    if ((km ? km.matches('list.delete', input, key) : input === 'd') && reminders.length > 0) {
       const r = reminders[selectedIdx];
       if (r) {
         deleteReminder(r.id);
