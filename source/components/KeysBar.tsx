@@ -14,6 +14,7 @@ interface KeysBarProps {
   isZen: boolean;
   hasActiveSequence: boolean;
   hasActiveProject: boolean;
+  timerMode: 'countdown' | 'stopwatch';
   config?: Config;
   keymap?: Keymap;
 }
@@ -23,7 +24,7 @@ interface KeyHint {
   label: string;
 }
 
-export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence, hasActiveProject, config, keymap }: KeysBarProps) {
+export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence, hasActiveProject, timerMode, config, keymap }: KeysBarProps) {
   // Zen mode: minimal
   if (isZen) {
     const hint = isRunning && !isPaused ? 'Pause' : isPaused ? 'Resume' : 'Start';
@@ -49,9 +50,10 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     } else if (!isRunning) {
       actionHints.push({ key: km ? km.label('timer.toggle') : 'Space', label: 'Start' });
     }
-    if (isRunning && !strictMode) actionHints.push({ key: km ? km.label('timer.skip') : 's', label: 'Skip' });
+    if (isRunning && !strictMode && timerMode !== 'stopwatch') actionHints.push({ key: km ? km.label('timer.skip') : 's', label: 'Skip' });
+    actionHints.push({ key: 'm', label: 'Mode' });
     actionHints.push({ key: km ? km.label('global.zen') : 'z', label: 'Zen' });
-    actionHints.push({ key: km ? km.label('timer.set_duration') : 't', label: 'Set duration' });
+    if (timerMode !== 'stopwatch') actionHints.push({ key: km ? km.label('timer.set_duration') : 't', label: 'Set duration' });
     actionHints.push({ key: km ? km.label('timer.set_project') : 'p', label: 'Project' });
     if (hasActiveProject) actionHints.push({ key: km ? km.label('timer.clear_project') : 'P', label: 'Clear project' });
     actionHints.push({ key: km ? km.label('timer.sequences') : 'S', label: 'Sequences' });

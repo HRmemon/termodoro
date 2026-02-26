@@ -20,6 +20,8 @@ export interface TimerSnapshot {
   label?: string;
   project?: string;
   overrideDuration?: number | null;
+  timerMode?: 'countdown' | 'stopwatch';
+  stopwatchElapsed?: number;
   sequenceName?: string;
   sequenceBlocks?: SequenceBlock[];
   sequenceBlockIndex?: number;

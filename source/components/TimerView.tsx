@@ -27,6 +27,10 @@ interface TimerViewProps {
   onActivateSequence: (seq: SessionSequence) => void;
   onClearSequence: () => void;
   onEditSequences: () => void;
+  timerMode: 'countdown' | 'stopwatch';
+  stopwatchElapsed: number;
+  onSwitchToStopwatch: () => void;
+  onStopStopwatch: () => void;
   keymap?: Keymap;
 }
 
@@ -44,6 +48,10 @@ export function TimerView({
   onActivateSequence,
   onClearSequence,
   onEditSequences,
+  timerMode,
+  stopwatchElapsed,
+  onSwitchToStopwatch,
+  onStopStopwatch,
   keymap,
 }: TimerViewProps) {
   const [isSettingDuration, setIsSettingDuration] = useState(false);
@@ -54,6 +62,8 @@ export function TimerView({
   const [suggestionIdx, setSuggestionIdx] = useState(0);
   const [showSeqPicker, setShowSeqPicker] = useState(false);
   const [seqCursor, setSeqCursor] = useState(0);
+  const [showModePicker, setShowModePicker] = useState(false);
+  const [modeCursor, setModeCursor] = useState(0);
 
   const allProjects = useMemo(() => getProjects(), [showProjectInput]);
 
@@ -155,6 +165,22 @@ export function TimerView({
     }
     if (isSettingDuration) return;
 
+    // Mode picker input handling
+    if (showModePicker) {
+      if (key.escape) { setShowModePicker(false); setIsTyping(false); return; }
+      if (input === 'j' || key.downArrow) { setModeCursor(c => Math.min(c + 1, 1)); return; }
+      if (input === 'k' || key.upArrow) { setModeCursor(c => Math.max(c - 1, 0)); return; }
+      if (key.return) {
+        const selected = modeCursor === 0 ? 'countdown' : 'stopwatch';
+        if (selected === 'stopwatch' && timerMode !== 'stopwatch') onSwitchToStopwatch();
+        else if (selected === 'countdown' && timerMode === 'stopwatch') onStopStopwatch();
+        setShowModePicker(false);
+        setIsTyping(false);
+        return;
+      }
+      return;
+    }
+
     // Sequence picker input handling
     if (showSeqPicker) {
       if (key.escape || input === 'q') {
@@ -191,7 +217,7 @@ export function TimerView({
 
     const km = keymap;
 
-    if (km ? km.matches('timer.set_duration', input, key) : input === 't') {
+    if ((km ? km.matches('timer.set_duration', input, key) : input === 't') && timerMode !== 'stopwatch') {
       setIsSettingDuration(true);
       setIsTyping(true);
       setDurationInput('');
@@ -216,7 +242,43 @@ export function TimerView({
       setSeqCursor(0);
       return;
     }
+
+    if (input === 'm') {
+      setShowModePicker(true);
+      setModeCursor(timerMode === 'stopwatch' ? 1 : 0);
+      setIsTyping(true);
+      return;
+    }
   });
+
+  // Mode picker overlay
+  if (showModePicker) {
+    const isStopwatch = timerMode === 'stopwatch';
+    const options = ['Timer', 'Stopwatch'];
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <Box borderStyle="round" borderColor={colors.highlight} flexDirection="column" paddingX={1}>
+          <Box marginBottom={1}>
+            <Text bold color={colors.highlight}>Timer Mode</Text>
+            <Text dimColor>  (j/k navigate, Enter select, Esc cancel)</Text>
+          </Box>
+          {options.map((opt, i) => {
+            const isCursor = i === modeCursor;
+            const isCurrent = (i === 0 && !isStopwatch) || (i === 1 && isStopwatch);
+            return (
+              <Box key={opt}>
+                <Text color={isCursor ? colors.highlight : colors.text} bold={isCursor}>
+                  {isCursor ? '> ' : '  '}{opt}
+                </Text>
+                {isCurrent && <Text color={colors.focus}>  ← current</Text>}
+                {i === 0 && isStopwatch && <Text dimColor>  (logs & resets)</Text>}
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+    );
+  }
 
   // Sequence picker overlay
   if (showSeqPicker) {
@@ -327,6 +389,8 @@ export function TimerView({
         isPaused={isPaused}
         isRunning={isRunning}
         timerFormat={timerFormat}
+        timerMode={timerMode}
+        stopwatchElapsed={stopwatchElapsed}
       />
     </Box>
   );

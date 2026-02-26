@@ -7,6 +7,7 @@ interface StatusLineProps {
   sessionType: SessionType;
   isRunning: boolean;
   isPaused: boolean;
+  timerMode: 'countdown' | 'stopwatch';
   streak: number;
   todaySessions: number;
   todayFocusMinutes: number;
@@ -27,9 +28,10 @@ function formatDuration(minutes: number): string {
   return `${minutes}m`;
 }
 
-export function StatusLine({ sessionType, isRunning, isPaused, streak, todaySessions, todayFocusMinutes }: StatusLineProps) {
-  const status = isPaused ? 'PAUSED' : isRunning ? 'RUNNING' : 'READY';
-  const statusIcon = isPaused ? '⏸ ' : isRunning ? '▶ ' : '⏹ ';
+export function StatusLine({ sessionType, isRunning, isPaused, timerMode, streak, todaySessions, todayFocusMinutes }: StatusLineProps) {
+  const isStopwatch = timerMode === 'stopwatch';
+  const status = isStopwatch && !isPaused ? 'STOPWATCH' : isPaused ? 'PAUSED' : isRunning ? 'RUNNING' : 'READY';
+  const statusIcon = isStopwatch && !isPaused ? '⏱ ' : isPaused ? '⏸ ' : isRunning ? '▶ ' : '⏹ ';
   const statusColor = isPaused ? colors.break : isRunning ? colors.focus : colors.dim;
 
   return (

@@ -58,6 +58,8 @@ export function startDaemon(): void {
         secondsLeft: snapshot.pausedSecondsLeft ?? snapshot.totalSeconds,
         isRunning: true,
         isPaused: true,
+        timerMode: snapshot.timerMode,
+        stopwatchElapsed: snapshot.stopwatchElapsed,
         sequenceName: snapshot.sequenceName,
         sequenceBlocks: snapshot.sequenceBlocks,
         sequenceBlockIndex: snapshot.sequenceBlockIndex,
@@ -67,7 +69,7 @@ export function startDaemon(): void {
       const elapsed = Math.floor((Date.now() - new Date(snapshot.startedAt).getTime()) / 1000);
       const remaining = snapshot.totalSeconds - elapsed;
 
-      if (remaining > 0) {
+      if (remaining > 0 || snapshot.timerMode === 'stopwatch') {
         initialState = {
           sessionType: snapshot.sessionType,
           sessionNumber: snapshot.sessionNumber,
@@ -76,9 +78,11 @@ export function startDaemon(): void {
           project: snapshot.project ?? stickyProject,
           overrideDuration: snapshot.overrideDuration,
           startedAt: snapshot.startedAt,
-          secondsLeft: remaining,
+          secondsLeft: snapshot.timerMode === 'stopwatch' ? snapshot.totalSeconds : remaining,
           isRunning: true,
           isPaused: false,
+          timerMode: snapshot.timerMode,
+          stopwatchElapsed: snapshot.stopwatchElapsed,
           sequenceName: snapshot.sequenceName,
           sequenceBlocks: snapshot.sequenceBlocks,
           sequenceBlockIndex: snapshot.sequenceBlockIndex,
@@ -228,6 +232,14 @@ export function startDaemon(): void {
 
         case 'clear-sequence':
           engine.clearSequence();
+          return { ok: true, state: engine.getState() };
+
+        case 'switch-to-stopwatch':
+          engine.switchToStopwatch();
+          return { ok: true, state: engine.getState() };
+
+        case 'stop-stopwatch':
+          engine.stopStopwatch();
           return { ok: true, state: engine.getState() };
 
         case 'advance-session':

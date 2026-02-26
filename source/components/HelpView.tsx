@@ -29,6 +29,7 @@ const page1 = [
       ['p', 'Set project (Tab: autocomplete)'],
       ['P', 'Clear project'],
       ['S', 'Pick sequence'],
+      ['m', 'Timer/Stopwatch mode'],
       ['r', 'Reset (log prompt)'],
       ['c', 'Clear active sequence'],
     ],

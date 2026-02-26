@@ -79,15 +79,22 @@ function signalWaybar(): void {
 export function writeStatusFile(state: EngineFullState): void {
   try {
     const todayStats = getTodayStats();
+    const isStopwatch = state.timerMode === 'stopwatch';
     const label = getSessionLabel(state.sessionType);
-    const time = formatTime(state.secondsLeft);
-    const percentage = state.totalSeconds > 0
-      ? Math.round((state.secondsLeft / state.totalSeconds) * 100)
-      : 0;
+    const time = isStopwatch
+      ? formatTime(state.stopwatchElapsed)
+      : formatTime(state.secondsLeft);
+    const percentage = isStopwatch ? 0
+      : (state.totalSeconds > 0
+        ? Math.round((state.secondsLeft / state.totalSeconds) * 100)
+        : 0);
 
     let text: string;
     if (!state.isRunning && !state.isPaused) {
       text = 'idle';
+    } else if (isStopwatch) {
+      text = `${label} ${time} ⏱`;
+      if (state.isPaused) text += ' ||';
     } else {
       text = `${label} ${time}`;
       if (state.isPaused) text += ' ||';
@@ -108,6 +115,8 @@ export function writeStatusFile(state: EngineFullState): void {
       totalSeconds: state.totalSeconds,
       isRunning: state.isRunning,
       isPaused: state.isPaused,
+      timerMode: state.timerMode,
+      stopwatchElapsed: state.stopwatchElapsed,
       project: state.currentProject ?? null,
       sessionNumber: state.sessionNumber,
       totalWorkSessions: state.totalWorkSessions,

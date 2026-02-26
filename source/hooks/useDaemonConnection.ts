@@ -11,6 +11,8 @@ const DEFAULT_STATE: EngineFullState = {
   isPaused: false,
   isComplete: false,
   elapsed: 0,
+  timerMode: 'countdown',
+  stopwatchElapsed: 0,
   sessionType: 'work',
   sessionNumber: 1,
   totalWorkSessions: 0,
@@ -34,6 +36,8 @@ export interface DaemonTimerState {
   isPaused: boolean;
   isComplete: boolean;
   elapsed: number;
+  timerMode: 'countdown' | 'stopwatch';
+  stopwatchElapsed: number;
 }
 
 export interface DaemonEngineState {
@@ -70,6 +74,8 @@ export interface DaemonActions {
   activateSequenceInline: (definition: string) => void;
   clearSequence: () => void;
   advanceSession: () => void;
+  switchToStopwatch: () => void;
+  stopStopwatch: () => void;
   updateConfig: () => void;
 }
 
@@ -151,6 +157,8 @@ export function useDaemonConnection(): {
     activateSequenceInline: (definition: string) => send({ cmd: 'activate-sequence-inline', definition }),
     clearSequence: () => send({ cmd: 'clear-sequence' }),
     advanceSession: () => send({ cmd: 'advance-session' }),
+    switchToStopwatch: () => send({ cmd: 'switch-to-stopwatch' }),
+    stopStopwatch: () => send({ cmd: 'stop-stopwatch' }),
     updateConfig: () => send({ cmd: 'update-config' }),
   }), [send]);
 
@@ -162,6 +170,8 @@ export function useDaemonConnection(): {
     isPaused: state.isPaused,
     isComplete: state.isComplete,
     elapsed: state.elapsed,
+    timerMode: state.timerMode,
+    stopwatchElapsed: state.stopwatchElapsed,
   };
 
   const engine: DaemonEngineState = {

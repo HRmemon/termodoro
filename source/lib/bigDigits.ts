@@ -81,7 +81,7 @@ const DIGITS: Record<string, string[]> = {
   ],
 };
 
-export function formatTimerString(seconds: number, format: 'mm:ss' | 'hh:mm:ss' | 'minutes'): string {
+export function formatTimerString(seconds: number, format: 'mm:ss' | 'hh:mm:ss' | 'minutes', countUp = false): string {
   if (format === 'hh:mm:ss') {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -89,7 +89,7 @@ export function formatTimerString(seconds: number, format: 'mm:ss' | 'hh:mm:ss' 
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
   if (format === 'minutes') {
-    const mins = Math.ceil(seconds / 60);
+    const mins = countUp ? Math.floor(seconds / 60) : Math.ceil(seconds / 60);
     return String(mins).padStart(2, '0');
   }
   // mm:ss (default)
@@ -98,8 +98,8 @@ export function formatTimerString(seconds: number, format: 'mm:ss' | 'hh:mm:ss' 
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export function renderBigTime(seconds: number, format: 'mm:ss' | 'hh:mm:ss' | 'minutes' = 'mm:ss'): string[] {
-  const timeStr = formatTimerString(seconds, format);
+export function renderBigTime(seconds: number, format: 'mm:ss' | 'hh:mm:ss' | 'minutes' = 'mm:ss', countUp = false): string[] {
+  const timeStr = formatTimerString(seconds, format, countUp);
 
   const lines: string[] = ['', '', '', '', ''];
   for (let i = 0; i < timeStr.length; i++) {

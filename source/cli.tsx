@@ -32,6 +32,7 @@ const cli = meow(`
     reset         Reset current session
     status        Print timer state as JSON
     project <name>  Set current project
+    mode <timer|stopwatch>  Switch timer mode
 
   Daemon Management
     daemon start  Start the daemon in foreground
@@ -282,6 +283,39 @@ const timerCommands: Record<string, () => Promise<void>> = {
     const resp = await sendCommand({ cmd: 'set-project', project: name });
     if (resp.ok) console.log(name ? `Project set to #${name}` : 'Project cleared.');
     else console.error((resp as { error: string }).error);
+  },
+  async mode() {
+    const target = cli.input[1];
+    if (!target) {
+      // Just print current mode
+      const resp = await sendCommand({ cmd: 'status' });
+      if (resp.ok) {
+        console.log(`Current mode: ${resp.state.timerMode}`);
+        console.log(`stopwatchElapsed: ${resp.state.stopwatchElapsed}`);
+        console.log(`isRunning: ${resp.state.isRunning}, isPaused: ${resp.state.isPaused}`);
+        console.log(`sessionType: ${resp.state.sessionType}, secondsLeft: ${resp.state.secondsLeft}`);
+      } else {
+        console.error((resp as { error: string }).error);
+      }
+      return;
+    }
+    if (target === 'stopwatch' || target === 's') {
+      const resp = await sendCommand({ cmd: 'switch-to-stopwatch' });
+      if (resp.ok) {
+        console.log(`Switched to stopwatch. timerMode=${resp.state.timerMode}, elapsed=${resp.state.stopwatchElapsed}`);
+      } else {
+        console.error((resp as { error: string }).error);
+      }
+    } else if (target === 'timer' || target === 't') {
+      const resp = await sendCommand({ cmd: 'stop-stopwatch' });
+      if (resp.ok) {
+        console.log(`Switched to timer. timerMode=${resp.state.timerMode}`);
+      } else {
+        console.error((resp as { error: string }).error);
+      }
+    } else {
+      console.error('Usage: pomodorocli mode [timer|stopwatch]');
+    }
   },
 };
 

@@ -365,7 +365,8 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     }
 
     if (keymap.matches('timer.reset', input, key) && view === 'timer') {
-      if (timer.elapsed === 0 && engine.sessionType !== 'work') {
+      const effectiveElapsed = timer.timerMode === 'stopwatch' ? timer.stopwatchElapsed : timer.elapsed;
+      if (effectiveElapsed === 0 && engine.sessionType !== 'work') {
         actions.advanceSession();
         return;
       }
@@ -378,7 +379,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
         actions.toggle();
         return;
       }
-      if (keymap.matches('timer.skip', input, key) && !engine.isStrictMode && timer.isRunning && !isZen) {
+      if (keymap.matches('timer.skip', input, key) && !engine.isStrictMode && timer.isRunning && !isZen && timer.timerMode !== 'stopwatch') {
         actions.skip();
         return;
       }
@@ -433,7 +434,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   if (showResetModal) {
     return (
       <ResetModal
-        elapsed={timer.elapsed}
+        elapsed={timer.timerMode === 'stopwatch' ? timer.stopwatchElapsed : timer.elapsed}
         sessionType={engine.sessionType}
         onConfirm={handleResetConfirm}
         onCancel={() => setShowResetModal(false)}
@@ -454,6 +455,8 @@ export function App({ config: initialConfig, initialView, initialProject, initia
         isPaused={timer.isPaused}
         isRunning={timer.isRunning}
         timerFormat={config.timerFormat}
+        timerMode={timer.timerMode}
+        stopwatchElapsed={timer.stopwatchElapsed}
       />
     );
   }
@@ -463,6 +466,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       sessionType={engine.sessionType}
       isRunning={timer.isRunning}
       isPaused={timer.isPaused}
+      timerMode={timer.timerMode}
       streak={streak}
       todaySessions={todayStats.count}
       todayFocusMinutes={todayStats.focusMinutes}
@@ -484,6 +488,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       isZen={false}
       hasActiveSequence={sequence.sequenceIsActive}
       hasActiveProject={!!engine.currentProject}
+      timerMode={timer.timerMode}
       config={config}
       keymap={keymap}
     />
@@ -512,6 +517,10 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           onActivateSequence={handleActivateSequence}
           onClearSequence={handleClearSequence}
           onEditSequences={() => { setConfigSeqMode(true); setView('config'); }}
+          timerMode={timer.timerMode}
+          stopwatchElapsed={timer.stopwatchElapsed}
+          onSwitchToStopwatch={() => actions.switchToStopwatch()}
+          onStopStopwatch={() => actions.stopStopwatch()}
           keymap={keymap}
         />
       )}

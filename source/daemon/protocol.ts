@@ -24,6 +24,8 @@ export type DaemonCommand =
   | { cmd: 'activate-sequence-inline'; definition: string }
   | { cmd: 'clear-sequence' }
   | { cmd: 'advance-session' }
+  | { cmd: 'switch-to-stopwatch' }
+  | { cmd: 'stop-stopwatch' }
   | { cmd: 'update-config' }
   | { cmd: 'subscribe' }
   | { cmd: 'ping' }
