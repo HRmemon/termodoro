@@ -499,7 +499,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   return (
     <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config} hideViewHeader={showHelp}>
       {showHelp ? (
-        <HelpView onClose={() => setShowHelp(false)} keymap={keymap} setIsTyping={setIsTyping} />
+        <HelpView onClose={() => setShowHelp(false)} keymap={keymap} setIsTyping={setIsTyping} sidebarWidth={config.sidebarWidth} />
       ) : (
         <>
           {view === 'timer' && (
