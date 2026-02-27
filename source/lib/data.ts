@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { loadSessions, saveSessions, getDataDir, getSessionsPath } from './store.js';
+import { loadSessions, getDataDir, getSessionsPath, getSessionsDbPath } from './store.js';
+import { importSessions } from './session-db.js';
 import type { Session } from '../types.js';
 
 // --- CSV / Import Safety Helpers ---
@@ -161,9 +162,8 @@ export function handleImport(filePath: string): void {
       console.error('JSON file must contain an array of sessions.');
       process.exit(1);
     }
-    const existing = loadSessions();
-    const existingIds = new Set(existing.map(s => s.id));
-    let imported = 0, skipped = 0;
+    const validSessions: Session[] = [];
+    let skipped = 0;
 
     for (let i = 0; i < raw.length; i++) {
       const result = validateSession(raw[i]);
@@ -175,12 +175,10 @@ export function handleImport(filePath: string): void {
       }
       const session = raw[i] as Session;
       session.intervals = session.intervals ?? [];
-      if (existingIds.has(session.id)) { skipped++; continue; }
-      existing.push(session);
-      existingIds.add(session.id);
-      imported++;
+      validSessions.push(session);
     }
-    saveSessions(existing);
+    const imported = importSessions(validSessions);
+    skipped += validSessions.length - imported;
     console.log(`Imported ${imported} sessions (${skipped} skipped).`);
   } else if (ext === '.csv') {
     const lines = fs.readFileSync(filePath, 'utf-8').trim().split('\n');
@@ -189,16 +187,12 @@ export function handleImport(filePath: string): void {
       return;
     }
     const headers = parseCSVLine(lines[0]!);
-    const existing = loadSessions();
-    const existingIds = new Set(existing.map(s => s.id));
-    let imported = 0;
+    const validSessions: Session[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       const values = parseCSVLine(lines[i]!);
       const obj: Record<string, string> = {};
       headers.forEach((h, idx) => { obj[h] = values[idx] ?? ''; });
-
-      if (existingIds.has(obj['id']!)) continue;
 
       // Strip formula prefixes from string fields
       for (const field of ['label', 'project', 'tag']) {
@@ -231,12 +225,10 @@ export function handleImport(filePath: string): void {
         continue;
       }
 
-      existing.push(session);
-      existingIds.add(session.id);
-      imported++;
+      validSessions.push(session);
     }
 
-    saveSessions(existing);
+    const imported = importSessions(validSessions);
     console.log(`Imported ${imported} sessions from CSV.`);
   } else {
     console.error('Unsupported file format. Use .json or .csv');
@@ -250,12 +242,27 @@ export function handleBackup(): void {
   const backupDir = path.join(dataDir, 'backups');
   fs.mkdirSync(backupDir, { recursive: true });
 
+  let backed = false;
+
+  // Back up SQLite database
+  const dbPath = getSessionsDbPath();
+  if (fs.existsSync(dbPath)) {
+    const dest = path.join(backupDir, `sessions-${timestamp}.db`);
+    fs.copyFileSync(dbPath, dest);
+    console.log(`Backup created: ${dest}`);
+    backed = true;
+  }
+
+  // Also back up legacy JSON if it still exists
   const sessionsPath = getSessionsPath();
   if (fs.existsSync(sessionsPath)) {
     const dest = path.join(backupDir, `sessions-${timestamp}.json`);
     fs.copyFileSync(sessionsPath, dest);
     console.log(`Backup created: ${dest}`);
-  } else {
+    backed = true;
+  }
+
+  if (!backed) {
     console.log('No session data to back up.');
   }
 }

@@ -5,7 +5,8 @@ import { spawnSync } from 'child_process';
 import { nanoid } from 'nanoid';
 import type { View, Task, TimeBlock, ScheduledNotification, Session, SessionSequence, SequenceBlock, CalendarEvent } from '../types.js';
 import { loadTasks, saveTasks } from './tasks.js';
-import { getPlanForDate, savePlanForDate, loadSessions, saveSessions } from './store.js';
+import { getPlanForDate, savePlanForDate, loadSessions } from './store.js';
+import { updateSession } from './session-db.js';
 import { loadReminders, saveReminders } from './reminders.js';
 import { loadGoals, saveGoals } from './goals.js';
 import type { TrackedGoal } from './goals.js';
@@ -1091,10 +1092,8 @@ function parseSessions(text: string): void {
         : undefined,
     };
 
-    allMap.set(id, updated);
+    updateSession(updated);
   }
-
-  saveSessions([...allMap.values()]);
 }
 
 export function openSessionsInNvim(): void {

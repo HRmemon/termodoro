@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { Session, DayPlan, SessionType, SequenceBlock, WorkInterval } from '../types.js';
+import { getAllSessions, insertSession, replaceAllSessions, migrateFromJson, getDbPath } from './session-db.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
@@ -51,21 +52,19 @@ function readJSON<T>(filePath: string, fallback: T): T {
   return fallback;
 }
 
-// Sessions
+// Sessions — delegated to SQLite via session-db
+migrateFromJson(); // One-time migration from sessions.json on first load
+
 export function loadSessions(): Session[] {
-  const raw = readJSON<Session[]>(SESSIONS_PATH, []);
-  // Normalize legacy sessions that predate the intervals field
-  return raw.map(s => s.intervals ? s : { ...s, intervals: [] });
+  return getAllSessions();
 }
 
 export function saveSessions(sessions: Session[]): void {
-  atomicWrite(SESSIONS_PATH, sessions);
+  replaceAllSessions(sessions);
 }
 
 export function appendSession(session: Session): void {
-  const sessions = loadSessions();
-  sessions.push(session);
-  saveSessions(sessions);
+  insertSession(session); // Atomic INSERT, no read-modify-write
 }
 
 // Plans
@@ -146,4 +145,8 @@ export function getDataDir(): string {
 
 export function getSessionsPath(): string {
   return SESSIONS_PATH;
+}
+
+export function getSessionsDbPath(): string {
+  return getDbPath();
 }
