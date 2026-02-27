@@ -52,7 +52,9 @@ function readJSON<T>(filePath: string, fallback: T): T {
 
 // Sessions
 export function loadSessions(): Session[] {
-  return readJSON<Session[]>(SESSIONS_PATH, []);
+  const raw = readJSON<Session[]>(SESSIONS_PATH, []);
+  // Normalize legacy sessions that predate the intervals field
+  return raw.map(s => s.intervals ? s : { ...s, intervals: [] });
 }
 
 export function saveSessions(sessions: Session[]): void {

@@ -172,7 +172,7 @@ export class PomodoroEngine extends EventEmitter {
         : this.totalSeconds - this.secondsLeft;
       this.sessionStartedAt = new Date(now.getTime() - elapsed * 1000).toISOString();
       // Track new work interval
-      this.workIntervals.push({ start: now.toISOString(), end: '' });
+      this.workIntervals.push({ start: now.toISOString(), end: null });
       this.persistState();
       const state = this.getState();
       this.emit('timer:resume', state);
@@ -186,7 +186,7 @@ export class PomodoroEngine extends EventEmitter {
     this.isPaused = false;
     this.isComplete = false;
     this.sessionStartedAt = freshNow;
-    this.workIntervals = [{ start: freshNow, end: '' }];
+    this.workIntervals = [{ start: freshNow, end: null }];
     this.startTickInterval();
     this.persistState();
 
@@ -207,7 +207,7 @@ export class PomodoroEngine extends EventEmitter {
     // Close current work interval
     if (this.workIntervals.length > 0) {
       const last = this.workIntervals[this.workIntervals.length - 1]!;
-      if (!last.end) last.end = new Date().toISOString();
+      if (last.end === null) last.end = new Date().toISOString();
     }
     this.persistState();
     const state = this.getState();
@@ -447,6 +447,12 @@ export class PomodoroEngine extends EventEmitter {
   // Called on startup to handle timers that expired while the daemon was down
   restoreAndReconcile(): void {
     if (this.isRunning && !this.isPaused && this.sessionStartedAt) {
+      // Reopen the last interval to cover daemon-down time
+      if (this.workIntervals.length > 0) {
+        const last = this.workIntervals[this.workIntervals.length - 1]!;
+        if (last.end !== null) last.end = null;
+      }
+
       if (this.timerMode === 'stopwatch') {
         // Stopwatch was running — reconstruct elapsed from wall clock
         const wallClockTotal = Math.floor((Date.now() - new Date(this.sessionStartedAt).getTime()) / 1000);
@@ -562,14 +568,14 @@ export class PomodoroEngine extends EventEmitter {
   private closeOpenInterval(now?: string): void {
     if (this.workIntervals.length > 0) {
       const last = this.workIntervals[this.workIntervals.length - 1]!;
-      if (!last.end) last.end = now ?? new Date().toISOString();
+      if (last.end === null) last.end = now ?? new Date().toISOString();
     }
   }
 
   private intervalsActualDuration(): number {
     let total = 0;
     for (const iv of this.workIntervals) {
-      if (iv.start && iv.end) {
+      if (iv.start && iv.end !== null) {
         total += Math.floor((new Date(iv.end).getTime() - new Date(iv.start).getTime()) / 1000);
       }
     }

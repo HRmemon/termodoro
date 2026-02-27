@@ -23,7 +23,7 @@ export function handleExport(outputPath?: string): void {
     JSON.stringify(s.intervals ?? []),
   ]);
 
-  const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+  const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
   const out = outputPath ?? 'sessions.csv';
   fs.writeFileSync(out, csv + '\n', 'utf-8');
   console.log(`Exported ${sessions.length} sessions to ${out}`);

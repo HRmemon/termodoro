@@ -1,6 +1,6 @@
 export interface WorkInterval {
-  start: string;  // ISO timestamp — when work actually started/resumed
-  end: string;    // ISO timestamp — when paused/completed
+  start: string;       // ISO timestamp — when work actually started/resumed
+  end: string | null;  // ISO timestamp — when paused/completed; null while open
 }
 
 export interface Session {
