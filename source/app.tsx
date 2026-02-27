@@ -433,10 +433,6 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     );
   }
 
-  if (showHelp) {
-    return <HelpView onClose={() => setShowHelp(false)} keymap={keymap} setIsTyping={setIsTyping} />;
-  }
-
   if (showResetModal) {
     return (
       <ResetModal
@@ -501,7 +497,11 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   ) : null;
 
   return (
-    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config}>
+    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config} overlayTitle={showHelp ? 'Keybindings' : undefined}>
+      {showHelp ? (
+        <HelpView onClose={() => setShowHelp(false)} keymap={keymap} setIsTyping={setIsTyping} />
+      ) : (
+      <>
       {view === 'timer' && (
         <TimerView
           secondsLeft={timer.secondsLeft}
@@ -569,6 +569,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
       {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
       {view === 'calendar' && <CalendarView setIsTyping={setIsTyping} config={config} keymap={keymap} />}
+      </>)}
     </Layout>
   );
 }

@@ -269,9 +269,10 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
     return out;
   }, [lines]);
 
-  // Total content height + 1 for search bar
-  const contentHeight = termRows;
-  const bodyHeight = contentHeight - 1; // 1 for search bar
+  // Estimate available rows inside Layout (terminal - Layout chrome)
+  const layoutChrome = 10; // borders, status bar, keys bar, view header
+  const availableRows = Math.max(5, termRows - layoutChrome);
+  const bodyHeight = availableRows - 1; // 1 for search bar
   const totalLines = renderLines.length;
   const visibleCount = Math.min(bodyHeight, totalLines);
   const maxScroll = Math.max(0, totalLines - visibleCount);
@@ -283,7 +284,7 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
   const canScrollDown = clampedOffset < maxScroll;
 
   return (
-    <Box flexDirection="column" height={contentHeight} overflow="hidden">
+    <Box flexDirection="column">
       {/* Search bar - always at top */}
       <Box flexShrink={0}>
         <Text>  </Text>
