@@ -63,6 +63,26 @@ const page1 = [
 
 const page2 = [
   {
+    title: '[0] Calendar',
+    hints: [
+      ['h/l', 'Prev / next day'],
+      ['j/k', 'Prev / next week'],
+      ['v', 'Toggle monthly/daily'],
+      ['Enter', 'Open daily view'],
+      ['t', 'Go to today'],
+      ['f', 'Toggle session heatmap'],
+      ['a', 'Add event'],
+      ['e', 'Edit event (daily)'],
+      ['d', 'Delete event'],
+      ['x', 'Toggle done'],
+      ['i', 'Toggle important'],
+      ['.', 'Toggle privacy'],
+      ['*', 'Toggle global privacy'],
+      ['Q', 'Reload ICS files'],
+      ['Tab', 'Switch pane'],
+    ],
+  },
+  {
     title: '[5] Stats',
     hints: [
       ['h/l', 'Switch tab'],

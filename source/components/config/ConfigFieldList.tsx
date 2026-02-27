@@ -44,6 +44,11 @@ export const FIELDS: ConfigField[] = [
   { key: 'layout.sidebar', label: 'Sidebar', type: 'cycle', values: ['visible', 'hidden'] },
   { key: 'layout.showKeysBar', label: 'Keys Bar', type: 'boolean' },
   { key: 'layout.compact', label: 'Compact Mode', type: 'boolean' },
+  { key: 'calendar.showSessionHeatmap', label: 'Cal: Heatmap', type: 'boolean' },
+  { key: 'calendar.weekStartsOn', label: 'Cal: Week Start', type: 'cycle', values: ['1', '0'] },
+  { key: 'calendar.showWeekNumbers', label: 'Cal: Week Numbers', type: 'boolean' },
+  { key: 'calendar.defaultView', label: 'Cal: Default View', type: 'cycle', values: ['monthly', 'daily'] },
+  { key: 'calendar.privacyMode', label: 'Cal: Privacy Mode', type: 'boolean' },
 ];
 
 interface ConfigFieldListProps {

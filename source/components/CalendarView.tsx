@@ -13,6 +13,7 @@ import { EventForm } from './EventForm.js';
 import type { Keymap } from '../lib/keymap.js';
 import { getTodayStr, parseDateParts, formatDateStr, getMonthDays, addDays } from '../lib/date-utils.js';
 import { saveConfig, loadConfig } from '../lib/config.js';
+import { setCalendarSelectedDate } from '../lib/nvim-edit.js';
 
 type ViewMode = 'monthly' | 'daily' | 'add' | 'edit';
 
@@ -56,6 +57,11 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
     const interval = setInterval(() => setToday(getTodayStr()), 60_000);
     return () => clearInterval(interval);
   }, []);
+
+  // Keep nvim-edit in sync with selected date for cursor positioning
+  useEffect(() => {
+    setCalendarSelectedDate(selectedDate);
+  }, [selectedDate]);
 
   // Load user events
   const allUserEvents = useMemo(() => loadEvents(), [eventVersion]);
