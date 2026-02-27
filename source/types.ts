@@ -156,6 +156,7 @@ export interface CalendarConfig {
   privacyMode?: boolean;
   icons?: Record<string, string>;
   icsColors?: string[];
+  maxEventLines?: number;
 }
 
 export interface TagInfo {

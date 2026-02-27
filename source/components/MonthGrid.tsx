@@ -118,7 +118,8 @@ export function MonthGrid({
   // Each week uses 1 separator row (dim border) + content rows
   const separatorRows = weeks.length - 1; // no separator after last week
   const rowsPerWeek = Math.max(2, Math.floor((availForWeeks - separatorRows) / weeks.length));
-  const eventLines = Math.max(0, rowsPerWeek - 1);
+  const maxEventLines = calendarConfig?.maxEventLines ?? 3;
+  const eventLines = Math.min(Math.max(0, rowsPerWeek - 1), maxEventLines);
   const dimBorder = '·'.repeat(cellWidth * 7 + wnWidth);
 
   return (
@@ -210,9 +211,7 @@ export function MonthGrid({
                 {showWeekNumbers && <Text>{'    '}</Text>}
                 {week.map((cell, ci) => {
                   const sep = ci < 6 ? vSep : '';
-                  if (cell.filler) {
-                    return <Text key={`filler-ev-${ci}`}>{' '.repeat(cellWidth - (sep ? 1 : 0))}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>;
-                  }
+                  const isFiller = !!cell.filler;
 
                   const events = eventsByDate.get(cell.dateStr) ?? [];
 
@@ -246,9 +245,10 @@ export function MonthGrid({
                   const prefix = (!isStart && event.endDate) ? '→' : icon;
 
                   let eventColor = event.color ?? colors.highlight;
-                  if (event.status === 'done') eventColor = colors.dim;
-                  if (event.status === 'important') eventColor = colors.focus;
-                  if (event.source === 'ics') eventColor = colors.break;
+                  if (isFiller) eventColor = colors.dim;
+                  else if (event.status === 'done') eventColor = colors.dim;
+                  else if (event.status === 'important') eventColor = colors.focus;
+                  if (event.source === 'ics') eventColor = isFiller ? colors.dim : colors.break;
 
                   const content = `${prefix} ${display}`;
                   const pad = ' '.repeat(Math.max(0, cellWidth - content.length - (sep ? 1 : 0)));

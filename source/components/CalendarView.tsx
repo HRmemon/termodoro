@@ -90,11 +90,56 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
 
   const allEvents = useMemo(() => [...allUserEvents, ...icsEvents], [allUserEvents, icsEvents]);
 
-  // Month data
-  const eventsByDate = useMemo(
-    () => getEventsForMonth(allEvents, year, month),
-    [allEvents, year, month],
-  );
+  // Month data — include filler days from adjacent months
+  const eventsByDate = useMemo(() => {
+    const map = getEventsForMonth(allEvents, year, month);
+
+    // Compute filler date range
+    const mondayStart = (calendarConfig?.weekStartsOn ?? 1) === 1;
+    const firstDow = (() => {
+      const d = new Date(year, month - 1, 1).getDay();
+      return mondayStart ? (d + 6) % 7 : d;
+    })();
+
+    // Previous month filler days
+    if (firstDow > 0) {
+      const prevMonth = month === 1 ? 12 : month - 1;
+      const prevYear = month === 1 ? year - 1 : year;
+      const prevMonthDays = new Date(prevYear, prevMonth, 0).getDate();
+      const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevMonthDays - firstDow + 1).padStart(2, '0')}`;
+      const prevEnd = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevMonthDays).padStart(2, '0')}`;
+      const prevExpanded = expandRecurring(allEvents, prevStart, prevEnd);
+      for (const e of prevExpanded) {
+        if (e.date >= prevStart && e.date <= prevEnd) {
+          if (!map.has(e.date)) map.set(e.date, []);
+          map.get(e.date)!.push(e);
+        }
+      }
+    }
+
+    // Next month filler days
+    const totalDays = new Date(year, month, 0).getDate();
+    const lastDow = (() => {
+      const d = new Date(year, month - 1, totalDays).getDay();
+      return mondayStart ? (d + 6) % 7 : d;
+    })();
+    const trailingDays = lastDow < 6 ? 6 - lastDow : 0;
+    if (trailingDays > 0) {
+      const nextMonth = month === 12 ? 1 : month + 1;
+      const nextYear = month === 12 ? year + 1 : year;
+      const nextStart = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+      const nextEnd = `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(trailingDays).padStart(2, '0')}`;
+      const nextExpanded = expandRecurring(allEvents, nextStart, nextEnd);
+      for (const e of nextExpanded) {
+        if (e.date >= nextStart && e.date <= nextEnd) {
+          if (!map.has(e.date)) map.set(e.date, []);
+          map.get(e.date)!.push(e);
+        }
+      }
+    }
+
+    return map;
+  }, [allEvents, year, month, calendarConfig?.weekStartsOn]);
 
   // Session heatmap
   const sessionMinutesByDate = useMemo(() => {
