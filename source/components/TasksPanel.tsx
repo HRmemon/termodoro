@@ -4,72 +4,39 @@ import { colors } from '../lib/theme.js';
 import { getPrivacyDisplay, getEventIcon } from '../lib/event-icons.js';
 import type { CalendarConfig } from '../types.js';
 
-export type PaneId = 'calendar' | 'today' | 'tasks';
-
-interface TasksPanelProps {
+interface DayPanelProps {
   selectedDate: string;
   selectedEvents: CalendarEvent[];
   selectedTasks: Task[];
-  allTasks: Task[];
   width: number;
   maxRows: number;
   isGlobalPrivacy?: boolean;
-  focusedPane: PaneId;
-  todayCollapsed: boolean;
-  tasksCollapsed: boolean;
-  todayScrollOffset: number;
-  tasksScrollOffset: number;
+  isFocused: boolean;
+  collapsed: boolean;
+  scrollOffset: number;
   calendarConfig?: CalendarConfig;
 }
 
-function TaskItem({ task, width, isGlobalPrivacy, done }: { task: Task; width: number; isGlobalPrivacy?: boolean; done?: boolean }) {
-  const name = isGlobalPrivacy ? getPrivacyDisplay(task.text) : task.text;
-  const projectStr = task.project ? ` #${task.project}` : '';
-  const bulletStr = done ? '✔ ' : '• ';
-
-  const maxLen = Math.max(0, width - bulletStr.length - projectStr.length);
-  const display = name.length > maxLen ? name.slice(0, Math.max(0, maxLen - 1)) + '…' : name;
-
-  return (
-    <Box flexShrink={0}>
-      <Text color={done ? colors.dim : colors.highlight}>{bulletStr}</Text>
-      <Text color={done ? colors.dim : colors.text}>{display}</Text>
-      {task.project && <Text dimColor>{projectStr}</Text>}
-    </Box>
-  );
-}
-
-export function TasksPanel({
+export function DayPanel({
   selectedDate,
   selectedEvents,
   selectedTasks,
-  allTasks,
   width,
   maxRows,
   isGlobalPrivacy,
-  focusedPane,
-  todayCollapsed,
-  tasksCollapsed,
-  todayScrollOffset,
-  tasksScrollOffset,
+  isFocused,
+  collapsed,
+  scrollOffset,
   calendarConfig,
-}: TasksPanelProps) {
-  const isTodayFocused = focusedPane === 'today';
-  const isTasksFocused = focusedPane === 'tasks';
+}: DayPanelProps) {
+  const headerColor = isFocused ? colors.highlight : colors.dim;
 
-  const todayHeader = isTodayFocused ? colors.highlight : colors.dim;
-  const tasksHeader = isTasksFocused ? colors.highlight : colors.dim;
-
-  // Fixed 50/50 split: each box gets half of maxRows
-  // Each box: 1 header + 1 separator + content lines
-  const boxHeaderCost = 2;
-  const halfRows = Math.floor(maxRows / 2);
-  const todayContentRows = todayCollapsed ? 0 : halfRows - boxHeaderCost;
-  const tasksContentRows = tasksCollapsed ? 0 : halfRows - boxHeaderCost;
+  const boxHeaderCost = 2; // header + separator
+  const contentRows = collapsed ? 0 : maxRows - boxHeaderCost;
 
   const sep = '─'.repeat(Math.max(0, width - 2));
 
-  // Selected day items: events + tasks with deadlines on that day
+  // Merge events + task deadlines into a single list
   type DayItem = { type: 'event'; event: CalendarEvent } | { type: 'task'; task: Task };
   const dayItems: DayItem[] = [];
   for (const e of selectedEvents) {
@@ -79,28 +46,24 @@ export function TasksPanel({
     dayItems.push({ type: 'task', task: t });
   }
 
-  // Compute visible items with stable scroll indicators
-  // Top indicator shown only when scrolled down; bottom only when more items below
-  const todayHasPrev = todayScrollOffset > 0;
-  const todayTopCost = todayHasPrev ? 1 : 0;
-  const todayTentative = Math.max(0, todayContentRows - todayTopCost);
-  const todayHasMore = dayItems.length > todayScrollOffset + todayTentative;
-  const todayBottomCost = todayHasMore ? 1 : 0;
-  const todayVisibleCount = Math.max(0, todayContentRows - todayTopCost - todayBottomCost);
-  const todayVisible = dayItems.slice(todayScrollOffset, todayScrollOffset + todayVisibleCount);
-  const todayHasMoreFinal = dayItems.length > todayScrollOffset + todayVisibleCount;
+  // Scroll indicators
+  const hasPrev = scrollOffset > 0;
+  const topCost = hasPrev ? 1 : 0;
+  const tentative = Math.max(0, contentRows - topCost);
+  const hasMore = dayItems.length > scrollOffset + tentative;
+  const bottomCost = hasMore ? 1 : 0;
+  const visibleCount = Math.max(0, contentRows - topCost - bottomCost);
+  const visible = dayItems.slice(scrollOffset, scrollOffset + visibleCount);
+  const hasMoreFinal = dayItems.length > scrollOffset + visibleCount;
 
-  // All tasks: pending first, then done
-  const tasksList = [...allTasks.filter(t => !t.completed), ...allTasks.filter(t => t.completed)];
-
-  const tasksHasPrev = tasksScrollOffset > 0;
-  const tasksTopCost = tasksHasPrev ? 1 : 0;
-  const tasksTentative = Math.max(0, tasksContentRows - tasksTopCost);
-  const tasksHasMore = tasksList.length > tasksScrollOffset + tasksTentative;
-  const tasksBottomCost = tasksHasMore ? 1 : 0;
-  const tasksVisibleCount = Math.max(0, tasksContentRows - tasksTopCost - tasksBottomCost);
-  const tasksVisible = tasksList.slice(tasksScrollOffset, tasksScrollOffset + tasksVisibleCount);
-  const tasksHasMoreFinal = tasksList.length > tasksScrollOffset + tasksVisibleCount;
+  // Count content lines for padding
+  let contentLines = 0;
+  if (!collapsed) {
+    contentLines += topCost;
+    contentLines += dayItems.length === 0 ? 1 : visible.length;
+    contentLines += hasMoreFinal ? 1 : 0;
+  }
+  const padLines = Math.max(0, (collapsed ? maxRows - boxHeaderCost : contentRows) - contentLines);
 
   // Format date for header: "Feb 27" style
   const dateParts = selectedDate.split('-');
@@ -110,157 +73,91 @@ export function TasksPanel({
     : selectedDate;
 
   const border = colors.dim;
-  const innerWidth = width - 1; // 1 char for left │ border
-
-  // Count actual content lines rendered per box to pad with │ for remaining
-  let dayContentLines = 0;
-  if (!todayCollapsed) {
-    dayContentLines += todayTopCost;
-    dayContentLines += dayItems.length === 0 ? 1 : todayVisible.length;
-    dayContentLines += todayHasMoreFinal ? 1 : 0;
-  }
-  const dayPadLines = Math.max(0, (todayCollapsed ? halfRows - boxHeaderCost : todayContentRows) - dayContentLines);
-
-  let tasksContentLines = 0;
-  if (!tasksCollapsed) {
-    tasksContentLines += tasksTopCost;
-    tasksContentLines += tasksList.length === 0 ? 1 : tasksVisible.length;
-    tasksContentLines += tasksHasMoreFinal ? 1 : 0;
-  }
-  const tasksPadLines = Math.max(0, (tasksCollapsed ? halfRows - boxHeaderCost : tasksContentRows) - tasksContentLines);
+  const innerWidth = width - 1;
 
   return (
-    <Box flexDirection="column" width={width}>
-      {/* ─── Selected day box ─── */}
-      <Box height={halfRows} flexDirection="column" overflow="hidden">
-        <Box flexShrink={0}>
-          <Text color={border}>│</Text>
-          <Text bold color={todayHeader}>
-            {isTodayFocused ? '▸ ' : ' '}{dateLabel}{todayCollapsed ? ' [+]' : ''}
-          </Text>
-        </Box>
-        <Box flexShrink={0}>
-          <Text color={border}>├{sep}</Text>
-        </Box>
+    <Box flexDirection="column" width={width} height={maxRows} overflow="hidden">
+      <Box flexShrink={0}>
+        <Text color={border}>│</Text>
+        <Text bold color={headerColor}>
+          {isFocused ? '▸ ' : ' '}{dateLabel}{collapsed ? ' [+]' : ''}
+        </Text>
+      </Box>
+      <Box flexShrink={0}>
+        <Text color={border}>├{sep}</Text>
+      </Box>
 
-        {!todayCollapsed && (
-          <>
-            {todayHasPrev && (
-              <Box flexShrink={0}>
-                <Text color={border}>│</Text>
-                <Text dimColor> ↑ more</Text>
-              </Box>
-            )}
-            {dayItems.length === 0 && (
-              <Box flexShrink={0}>
-                <Text color={border}>│</Text>
-                <Text dimColor> No events</Text>
-              </Box>
-            )}
-            {todayVisible.map((item, i) => {
-              if (item.type === 'event') {
-                const e = item.event;
-                const icon = getEventIcon(e, calendarConfig, isGlobalPrivacy);
-                const title = isGlobalPrivacy || e.privacy
-                  ? getPrivacyDisplay(e.title)
-                  : e.title;
+      {!collapsed && (
+        <>
+          {hasPrev && (
+            <Box flexShrink={0}>
+              <Text color={border}>│</Text>
+              <Text dimColor> ↑ more</Text>
+            </Box>
+          )}
+          {dayItems.length === 0 && (
+            <Box flexShrink={0}>
+              <Text color={border}>│</Text>
+              <Text dimColor> No events</Text>
+            </Box>
+          )}
+          {visible.map((item, i) => {
+            if (item.type === 'event') {
+              const e = item.event;
+              const icon = getEventIcon(e, calendarConfig, isGlobalPrivacy);
+              const title = isGlobalPrivacy || e.privacy
+                ? getPrivacyDisplay(e.title)
+                : e.title;
 
-                const timeStr = e.time ? ` ${e.time}` : '';
-                const iconStr = `${icon} `;
+              const timeStr = e.time ? ` ${e.time}` : '';
+              const iconStr = `${icon} `;
 
-                const maxLen = Math.max(0, innerWidth - iconStr.length - timeStr.length);
-                const display = title.length > maxLen ? title.slice(0, Math.max(0, maxLen - 1)) + '…' : title;
+              const maxLen = Math.max(0, innerWidth - iconStr.length - timeStr.length);
+              const display = title.length > maxLen ? title.slice(0, Math.max(0, maxLen - 1)) + '…' : title;
 
-                let eventColor = e.color ?? colors.highlight;
-                if (e.status === 'done') eventColor = colors.dim;
-                if (e.source === 'ics') eventColor = colors.break;
-                return (
-                  <Box key={`te-${i}`} flexShrink={0}>
-                    <Text color={border}>│</Text>
-                    <Text color={eventColor}>{iconStr}{display}</Text>
-                    {e.time && <Text dimColor>{timeStr}</Text>}
-                  </Box>
-                );
-              }
-              // item.type === 'task'
+              let eventColor = e.color ?? colors.highlight;
+              if (e.status === 'done') eventColor = colors.dim;
+              if (e.source === 'ics') eventColor = colors.break;
               return (
-                <Box key={`tt-${i}`} flexShrink={0}>
+                <Box key={`e-${i}`} flexShrink={0}>
                   <Text color={border}>│</Text>
-                  <TaskItem task={item.task} width={innerWidth} isGlobalPrivacy={isGlobalPrivacy} done={item.task.completed} />
+                  <Text color={eventColor}>{iconStr}{display}</Text>
+                  {e.time && <Text dimColor>{timeStr}</Text>}
                 </Box>
               );
-            })}
-            {todayHasMoreFinal && (
-              <Box flexShrink={0}>
+            }
+            // task deadline
+            const t = item.task;
+            const name = isGlobalPrivacy ? getPrivacyDisplay(t.text) : t.text;
+            const projectStr = t.project ? ` #${t.project}` : '';
+            const bulletStr = t.completed ? '✔ ' : '• ';
+            const maxLen = Math.max(0, innerWidth - bulletStr.length - projectStr.length);
+            const display = name.length > maxLen ? name.slice(0, Math.max(0, maxLen - 1)) + '…' : name;
+            return (
+              <Box key={`t-${i}`} flexShrink={0}>
                 <Text color={border}>│</Text>
-                <Text dimColor> ↓ more</Text>
+                <Text color={t.completed ? colors.dim : colors.highlight}>{bulletStr}</Text>
+                <Text color={t.completed ? colors.dim : colors.text}>{display}</Text>
+                {t.project && <Text dimColor>{projectStr}</Text>}
               </Box>
-            )}
-          </>
-        )}
-        {Array.from({ length: dayPadLines }).map((_, i) => (
-          <Box key={`dpad-${i}`} flexShrink={0}><Text color={border}>│</Text></Box>
-        ))}
-      </Box>
-
-      {/* ─── TASKS box ─── */}
-      <Box height={halfRows} flexDirection="column" overflow="hidden">
-        <Box flexShrink={0}>
-          <Text color={border}>│</Text>
-          <Text bold color={tasksHeader}>
-            {isTasksFocused ? '▸ ' : ' '}TASKS{tasksCollapsed ? ' [+]' : ''}
-          </Text>
-        </Box>
-        <Box flexShrink={0}>
-          <Text color={border}>├{sep}</Text>
-        </Box>
-
-        {!tasksCollapsed && (
-          <>
-            {tasksHasPrev && (
-              <Box flexShrink={0}>
-                <Text color={border}>│</Text>
-                <Text dimColor> ↑ more</Text>
-              </Box>
-            )}
-            {tasksList.length === 0 && (
-              <Box flexShrink={0}>
-                <Text color={border}>│</Text>
-                <Text dimColor> No tasks</Text>
-              </Box>
-            )}
-            {tasksVisible.map((task) => (
-              <Box key={task.id} flexShrink={0}>
-                <Text color={border}>│</Text>
-                <TaskItem
-                  task={task}
-                  width={innerWidth}
-                  isGlobalPrivacy={isGlobalPrivacy}
-                  done={task.completed}
-                />
-              </Box>
-            ))}
-            {tasksHasMoreFinal && (
-              <Box flexShrink={0}>
-                <Text color={border}>│</Text>
-                <Text dimColor> ↓ more</Text>
-              </Box>
-            )}
-          </>
-        )}
-        {Array.from({ length: tasksPadLines }).map((_, i) => (
-          <Box key={`tpad-${i}`} flexShrink={0}><Text color={border}>│</Text></Box>
-        ))}
-      </Box>
+            );
+          })}
+          {hasMoreFinal && (
+            <Box flexShrink={0}>
+              <Text color={border}>│</Text>
+              <Text dimColor> ↓ more</Text>
+            </Box>
+          )}
+        </>
+      )}
+      {Array.from({ length: padLines }).map((_, i) => (
+        <Box key={`pad-${i}`} flexShrink={0}><Text color={border}>│</Text></Box>
+      ))}
     </Box>
   );
 }
 
-/** Get total item count for a pane (used by CalendarView to clamp scroll) */
+/** Get total item count for scroll clamping */
 export function getDayItemCount(events: CalendarEvent[], tasks: Task[]): number {
   return events.length + tasks.length;
-}
-
-export function getTasksItemCount(allTasks: Task[]): number {
-  return allTasks.length;
 }

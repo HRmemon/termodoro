@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
+import { Box, useInput, useStdout } from 'ink';
 import type { CalendarEvent, Config } from '../types.js';
 import { loadEvents, addEvent, updateEvent, deleteEvent, expandRecurring } from '../lib/events.js';
 import { loadIcsEvents } from '../lib/ics.js';
@@ -8,15 +8,16 @@ import { loadTasks } from '../lib/tasks.js';
 import { loadReminders } from '../lib/reminders.js';
 import { MonthGrid } from './MonthGrid.js';
 import { DayAgenda } from './DayAgenda.js';
-import { TasksPanel, getDayItemCount, getTasksItemCount } from './TasksPanel.js';
-import type { PaneId } from './TasksPanel.js';
+import { DayPanel, getDayItemCount } from './TasksPanel.js';
 import { EventForm } from './EventForm.js';
 import type { Keymap } from '../lib/keymap.js';
 import { getTodayStr, parseDateParts, formatDateStr, getMonthDays, addDays } from '../lib/date-utils.js';
+import { saveConfig, loadConfig } from '../lib/config.js';
 
 type ViewMode = 'monthly' | 'daily' | 'add' | 'edit';
 
-const PANES: PaneId[] = ['calendar', 'today', 'tasks'];
+type PaneId = 'calendar' | 'today';
+const PANES: PaneId[] = ['calendar', 'today'];
 
 // Layout overhead from Layout.tsx: top border(1) + view header+margin(2) + mid divider(1)
 // + status row(1) + simpleDivider(1) + keysBar content+border(3) + safeRows -1 adjustment(1) = 10
@@ -40,9 +41,7 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   const [dailySelectedIdx, setDailySelectedIdx] = useState(0);
   const [focusedPane, setFocusedPane] = useState<PaneId>('calendar');
   const [todayCollapsed, setTodayCollapsed] = useState(false);
-  const [tasksCollapsed, setTasksCollapsed] = useState(false);
   const [todayScrollOffset, setTodayScrollOffset] = useState(0);
-  const [tasksScrollOffset, setTasksScrollOffset] = useState(0);
   const [showHeatmap, setShowHeatmap] = useState(calendarConfig?.showSessionHeatmap !== false);
 
   const { stdout } = useStdout();
@@ -156,9 +155,6 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
     );
   }, [selectedDate, eventVersion]);
 
-  // All tasks for the right panel
-  const allTasks = useMemo(() => loadTasks(), [eventVersion]);
-
   // Reset cursor and day-panel scroll when selected date changes
   useEffect(() => { setDailySelectedIdx(0); setTodayScrollOffset(0); }, [selectedDate]);
 
@@ -236,17 +232,21 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
       return;
     }
     if (keymap.matches('calendar.toggle_heatmap', input, key)) {
-      setShowHeatmap(prev => !prev);
+      setShowHeatmap(prev => {
+        const next = !prev;
+        // Persist to config
+        const cfg = loadConfig();
+        if (!cfg.calendar) cfg.calendar = {};
+        cfg.calendar.showSessionHeatmap = next;
+        saveConfig(cfg);
+        return next;
+      });
       return;
     }
 
     // Toggle collapse on focused right-side pane with Enter
     if (focusedPane === 'today' && key.return) {
       setTodayCollapsed(prev => !prev);
-      return;
-    }
-    if (focusedPane === 'tasks' && key.return) {
-      setTasksCollapsed(prev => !prev);
       return;
     }
 
@@ -357,17 +357,6 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
       }
     }
 
-    if (focusedPane === 'tasks') {
-      const totalItems = getTasksItemCount(allTasks);
-      if (keymap.matches('nav.down', input, key)) {
-        setTasksScrollOffset(prev => Math.min(prev + 1, Math.max(0, totalItems - 1)));
-        return;
-      }
-      if (keymap.matches('nav.up', input, key)) {
-        setTasksScrollOffset(prev => Math.max(prev - 1, 0));
-        return;
-      }
-    }
   });
 
   // Layout calculations
@@ -400,19 +389,16 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   }
 
   const rightPanel = (
-    <TasksPanel
+    <DayPanel
       selectedDate={selectedDate}
       selectedEvents={dayEvents}
       selectedTasks={dayTasks}
-      allTasks={allTasks}
       width={tasksPanelWidth}
       maxRows={maxGridRows}
       isGlobalPrivacy={isGlobalPrivacy}
-      focusedPane={focusedPane}
-      todayCollapsed={todayCollapsed}
-      tasksCollapsed={tasksCollapsed}
-      todayScrollOffset={todayScrollOffset}
-      tasksScrollOffset={tasksScrollOffset}
+      isFocused={focusedPane === 'today'}
+      collapsed={todayCollapsed}
+      scrollOffset={todayScrollOffset}
       calendarConfig={calendarConfig}
     />
   );
