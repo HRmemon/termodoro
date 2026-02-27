@@ -2,6 +2,7 @@ import { Box, Text } from 'ink';
 import type { CalendarEvent, CalendarConfig } from '../types.js';
 import { colors } from '../lib/theme.js';
 import { getEventIcon, getPrivacyDisplay } from '../lib/event-icons.js';
+import { getMonthDays, formatDateStr } from '../lib/date-utils.js';
 
 interface MonthGridProps {
   year: number;
@@ -14,20 +15,22 @@ interface MonthGridProps {
   calendarConfig?: CalendarConfig;
   isGlobalPrivacy?: boolean;
   contentWidth: number;
-  maxRows: number;             // available rows for the grid
+  maxRows: number;
+  showHeatmap?: boolean;
 }
 
-const DAY_NAMES_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const DAY_NAMES_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const FULL_DAY_NAMES_MON = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const FULL_DAY_NAMES_SUN = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 
-const HEATMAP_BLOCKS = ['·', '░', '▒', '▓', '█'] as const;
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
-function getHeatmapBlock(minutes: number): { char: string; color: string; dim: boolean } {
-  if (minutes <= 0) return { char: '', color: 'white', dim: true };
-  if (minutes < 30) return { char: HEATMAP_BLOCKS[1]!, color: 'green', dim: true };
-  if (minutes < 60) return { char: HEATMAP_BLOCKS[2]!, color: 'green', dim: false };
-  if (minutes < 120) return { char: HEATMAP_BLOCKS[3]!, color: 'green', dim: false };
-  return { char: HEATMAP_BLOCKS[4]!, color: 'green', dim: false };
+function getDayOfWeek(year: number, month: number, day: number, mondayStart: boolean): number {
+  const d = new Date(year, month - 1, day).getDay();
+  if (mondayStart) return (d + 6) % 7;
+  return d;
 }
 
 function getWeekNumber(date: Date): number {
@@ -38,30 +41,10 @@ function getWeekNumber(date: Date): number {
   return 1 + Math.round(((d.getTime() - yearStart.getTime()) / 86400000 - 3 + ((yearStart.getDay() + 6) % 7)) / 7);
 }
 
-function getMonthDays(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
-
-function getDayOfWeek(year: number, month: number, day: number, mondayStart: boolean): number {
-  const d = new Date(year, month - 1, day).getDay(); // 0=Sun
-  if (mondayStart) return (d + 6) % 7; // 0=Mon
-  return d;
-}
-
-function formatDateStr(year: number, month: number, day: number): string {
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
 export function MonthGrid({
   year,
   month,
   eventsByDate,
-  sessionMinutesByDate,
   selectedDate,
   today,
   showWeekNumbers,
@@ -69,21 +52,35 @@ export function MonthGrid({
   isGlobalPrivacy,
   contentWidth,
   maxRows,
+  sessionMinutesByDate,
+  showHeatmap: showHeatmapProp,
 }: MonthGridProps) {
   const mondayStart = (calendarConfig?.weekStartsOn ?? 1) === 1;
-  const dayNames = mondayStart ? DAY_NAMES_MON : DAY_NAMES_SUN;
-  const showHeatmap = calendarConfig?.showSessionHeatmap !== false;
+  const dayNames = mondayStart ? FULL_DAY_NAMES_MON : FULL_DAY_NAMES_SUN;
+  const showHeatmap = showHeatmapProp ?? (calendarConfig?.showSessionHeatmap !== false);
 
   const wnWidth = showWeekNumbers ? 4 : 0;
-  const availWidth = contentWidth - wnWidth - 1;
-  const cellWidth = Math.max(5, Math.floor(availWidth / 7));
+  const gridWidth = contentWidth - wnWidth;
+  const cellWidth = Math.max(4, Math.floor(gridWidth / 7));
+  const vSep = '·';
   const totalDays = getMonthDays(year, month);
   const firstDow = getDayOfWeek(year, month, 1, mondayStart);
 
-  // Build week rows
-  type DayCell = { day: number; dateStr: string } | null;
+  // Build week rows with prev/next month filler days
+  type DayCell = { day: number; dateStr: string; filler?: boolean };
   const weeks: DayCell[][] = [];
-  let currentWeek: DayCell[] = Array(firstDow).fill(null) as DayCell[];
+  let currentWeek: DayCell[] = [];
+
+  // Fill leading days from previous month
+  if (firstDow > 0) {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevMonthDays = getMonthDays(prevYear, prevMonth);
+    for (let i = firstDow - 1; i >= 0; i--) {
+      const d = prevMonthDays - i;
+      currentWeek.push({ day: d, dateStr: formatDateStr(prevYear, prevMonth, d), filler: true });
+    }
+  }
 
   for (let d = 1; d <= totalDays; d++) {
     const dateStr = formatDateStr(year, month, d);
@@ -93,145 +90,189 @@ export function MonthGrid({
       currentWeek = [];
     }
   }
+
+  // Fill trailing days from next month
   if (currentWeek.length > 0) {
-    while (currentWeek.length < 7) currentWeek.push(null);
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    let nextDay = 1;
+    while (currentWeek.length < 7) {
+      currentWeek.push({ day: nextDay, dateStr: formatDateStr(nextYear, nextMonth, nextDay), filler: true });
+      nextDay++;
+    }
     weeks.push(currentWeek);
   }
 
-  // How many event lines can fit per cell
-  // Header row (month) + day names row + (weeks × lines per week)
-  // Each week row = 1 (day number) + eventLines
-  const headerRows = 2; // month title + day names
-  const availForWeeks = maxRows - headerRows;
-  const linesPerWeek = Math.max(1, Math.floor(availForWeeks / weeks.length));
-  const eventLines = Math.max(0, linesPerWeek - 1); // subtract day number row
+  // Calculate how many event lines fit per cell
+  // Layout: 1 month title + 1 day names + 1 divider + week rows with separators between them
+  const headerRows = 3; // month title + day names + divider
+  const availForWeeks = Math.max(0, maxRows - headerRows);
+  const separatorRows = Math.max(0, weeks.length - 1);
+  const totalCellRows = Math.max(0, availForWeeks - separatorRows);
+
+  const baseRowsPerWeek = weeks.length > 0 ? Math.floor(totalCellRows / weeks.length) : 0;
+  const remainder = weeks.length > 0 ? totalCellRows % weeks.length : 0;
+
+  // Per-week event lines: distribute remainder to first N weeks
+  // All allocated space (minus day-number row) becomes event slots — no cap
+  const eventLinesPerWeek: number[] = [];
+  for (let wi = 0; wi < weeks.length; wi++) {
+    const allocatedRows = baseRowsPerWeek + (wi < remainder ? 1 : 0);
+    eventLinesPerWeek.push(Math.max(0, allocatedRows - 1));
+  }
+  const dimBorder = '·'.repeat(cellWidth * 7 + wnWidth);
 
   return (
     <Box flexDirection="column">
-      {/* Month header */}
-      <Box justifyContent="center" marginBottom={0}>
-        <Text color={colors.dim}>{'◀ '}</Text>
-        <Text bold color={colors.text}>{MONTH_NAMES[month - 1]} {year}</Text>
-        <Text color={colors.dim}>{' ▶'}</Text>
+      {/* Month + Year header */}
+      <Box>
+        {showWeekNumbers && <Box width={wnWidth}><Text> </Text></Box>}
+        <Text bold color={colors.text}>
+          {MONTH_NAMES[month - 1]} {year}
+        </Text>
       </Box>
 
       {/* Day names row */}
       <Box>
-        {showWeekNumbers && <Box width={wnWidth}><Text dimColor>{'Wk '}</Text></Box>}
-        {dayNames.map((name, i) => (
-          <Box key={name} width={cellWidth}>
-            <Text color={i >= 5 ? colors.dim : colors.text} bold>{name.slice(0, cellWidth - 1)}</Text>
-          </Box>
-        ))}
+        {showWeekNumbers && <Box width={wnWidth}><Text dimColor>{'    '}</Text></Box>}
+        {dayNames.map((name, i) => {
+          const truncName = name.slice(0, cellWidth - 2);
+          const pad = ' '.repeat(Math.max(0, cellWidth - 1 - truncName.length));
+          return (
+            <Text key={name} color={colors.dim}>
+              {truncName}{pad}{i < 6 ? <Text color={colors.dim}>{vSep}</Text> : ''}
+            </Text>
+          );
+        })}
       </Box>
+
+      {/* Divider below day names */}
+      <Text color={colors.dim}>{dimBorder}</Text>
 
       {/* Week rows */}
       {weeks.map((week, wi) => {
-        // Week number
-        const firstDayInWeek = week.find(d => d !== null);
-        const wn = firstDayInWeek
-          ? getWeekNumber(new Date(year, month - 1, firstDayInWeek.day))
-          : 0;
+        const firstRealDay = week.find(d => !d.filler);
+        const wn = firstRealDay
+          ? getWeekNumber(new Date(year, month - 1, firstRealDay.day))
+          : getWeekNumber(new Date(week[0]!.dateStr + 'T00:00:00'));
 
         return (
-          <Box key={wi} flexDirection="column">
+          <Box key={wi} flexDirection="column" gap={0}>
             {/* Day numbers row */}
             <Box>
               {showWeekNumbers && (
-                <Box width={wnWidth}>
-                  <Text dimColor>{wn > 0 ? String(wn).padStart(2, ' ') + ' ' : '   '}</Text>
-                </Box>
+                <Text dimColor>{wn > 0 ? String(wn).padStart(3, ' ') + ' ' : '    '}</Text>
               )}
               {week.map((cell, ci) => {
-                if (!cell) {
-                  return <Box key={`empty-${ci}`} width={cellWidth} />;
+                const sep = ci < 6 ? vSep : '';
+
+                if (cell.filler) {
+                  const dayStr = String(cell.day);
+                  const padLen = Math.max(0, cellWidth - dayStr.length - (sep ? 1 : 0));
+                  return (
+                    <Text key={`filler-${ci}`}>
+                      <Text color={colors.dim}>{dayStr}</Text>
+                      <Text>{' '.repeat(padLen)}</Text>
+                      {sep && <Text color={colors.dim}>{sep}</Text>}
+                    </Text>
+                  );
                 }
 
                 const isToday = cell.dateStr === today;
                 const isSelected = cell.dateStr === selectedDate;
-                const isWeekend = mondayStart ? ci >= 5 : (ci === 0 || ci === 6);
 
-                // Heatmap indicator
-                const focusMin = sessionMinutesByDate.get(cell.dateStr) ?? 0;
-                const hm = showHeatmap ? getHeatmapBlock(focusMin) : null;
-
-                let dayColor = isWeekend ? colors.dim : colors.text;
-                if (isToday) dayColor = colors.focus;
+                let dayColor = colors.text;
+                if (isToday) dayColor = colors.highlight;
                 if (isSelected) dayColor = colors.highlight;
 
                 const dayStr = String(cell.day);
-                const prefix = isSelected ? '[' : isToday ? '•' : ' ';
-                const suffix = isSelected ? ']' : ' ';
+                const todayMark = isToday && !isSelected ? '•' : '';
+
+                // Heatmap indicator
+                const focusMin = sessionMinutesByDate.get(cell.dateStr) ?? 0;
+                const hmChar = showHeatmap && focusMin > 0
+                  ? (focusMin < 30 ? '░' : focusMin < 60 ? '▒' : focusMin < 120 ? '▓' : '█')
+                  : '';
+
+                const labelLen = dayStr.length + todayMark.length + hmChar.length;
+                const padLen = Math.max(0, cellWidth - labelLen - (sep ? 1 : 0));
 
                 return (
-                  <Box key={cell.dateStr} width={cellWidth}>
-                    <Text color={dayColor} bold={isToday || isSelected}>
-                      {prefix}{dayStr}{suffix}
-                    </Text>
-                    {hm && hm.char && (
-                      <Text color={hm.color} dimColor={hm.dim}>{hm.char}</Text>
-                    )}
-                  </Box>
+                  <Text key={cell.dateStr}>
+                    <Text color={dayColor} bold={isToday || isSelected}>{dayStr}{todayMark}</Text>
+                    {hmChar && <Text color="green">{hmChar}</Text>}
+                    <Text>{' '.repeat(padLen)}</Text>
+                    {sep && <Text color={colors.dim}>{sep}</Text>}
+                  </Text>
                 );
               })}
             </Box>
 
-            {/* Event lines for this week */}
-            {Array.from({ length: eventLines }).map((_, lineIdx) => (
-              <Box key={`events-${wi}-${lineIdx}`}>
-                {showWeekNumbers && <Box width={wnWidth} />}
+            {/* Event lines inside cells */}
+            {Array.from({ length: eventLinesPerWeek[wi] }).map((_, lineIdx) => (
+              <Box key={`ev-${wi}-${lineIdx}`}>
+                {showWeekNumbers && <Text>{'    '}</Text>}
                 {week.map((cell, ci) => {
-                  if (!cell) {
-                    return <Box key={`empty-ev-${ci}`} width={cellWidth} />;
-                  }
+                  const sep = ci < 6 ? vSep : '';
+                  const isFiller = !!cell.filler;
 
                   const events = eventsByDate.get(cell.dateStr) ?? [];
-                  const event = events[lineIdx];
+                  const weekEventLines = eventLinesPerWeek[wi]!;
 
-                  if (!event && lineIdx === eventLines - 1 && events.length > eventLines) {
-                    // Overflow indicator
+                  // Overflow indicator: replace last slot when more events exist
+                  if (lineIdx === weekEventLines - 1 && events.length > weekEventLines) {
+                    const hidden = events.length - weekEventLines + 1;
+                    const label = `+${hidden} more`;
+                    const maxLen = cellWidth - (sep ? 1 : 0);
+                    const overflow = label.length > maxLen ? `+${hidden}` : label;
+                    const pad = ' '.repeat(Math.max(0, maxLen - overflow.length));
                     return (
-                      <Box key={`overflow-${cell.dateStr}`} width={cellWidth}>
-                        <Text dimColor>{`+${events.length - eventLines + 1}`}</Text>
-                      </Box>
+                      <Text key={`overflow-${cell.dateStr}`} color={colors.dim}>{overflow}{pad}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>
                     );
                   }
 
+                  const event = events[lineIdx];
                   if (!event) {
-                    return <Box key={`no-ev-${ci}-${lineIdx}`} width={cellWidth} />;
+                    return <Text key={`noev-${ci}-${lineIdx}`}>{' '.repeat(cellWidth - (sep ? 1 : 0))}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>;
                   }
 
                   const icon = getEventIcon(event, calendarConfig, isGlobalPrivacy);
-                  const maxTitleLen = cellWidth - 3; // icon + space + truncation
+                  const maxLen = cellWidth - 2 - (sep ? 1 : 0); // icon + space + separator
                   let display: string;
                   if (isGlobalPrivacy || event.privacy) {
-                    display = getPrivacyDisplay(event.title).slice(0, maxTitleLen);
+                    display = getPrivacyDisplay(event.title).slice(0, maxLen);
                   } else {
-                    display = event.title.slice(0, maxTitleLen);
+                    display = event.title.slice(0, maxLen);
                   }
 
-                  // Multi-day continuation
                   const isStart = cell.dateStr === event.date;
-                  const isContinuation = !isStart && event.endDate;
+                  const prefix = (!isStart && event.endDate) ? '→' : icon;
 
                   let eventColor = event.color ?? colors.highlight;
-                  if (event.status === 'done') eventColor = colors.dim;
-                  if (event.status === 'important') eventColor = colors.focus;
-                  if (event.source === 'ics') eventColor = colors.break;
+                  if (isFiller) eventColor = colors.dim;
+                  else if (event.status === 'done') eventColor = colors.dim;
+                  else if (event.status === 'important') eventColor = colors.focus;
+                  if (event.source === 'ics') eventColor = isFiller ? colors.dim : colors.break;
+
+                  const content = `${prefix} ${display}`;
+                  const pad = ' '.repeat(Math.max(0, cellWidth - content.length - (sep ? 1 : 0)));
 
                   return (
-                    <Box key={`ev-${cell.dateStr}-${lineIdx}`} width={cellWidth}>
-                      <Text color={eventColor}>
-                        {isContinuation ? '→' : icon}{' '}{display}
-                      </Text>
-                    </Box>
+                    <Text key={`ev-${cell.dateStr}-${lineIdx}`}>
+                      <Text color={eventColor}>{content}</Text>
+                      <Text>{pad}</Text>
+                      {sep && <Text color={colors.dim}>{sep}</Text>}
+                    </Text>
                   );
                 })}
               </Box>
             ))}
+
+            {wi < weeks.length - 1 && <Text color={colors.dim}>{dimBorder}</Text>}
           </Box>
         );
       })}
     </Box>
   );
 }
+

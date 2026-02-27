@@ -135,16 +135,16 @@ Navigate between views with number keys `1`-`0`. Press `?` for the help overlay.
 
 | Key | View | Description |
 |-----|------|-------------|
+| `0` | Calendar | Monthly/daily calendar with events, ICS import, focus heatmap |
 | `1` | Timer | Big ASCII countdown with project tag and sequence progress |
 | `2` | Tasks | Task list with project tags and pomodoro tracking |
 | `3` | Reminders | Scheduled notifications at specific times |
 | `4` | Clock | Standalone digital clock display |
-| `5` | Sequences | Activate preset or custom session sequences |
-| `6` | Stats | Daily/weekly analytics, heatmaps, bar charts |
-| `7` | Config | Edit all settings, manage custom sequences |
-| `8` | Web | Browser usage tracking with domain/page breakdowns |
-| `9` | Tracker | Weekly 30-minute time slot grid with categories |
-| `0` | Goals | Daily habit/goal tracking with heatmap visualization |
+| `5` | Stats | Daily/weekly analytics, heatmaps, bar charts |
+| `6` | Config | Edit all settings, manage custom sequences |
+| `7` | Web | Browser usage tracking with domain/page breakdowns |
+| `8` | Tracker | Weekly 30-minute time slot grid with categories |
+| `9` | Goals | Daily habit/goal tracking with heatmap visualization |
 
 ---
 
@@ -165,6 +165,53 @@ These work from any view (unless a text input is active):
 ---
 
 ## Features & Views
+
+### [0] Calendar
+
+A full monthly calendar inspired by [calcure](https://github.com/anufrievroman/calcure). Shows events, task deadlines, reminders, and focus session heatmaps in a grid layout with a right-side panel for the selected day's details and all tasks.
+
+**Monthly view** (default):
+
+| Key | Action |
+|-----|--------|
+| `h/l` | Navigate days |
+| `j/k` | Navigate weeks |
+| `Tab` | Cycle focus between calendar, day panel, and tasks panel |
+| `t` | Jump to today |
+| `a` | Add event |
+| `d` | Delete event |
+| `x` | Toggle event done |
+| `v` | Switch to daily view |
+| `f` | Toggle focus session heatmap |
+
+**Daily view**: Shows a detailed agenda with events, tasks with deadlines, reminders, and completed focus sessions for the selected date. `h/l` to change day, `j/k` to navigate items, `e` to edit, `Esc` or `v` to return to monthly view.
+
+**Events**: Each event has a title, date, optional time, recurrence (once/daily/weekly/monthly/yearly), and status (normal/important/done). Events display with auto-detected icons based on keywords (e.g. "meeting" shows a meeting icon, "birthday" shows a cake).
+
+**ICS import**: Add `.ics` file paths to `calendar.icsFiles` in config. Press `R` to reload. ICS events render in a distinct color and are read-only.
+
+**Focus heatmap**: Toggle with `f`. Shows Unicode block characters (░▒▓█) next to day numbers based on completed focus minutes: light (<30m), medium (<60m), dense (<120m), full (120m+).
+
+**Privacy mode**: Per-event privacy flag or global toggle. Private events show masked titles (`████`).
+
+**Right panel**: Split into two boxes — the top shows events and task deadlines for the selected date, the bottom shows all tasks. Both panels scroll with `j/k` when focused via `Tab`.
+
+**Calendar config** (`config.calendar`):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `defaultView` | `monthly` | Start in `monthly` or `daily` mode |
+| `weekStartsOn` | `1` | `0` = Sunday, `1` = Monday |
+| `showWeekNumbers` | `false` | Show ISO week numbers |
+| `showSessionHeatmap` | `true` | Focus heatmap on day numbers |
+| `showTaskDeadlines` | `true` | Show tasks with deadlines in calendar |
+| `showReminders` | `true` | Show reminders in daily view |
+| `privacyMode` | `false` | Mask all event titles globally |
+| `icsFiles` | `[]` | Paths to `.ics` files to import |
+| `icsColors` | `[]` | Custom colors per ICS calendar |
+| `icons` | `{}` | Keyword-to-icon overrides |
+
+---
 
 ### [1] Timer
 
@@ -467,6 +514,7 @@ All data lives in `~/.local/share/pomodorocli/`:
 ```
 sessions.json       # Session history
 tasks.json          # Task list
+events.json         # Calendar events
 reminders.json      # Reminders
 timer-state.json    # Active timer state (managed by daemon)
 tracker/            # Weekly tracker data

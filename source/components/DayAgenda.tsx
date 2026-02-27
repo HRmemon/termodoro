@@ -36,7 +36,7 @@ function SectionHeader({ title }: { title: string }) {
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text bold color={colors.text}>{title}</Text>
-      <Text color={colors.dim}>{'─'.repeat(38)}</Text>
+      <Text color={colors.dim}>{'─'.repeat(30)}</Text>
     </Box>
   );
 }

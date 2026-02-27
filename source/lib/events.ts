@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { nanoid } from 'nanoid';
 import type { CalendarEvent } from '../types.js';
+import { localDateStr, addDays, dateToNum, getMonthDays } from './date-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const EVENTS_PATH = path.join(DATA_DIR, 'events.json');
@@ -53,20 +54,6 @@ export function deleteEvent(id: string): void {
   saveEvents(events.filter(e => e.id !== id));
 }
 
-// Date helpers
-function dateToNum(d: string): number {
-  return parseInt(d.replace(/-/g, ''), 10);
-}
-
-function addDaysToDate(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function getMonthEnd(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
 
 /** Expand recurring events into individual instances for a date range */
 export function expandRecurring(
@@ -92,7 +79,10 @@ export function expandRecurring(
     }
 
     // Recurring: generate instances
-    const maxInstances = event.repeatCount && event.repeatCount > 0 ? event.repeatCount : 365;
+    // For infinite recurrence, derive cap from distance to range end
+    const maxInstances = event.repeatCount && event.repeatCount > 0
+      ? event.repeatCount
+      : Math.max(365, Math.ceil((new Date(rangeEnd + 'T00:00:00').getTime() - new Date(event.date + 'T00:00:00').getTime()) / 86400000) + 1);
     let count = 0;
     let current = event.date;
 
@@ -102,7 +92,7 @@ export function expandRecurring(
         (new Date(rangeStart + 'T00:00:00').getTime() - new Date(current + 'T00:00:00').getTime()) / 86400000
       );
       if (daysBetween > 0 && daysBetween < maxInstances) {
-        current = addDaysToDate(current, daysBetween);
+        current = addDays(current, daysBetween);
         count = daysBetween;
       }
     }
@@ -114,13 +104,13 @@ export function expandRecurring(
       if (curNum >= startNum) {
         // Create instance (same id + date suffix for uniqueness)
         const duration = event.endDate
-          ? Math.round((new Date(event.endDate).getTime() - new Date(event.date).getTime()) / 86400000)
+          ? Math.round((new Date(event.endDate + 'T00:00:00').getTime() - new Date(event.date + 'T00:00:00').getTime()) / 86400000)
           : 0;
         result.push({
           ...event,
           id: count === 0 ? event.id : `${event.id}__${current}`,
           date: current,
-          endDate: duration > 0 ? addDaysToDate(current, duration) : undefined,
+          endDate: duration > 0 ? addDays(current, duration) : undefined,
         });
       }
 
@@ -137,7 +127,7 @@ export function expandRecurring(
         case 'monthly': {
           const origDay = new Date(event.date + 'T00:00:00').getDate();
           d.setMonth(d.getMonth() + 1);
-          const maxDay = getMonthEnd(d.getFullYear(), d.getMonth() + 1);
+          const maxDay = getMonthDays(d.getFullYear(), d.getMonth() + 1);
           d.setDate(Math.min(origDay, maxDay));
           break;
         }
@@ -145,7 +135,7 @@ export function expandRecurring(
           d.setFullYear(d.getFullYear() + 1);
           break;
       }
-      current = d.toISOString().slice(0, 10);
+      current = localDateStr(d);
     }
   }
 
@@ -169,7 +159,7 @@ export function getEventsForMonth(
   month: number,
 ): Map<string, CalendarEvent[]> {
   const rangeStart = `${year}-${String(month).padStart(2, '0')}-01`;
-  const lastDay = getMonthEnd(year, month);
+  const lastDay = getMonthDays(year, month);
   const rangeEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
   const expanded = expandRecurring(events, rangeStart, rangeEnd);
@@ -192,7 +182,7 @@ export function getEventsForMonth(
         if (arr) arr.push(event);
         else map.set(cur, [event]);
       }
-      cur = addDaysToDate(cur, 1);
+      cur = addDays(cur, 1);
     }
   }
 
