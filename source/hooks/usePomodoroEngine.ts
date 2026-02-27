@@ -77,6 +77,9 @@ export function usePomodoroEngine(config: Config, initialState?: EngineInitialSt
       durationActual: sessionStartRef.current
         ? Math.floor((Date.now() - new Date(sessionStartRef.current).getTime()) / 1000)
         : 0,
+      intervals: sessionStartRef.current
+        ? [{ start: sessionStartRef.current, end: now }]
+        : [],
     };
     appendSession(session);
     return session;
@@ -106,9 +109,9 @@ export function usePomodoroEngine(config: Config, initialState?: EngineInitialSt
     notifySessionEnd(sessionType, config.sound, config.notifications, config.notificationDuration, config.sounds);
     const session = saveSession('completed');
     // Generate tracker suggestions for completed work sessions
-    if (sessionType === 'work' && sessionStartRef.current) {
+    if (sessionType === 'work') {
       try {
-        generateAndStoreSuggestions(sessionStartRef.current, session.durationActual);
+        generateAndStoreSuggestions(session.intervals);
       } catch { /* don't let tracker errors break the timer */ }
     }
     advanceToNext();

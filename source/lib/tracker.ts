@@ -340,18 +340,29 @@ export function expirePending(weekData: WeekData): WeekData {
   return changed ? updated : weekData;
 }
 
-export function generateAndStoreSuggestions(startedAt: string, durationActual: number): void {
-  const suggestions = generatePomodoroSuggestions(startedAt, durationActual);
-  if (suggestions.length === 0) return;
+export function generateAndStoreSuggestions(intervals: import('../types.js').WorkInterval[]): void {
+  const allSuggestions: { date: string; time: string; code: string }[] = [];
+  for (const iv of intervals) {
+    if (!iv.start || !iv.end) continue;
+    const dur = Math.floor((new Date(iv.end).getTime() - new Date(iv.start).getTime()) / 1000);
+    if (dur < 1) continue;
+    allSuggestions.push(...generatePomodoroSuggestions(iv.start, dur));
+  }
+  if (allSuggestions.length === 0) return;
 
   // Group by week
-  const byWeek = new Map<string, typeof suggestions>();
-  for (const s of suggestions) {
+  const byWeek = new Map<string, typeof allSuggestions>();
+  for (const s of allSuggestions) {
     const d = new Date(s.date + 'T00:00:00');
     const ws = getISOWeekStr(getMondayOfWeek(d));
     if (!byWeek.has(ws)) byWeek.set(ws, []);
     byWeek.get(ws)!.push(s);
   }
+
+  const totalDuration = intervals.reduce((sum, iv) => {
+    if (!iv.start || !iv.end) return sum;
+    return sum + Math.floor((new Date(iv.end).getTime() - new Date(iv.start).getTime()) / 1000);
+  }, 0);
 
   for (const [ws, weekSuggestions] of byWeek) {
     let week = loadWeek(ws);
@@ -359,7 +370,7 @@ export function generateAndStoreSuggestions(startedAt: string, durationActual: n
       const monday = new Date(weekSuggestions[0]!.date + 'T00:00:00');
       week = createWeek(monday);
     }
-    addPendingSuggestions(week, weekSuggestions, 'pomodoro', startedAt, durationActual);
+    addPendingSuggestions(week, weekSuggestions, 'pomodoro', intervals[0]?.start, totalDuration);
   }
 }
 

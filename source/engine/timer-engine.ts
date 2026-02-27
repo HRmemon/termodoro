@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { nanoid } from 'nanoid';
-import type { Config, Session, SessionType, SequenceBlock, SessionSequence } from '../types.js';
+import type { Config, Session, SessionType, SequenceBlock, SessionSequence, WorkInterval } from '../types.js';
 import { appendSession, saveTimerState, clearTimerState, saveStickyProject } from '../lib/store.js';
 import type { TimerSnapshot } from '../lib/store.js';
 import { notifySessionEnd } from '../lib/notify.js';
@@ -50,6 +50,8 @@ export interface EngineRestoreState {
   sequenceName?: string;
   sequenceBlocks?: SequenceBlock[];
   sequenceBlockIndex?: number;
+  // Work intervals
+  workIntervals?: WorkInterval[];
 }
 
 // Events emitted by the engine
@@ -91,6 +93,9 @@ export class PomodoroEngine extends EventEmitter {
   private overrideDuration: number | null = null;
   private sessionStartedAt: string | null = null;
 
+  // Work interval tracking (for accurate session logging)
+  private workIntervals: WorkInterval[] = [];
+
   // Sequence state
   private sequence: SessionSequence | null = null;
   private sequenceBlockIndex = 0;
@@ -119,6 +124,7 @@ export class PomodoroEngine extends EventEmitter {
       // Restore stopwatch state
       if (initialState.timerMode) this.timerMode = initialState.timerMode;
       if (initialState.stopwatchElapsed !== undefined) this.stopwatchElapsed = initialState.stopwatchElapsed;
+      if (initialState.workIntervals) this.workIntervals = initialState.workIntervals;
 
       // Restore timer
       if (initialState.isRunning) {
@@ -165,6 +171,8 @@ export class PomodoroEngine extends EventEmitter {
         ? this.stopwatchElapsed
         : this.totalSeconds - this.secondsLeft;
       this.sessionStartedAt = new Date(now.getTime() - elapsed * 1000).toISOString();
+      // Track new work interval
+      this.workIntervals.push({ start: now.toISOString(), end: '' });
       this.persistState();
       const state = this.getState();
       this.emit('timer:resume', state);
@@ -173,10 +181,12 @@ export class PomodoroEngine extends EventEmitter {
     }
 
     // Fresh start
+    const freshNow = new Date().toISOString();
     this.isRunning = true;
     this.isPaused = false;
     this.isComplete = false;
-    this.sessionStartedAt = new Date().toISOString();
+    this.sessionStartedAt = freshNow;
+    this.workIntervals = [{ start: freshNow, end: '' }];
     this.startTickInterval();
     this.persistState();
 
@@ -194,6 +204,11 @@ export class PomodoroEngine extends EventEmitter {
 
     this.isPaused = true;
     this.stopTickInterval();
+    // Close current work interval
+    if (this.workIntervals.length > 0) {
+      const last = this.workIntervals[this.workIntervals.length - 1]!;
+      if (!last.end) last.end = new Date().toISOString();
+    }
     this.persistState();
     const state = this.getState();
     this.emit('timer:pause', state);
@@ -240,6 +255,7 @@ export class PomodoroEngine extends EventEmitter {
     this.totalSeconds = this.computeDuration();
     this.secondsLeft = this.totalSeconds;
     this.sessionStartedAt = null;
+    this.workIntervals = [];
     clearTimerState();
     this.emit('state:change', this.getState());
   }
@@ -346,7 +362,7 @@ export class PomodoroEngine extends EventEmitter {
 
       if (this.sessionType === 'work') {
         try {
-          generateAndStoreSuggestions(this.sessionStartedAt, this.stopwatchElapsed);
+          generateAndStoreSuggestions(session.intervals);
         } catch { /* swallow */ }
       }
     }
@@ -512,9 +528,9 @@ export class PomodoroEngine extends EventEmitter {
     this.emit('session:complete', { session });
 
     // Generate tracker suggestions for completed work sessions
-    if (this.sessionType === 'work' && this.sessionStartedAt) {
+    if (this.sessionType === 'work') {
       try {
-        generateAndStoreSuggestions(this.sessionStartedAt, session.durationActual);
+        generateAndStoreSuggestions(session.intervals);
       } catch { /* don't let tracker errors break the engine */ }
     }
 
@@ -543,10 +559,29 @@ export class PomodoroEngine extends EventEmitter {
     }
   }
 
+  private closeOpenInterval(now?: string): void {
+    if (this.workIntervals.length > 0) {
+      const last = this.workIntervals[this.workIntervals.length - 1]!;
+      if (!last.end) last.end = now ?? new Date().toISOString();
+    }
+  }
+
+  private intervalsActualDuration(): number {
+    let total = 0;
+    for (const iv of this.workIntervals) {
+      if (iv.start && iv.end) {
+        total += Math.floor((new Date(iv.end).getTime() - new Date(iv.start).getTime()) / 1000);
+      }
+    }
+    return total;
+  }
+
   private completeExpiredSession(): void {
     // Session completed while daemon was down — save it with correct timestamps
     const startedAt = this.sessionStartedAt!;
     const endedAt = new Date(new Date(startedAt).getTime() + this.totalSeconds * 1000).toISOString();
+    this.closeOpenInterval(endedAt);
+    const intervals = [...this.workIntervals];
 
     const session: Session = {
       id: nanoid(),
@@ -554,17 +589,18 @@ export class PomodoroEngine extends EventEmitter {
       status: 'completed',
       label: this.currentLabel,
       project: this.currentProject,
-      startedAt,
+      startedAt: intervals.length > 0 ? intervals[0]!.start : startedAt,
       endedAt,
       durationPlanned: this.totalSeconds,
-      durationActual: this.totalSeconds,
+      durationActual: intervals.length > 0 ? this.intervalsActualDuration() : this.totalSeconds,
+      intervals,
     };
     appendSession(session);
     this.emit('session:complete', { session });
 
     if (this.sessionType === 'work') {
       try {
-        generateAndStoreSuggestions(startedAt, this.totalSeconds);
+        generateAndStoreSuggestions(intervals);
       } catch { /* ignore */ }
     }
 
@@ -590,9 +626,9 @@ export class PomodoroEngine extends EventEmitter {
     const session = this.saveSession('completed');
     this.emit('session:complete', { session });
 
-    if (this.sessionType === 'work' && this.sessionStartedAt) {
+    if (this.sessionType === 'work') {
       try {
-        generateAndStoreSuggestions(this.sessionStartedAt, session.durationActual);
+        generateAndStoreSuggestions(session.intervals);
       } catch { /* ignore */ }
     }
   }
@@ -605,16 +641,19 @@ export class PomodoroEngine extends EventEmitter {
 
   private saveStopwatchSession(): Session {
     const now = new Date().toISOString();
+    this.closeOpenInterval(now);
+    const intervals = [...this.workIntervals];
     const session: Session = {
       id: nanoid(),
       type: this.sessionType,
       status: 'completed',
       label: this.currentLabel,
       project: this.currentProject,
-      startedAt: this.sessionStartedAt ?? now,
+      startedAt: intervals.length > 0 ? intervals[0]!.start : (this.sessionStartedAt ?? now),
       endedAt: now,
       durationPlanned: this.totalSeconds,
-      durationActual: this.stopwatchElapsed,
+      durationActual: intervals.length > 0 ? this.intervalsActualDuration() : this.stopwatchElapsed,
+      intervals,
     };
     appendSession(session);
     return session;
@@ -622,20 +661,26 @@ export class PomodoroEngine extends EventEmitter {
 
   private saveSession(status: Session['status']): Session {
     const now = new Date().toISOString();
+    this.closeOpenInterval(now);
+    const intervals = [...this.workIntervals];
+    const durationActual = intervals.length > 0
+      ? this.intervalsActualDuration()
+      : (this.timerMode === 'stopwatch'
+        ? this.stopwatchElapsed
+        : (this.sessionStartedAt
+          ? Math.floor((Date.now() - new Date(this.sessionStartedAt).getTime()) / 1000)
+          : 0));
     const session: Session = {
       id: nanoid(),
       type: this.sessionType,
       status,
       label: this.currentLabel,
       project: this.currentProject,
-      startedAt: this.sessionStartedAt ?? now,
+      startedAt: intervals.length > 0 ? intervals[0]!.start : (this.sessionStartedAt ?? now),
       endedAt: now,
       durationPlanned: this.totalSeconds,
-      durationActual: this.timerMode === 'stopwatch'
-        ? this.stopwatchElapsed
-        : (this.sessionStartedAt
-          ? Math.floor((Date.now() - new Date(this.sessionStartedAt).getTime()) / 1000)
-          : 0),
+      durationActual,
+      intervals,
     };
     appendSession(session);
     return session;
@@ -644,6 +689,7 @@ export class PomodoroEngine extends EventEmitter {
   private advanceToNext(): void {
     this.overrideDuration = null;
     this.sessionStartedAt = null;
+    this.workIntervals = [];
 
     if (this.sessionType === 'work') {
       this.totalWorkSessions += 1;
@@ -708,6 +754,7 @@ export class PomodoroEngine extends EventEmitter {
         sequenceName: this.sequence?.name,
         sequenceBlocks: this.sequence?.blocks,
         sequenceBlockIndex: this.sequence && !this.sequenceComplete ? this.sequenceBlockIndex : undefined,
+        workIntervals: this.workIntervals.length > 0 ? this.workIntervals : undefined,
       };
       saveTimerState(snapshot);
     } catch {

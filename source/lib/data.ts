@@ -13,13 +13,14 @@ export function handleExport(outputPath?: string): void {
   const headers = [
     'id', 'type', 'status', 'label', 'project', 'tag',
     'energyLevel', 'distractionScore', 'startedAt', 'endedAt',
-    'durationPlanned', 'durationActual',
+    'durationPlanned', 'durationActual', 'intervals',
   ];
 
   const rows = sessions.map(s => [
     s.id, s.type, s.status, s.label ?? '', s.project ?? '', s.tag ?? '',
     s.energyLevel ?? '', s.distractionScore?.toString() ?? '', s.startedAt, s.endedAt,
     s.durationPlanned.toString(), s.durationActual.toString(),
+    JSON.stringify(s.intervals ?? []),
   ]);
 
   const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
@@ -36,7 +37,8 @@ export function handleImport(filePath: string): void {
 
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.json') {
-    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Session[];
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Session[];
+    const data = raw.map(s => ({ ...s, intervals: s.intervals ?? [] }));
     const existing = loadSessions();
     const existingIds = new Set(existing.map(s => s.id));
     const newSessions = data.filter(s => !existingIds.has(s.id));
@@ -60,6 +62,10 @@ export function handleImport(filePath: string): void {
 
       if (existingIds.has(obj['id']!)) continue;
 
+      let intervals: Session['intervals'] = [];
+      if (obj['intervals']) {
+        try { intervals = JSON.parse(obj['intervals']); } catch { intervals = []; }
+      }
       const session: Session = {
         id: obj['id']!,
         type: obj['type'] as Session['type'],
@@ -73,6 +79,7 @@ export function handleImport(filePath: string): void {
         endedAt: obj['endedAt']!,
         durationPlanned: parseInt(obj['durationPlanned']!, 10),
         durationActual: parseInt(obj['durationActual']!, 10),
+        intervals,
       };
       existing.push(session);
       imported++;

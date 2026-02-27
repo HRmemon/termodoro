@@ -1,3 +1,8 @@
+export interface WorkInterval {
+  start: string;  // ISO timestamp — when work actually started/resumed
+  end: string;    // ISO timestamp — when paused/completed
+}
+
 export interface Session {
   id: string;
   type: 'work' | 'short-break' | 'long-break';
@@ -11,6 +16,7 @@ export interface Session {
   endedAt: string;
   durationPlanned: number;
   durationActual: number;
+  intervals: WorkInterval[];
 }
 
 export interface Config {
