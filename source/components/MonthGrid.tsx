@@ -114,11 +114,10 @@ export function MonthGrid({
       <Box>
         {showWeekNumbers && <Box width={wnWidth}><Text dimColor>{'    '}</Text></Box>}
         {dayNames.map((name, i) => {
-          const isWeekend = mondayStart ? i >= 5 : (i === 0 || i === 6);
           const truncName = name.slice(0, cellWidth - 2);
           const pad = ' '.repeat(Math.max(0, cellWidth - 1 - truncName.length));
           return (
-            <Text key={name} color={isWeekend ? colors.break : colors.dim}>
+            <Text key={name} color={colors.dim}>
               {truncName}{pad}{i < 6 ? <Text color={colors.dim}>{vSep}</Text> : ''}
             </Text>
           );
@@ -147,10 +146,9 @@ export function MonthGrid({
 
                 const isToday = cell.dateStr === today;
                 const isSelected = cell.dateStr === selectedDate;
-                const isWeekend = mondayStart ? ci >= 5 : (ci === 0 || ci === 6);
 
-                let dayColor = isWeekend ? colors.break : colors.text;
-                if (isToday) dayColor = colors.focus;
+                let dayColor = colors.text;
+                if (isToday) dayColor = colors.highlight;
                 if (isSelected) dayColor = colors.highlight;
 
                 const dayStr = String(cell.day);
