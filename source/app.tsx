@@ -428,7 +428,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   }
 
   if (showHelp) {
-    return <HelpView onClose={() => setShowHelp(false)} />;
+    return <HelpView onClose={() => setShowHelp(false)} keymap={keymap} setIsTyping={setIsTyping} />;
   }
 
   if (showResetModal) {

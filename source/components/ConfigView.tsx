@@ -9,6 +9,7 @@ import { KeybindingsManager } from './config/KeybindingsManager.js';
 import { ThemeManager } from './config/ThemeManager.js';
 import { ConfigFieldList } from './config/ConfigFieldList.js';
 import type { Keymap } from '../lib/keymap.js';
+import { setConfigSubMode } from '../lib/nvim-edit.js';
 
 interface ConfigViewProps {
   config: Config;
@@ -30,6 +31,11 @@ export function ConfigView({ config, onConfigChange, setIsTyping, initialSeqMode
       onSeqModeConsumed();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep nvim-edit in sync with config sub-mode
+  useEffect(() => {
+    setConfigSubMode(subMode);
+  }, [subMode]);
 
   // Load counts for display in main list (recalculated when returning from sub-modes)
   const { catCount, ruleCount, seqCount, keybindingCount, themeCount } = useMemo(() => ({
