@@ -56,6 +56,7 @@ const ACTION_LABELS: Record<KeyAction, string> = {
   'calendar.toggle_global_privacy': 'Toggle All Privacy',
   'calendar.reload_ics': 'Reload ICS Files',
   'calendar.delete': 'Delete Event',
+  'calendar.toggle_heatmap': 'Toggle Focus Heatmap',
 };
 
 const ACTIONS = Object.keys(DEFAULT_KEYBINDINGS) as KeyAction[];

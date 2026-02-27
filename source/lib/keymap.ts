@@ -25,7 +25,8 @@ export type KeyAction =
   | 'calendar.toggle_view' | 'calendar.goto_today'
   | 'calendar.toggle_done' | 'calendar.toggle_important'
   | 'calendar.toggle_privacy' | 'calendar.toggle_global_privacy'
-  | 'calendar.reload_ics' | 'calendar.delete';
+  | 'calendar.reload_ics' | 'calendar.delete'
+  | 'calendar.toggle_heatmap';
 
 export type KeybindingConfig = Partial<Record<KeyAction, string>>;
 
@@ -72,6 +73,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, string> = {
   'calendar.toggle_privacy': '.',
   'calendar.toggle_global_privacy': '*',
   'calendar.reload_ics': 'Q',
+  'calendar.toggle_heatmap': 'f',
 };
 
 export class Keymap {

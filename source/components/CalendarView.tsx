@@ -11,7 +11,6 @@ import { DayAgenda } from './DayAgenda.js';
 import { TasksPanel, getDayItemCount, getTasksItemCount } from './TasksPanel.js';
 import type { PaneId } from './TasksPanel.js';
 import { EventForm } from './EventForm.js';
-import { colors } from '../lib/theme.js';
 import type { Keymap } from '../lib/keymap.js';
 
 type ViewMode = 'monthly' | 'daily' | 'add' | 'edit';
@@ -63,6 +62,7 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   const [tasksCollapsed, setTasksCollapsed] = useState(false);
   const [todayScrollOffset, setTodayScrollOffset] = useState(0);
   const [tasksScrollOffset, setTasksScrollOffset] = useState(0);
+  const [showHeatmap, setShowHeatmap] = useState(calendarConfig?.showSessionHeatmap !== false);
 
   const { stdout } = useStdout();
   const termRows = stdout?.rows ?? 24;
@@ -214,6 +214,10 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
     // Go to today (works in any pane)
     if (keymap.matches('calendar.goto_today', input, key)) {
       setSelectedDate(getTodayStr());
+      return;
+    }
+    if (keymap.matches('calendar.toggle_heatmap', input, key)) {
+      setShowHeatmap(prev => !prev);
       return;
     }
 
@@ -432,11 +436,10 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
           isGlobalPrivacy={isGlobalPrivacy}
           contentWidth={calendarWidth}
           maxRows={maxGridRows}
+          showHeatmap={showHeatmap}
         />
       </Box>
-      <Box width={1} marginX={1}>
-        <Text color={colors.dim}>│</Text>
-      </Box>
+      <Box width={1} />
       {rightPanel}
     </Box>
   );

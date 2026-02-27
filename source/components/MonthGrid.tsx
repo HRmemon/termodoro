@@ -15,6 +15,7 @@ interface MonthGridProps {
   isGlobalPrivacy?: boolean;
   contentWidth: number;
   maxRows: number;
+  showHeatmap?: boolean;
 }
 
 const FULL_DAY_NAMES_MON = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
@@ -59,10 +60,11 @@ export function MonthGrid({
   contentWidth,
   maxRows,
   sessionMinutesByDate,
+  showHeatmap: showHeatmapProp,
 }: MonthGridProps) {
   const mondayStart = (calendarConfig?.weekStartsOn ?? 1) === 1;
   const dayNames = mondayStart ? FULL_DAY_NAMES_MON : FULL_DAY_NAMES_SUN;
-  const showHeatmap = calendarConfig?.showSessionHeatmap !== false;
+  const showHeatmap = showHeatmapProp ?? (calendarConfig?.showSessionHeatmap !== false);
 
   const wnWidth = showWeekNumbers ? 4 : 0;
   const gridWidth = contentWidth - wnWidth;
@@ -73,10 +75,21 @@ export function MonthGrid({
   const totalDays = getMonthDays(year, month);
   const firstDow = getDayOfWeek(year, month, 1, mondayStart);
 
-  // Build week rows
-  type DayCell = { day: number; dateStr: string } | null;
+  // Build week rows with prev/next month filler days
+  type DayCell = { day: number; dateStr: string; filler?: boolean };
   const weeks: DayCell[][] = [];
-  let currentWeek: DayCell[] = Array(firstDow).fill(null) as DayCell[];
+  let currentWeek: DayCell[] = [];
+
+  // Fill leading days from previous month
+  if (firstDow > 0) {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevMonthDays = getMonthDays(prevYear, prevMonth);
+    for (let i = firstDow - 1; i >= 0; i--) {
+      const d = prevMonthDays - i;
+      currentWeek.push({ day: d, dateStr: formatDateStr(prevYear, prevMonth, d), filler: true });
+    }
+  }
 
   for (let d = 1; d <= totalDays; d++) {
     const dateStr = formatDateStr(year, month, d);
@@ -86,8 +99,16 @@ export function MonthGrid({
       currentWeek = [];
     }
   }
+
+  // Fill trailing days from next month
   if (currentWeek.length > 0) {
-    while (currentWeek.length < 7) currentWeek.push(null);
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    let nextDay = 1;
+    while (currentWeek.length < 7) {
+      currentWeek.push({ day: nextDay, dateStr: formatDateStr(nextYear, nextMonth, nextDay), filler: true });
+      nextDay++;
+    }
     weeks.push(currentWeek);
   }
 
@@ -126,10 +147,10 @@ export function MonthGrid({
 
       {/* Week rows */}
       {weeks.map((week, wi) => {
-        const firstDayInWeek = week.find(d => d !== null);
-        const wn = firstDayInWeek
-          ? getWeekNumber(new Date(year, month - 1, firstDayInWeek.day))
-          : 0;
+        const firstRealDay = week.find(d => !d.filler);
+        const wn = firstRealDay
+          ? getWeekNumber(new Date(year, month - 1, firstRealDay.day))
+          : getWeekNumber(new Date(week[0]!.dateStr + 'T00:00:00'));
 
         return (
           <Box key={wi} flexDirection="column" gap={0}>
@@ -140,8 +161,17 @@ export function MonthGrid({
               )}
               {week.map((cell, ci) => {
                 const sep = ci < 6 ? vSep : '';
-                if (!cell) {
-                  return <Text key={`empty-${ci}`}>{' '.repeat(cellWidth - (sep ? 1 : 0))}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>;
+
+                if (cell.filler) {
+                  const dayStr = String(cell.day);
+                  const padLen = Math.max(0, cellWidth - dayStr.length - (sep ? 1 : 0));
+                  return (
+                    <Text key={`filler-${ci}`}>
+                      <Text color={colors.dim}>{dayStr}</Text>
+                      <Text>{' '.repeat(padLen)}</Text>
+                      {sep && <Text color={colors.dim}>{sep}</Text>}
+                    </Text>
+                  );
                 }
 
                 const isToday = cell.dateStr === today;
@@ -180,8 +210,8 @@ export function MonthGrid({
                 {showWeekNumbers && <Text>{'    '}</Text>}
                 {week.map((cell, ci) => {
                   const sep = ci < 6 ? vSep : '';
-                  if (!cell) {
-                    return <Text key={`empty-ev-${ci}`}>{' '.repeat(cellWidth - (sep ? 1 : 0))}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>;
+                  if (cell.filler) {
+                    return <Text key={`filler-ev-${ci}`}>{' '.repeat(cellWidth - (sep ? 1 : 0))}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>;
                   }
 
                   const events = eventsByDate.get(cell.dateStr) ?? [];
@@ -189,8 +219,10 @@ export function MonthGrid({
                   // Overflow indicator: replace last slot when more events exist
                   if (lineIdx === eventLines - 1 && events.length > eventLines) {
                     const hidden = events.length - eventLines + 1;
-                    const overflow = `+${hidden}`;
-                    const pad = ' '.repeat(Math.max(0, cellWidth - overflow.length - (sep ? 1 : 0)));
+                    const label = `+${hidden} more`;
+                    const maxLen = cellWidth - (sep ? 1 : 0);
+                    const overflow = label.length > maxLen ? `+${hidden}` : label;
+                    const pad = ' '.repeat(Math.max(0, maxLen - overflow.length));
                     return (
                       <Text key={`overflow-${cell.dateStr}`} dimColor>{overflow}{pad}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>
                     );

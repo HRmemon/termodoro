@@ -135,6 +135,7 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
     actionHints.push({ key: km ? km.label('calendar.delete') : 'd', label: 'Del' });
     actionHints.push({ key: km ? km.label('calendar.toggle_done') : 'x', label: 'Done' });
     actionHints.push({ key: km ? km.label('calendar.toggle_view') : 'v', label: 'View' });
+    actionHints.push({ key: km ? km.label('calendar.toggle_heatmap') : 'f', label: 'Focus' });
   }
 
   if (view === 'config') {
