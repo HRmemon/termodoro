@@ -1,14 +1,16 @@
 import { useState, useMemo } from 'react';
-import { useInput, useStdout } from 'ink';
+import { useInput } from 'ink';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Keymap } from '../lib/keymap.js';
 import { colors } from '../lib/theme.js';
+import { useFullScreen } from '../hooks/useFullScreen.js';
 
 interface HelpViewProps {
   onClose: () => void;
   keymap: Keymap;
   setIsTyping: (v: boolean) => void;
+  sidebarWidth?: number;
 }
 
 interface HelpSection {
@@ -154,12 +156,12 @@ function buildSections(km: Keymap): HelpSection[] {
   ];
 }
 
-export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
+export function HelpView({ onClose, keymap, setIsTyping, sidebarWidth = 20 }: HelpViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
 
-  const { stdout } = useStdout();
+  const { columns: termCols, rows: termRows } = useFullScreen();
 
   const sections = useMemo(() => buildSections(keymap), [keymap]);
 
@@ -248,10 +250,9 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
     }
   });
 
-  // Column width for key:label pairs (roughly 1/3 of terminal)
-  const termRows = stdout?.rows ?? 24;
-  const termCols = stdout?.columns ?? 80;
-  const colWidth = Math.floor((termCols - 8) / 3);
+  // Column width for key:label pairs (roughly 1/3 of content area)
+  const effectiveWidth = termCols - sidebarWidth;
+  const colWidth = Math.floor((effectiveWidth - 8) / 3);
 
   // Build flat text lines for rendering
   const renderLines: string[][] = useMemo(() => {
@@ -269,9 +270,11 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
     return out;
   }, [lines]);
 
-  // Total content height + 1 for search bar
-  const contentHeight = termRows;
-  const bodyHeight = contentHeight - 1; // 1 for search bar
+  // Estimate available rows inside Layout (terminal - Layout chrome)
+  // safeRows = rows-1, top border(1), mid divider(1), status row(1), keys divider(1), keys bar+border(2) = 7
+  const layoutChrome = 7;
+  const availableRows = Math.max(5, termRows - layoutChrome);
+  const bodyHeight = availableRows - 1; // 1 for search bar
   const totalLines = renderLines.length;
   const visibleCount = Math.min(bodyHeight, totalLines);
   const maxScroll = Math.max(0, totalLines - visibleCount);
@@ -283,7 +286,7 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
   const canScrollDown = clampedOffset < maxScroll;
 
   return (
-    <Box flexDirection="column" height={contentHeight} overflow="hidden">
+    <Box flexDirection="column">
       {/* Search bar - always at top */}
       <Box flexShrink={0}>
         <Text>  </Text>
@@ -318,7 +321,7 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
             return (
               <Box key={`h-${i}`} flexShrink={0}>
                 <Text bold color={colors.highlight}>  ── {title} </Text>
-                <Text color={colors.dim}>{'─'.repeat(Math.max(0, termCols - title.length - 12))}</Text>
+                <Text color={colors.dim}>{'─'.repeat(Math.max(0, effectiveWidth - title.length - 12))}</Text>
               </Box>
             );
           }
