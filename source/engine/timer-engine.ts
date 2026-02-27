@@ -46,6 +46,7 @@ export interface EngineRestoreState {
   startedAt?: string;
   timerMode?: 'countdown' | 'stopwatch';
   stopwatchElapsed?: number;
+  accumulatedElapsed?: number;
   // Sequence state
   sequenceName?: string;
   sequenceBlocks?: SequenceBlock[];
@@ -83,6 +84,10 @@ export class PomodoroEngine extends EventEmitter {
   // Stopwatch state
   private timerMode: 'countdown' | 'stopwatch' = 'countdown';
   private stopwatchElapsed: number = 0;
+
+  // Wall-clock anchoring (drift correction)
+  private anchorTimestamp: number = 0;
+  private accumulatedElapsed: number = 0;
 
   // Session engine state
   private sessionType: SessionType = 'work';
@@ -127,6 +132,7 @@ export class PomodoroEngine extends EventEmitter {
       // Restore stopwatch state
       if (initialState.timerMode) this.timerMode = initialState.timerMode;
       if (initialState.stopwatchElapsed !== undefined) this.stopwatchElapsed = initialState.stopwatchElapsed;
+      if (initialState.accumulatedElapsed !== undefined) this.accumulatedElapsed = initialState.accumulatedElapsed;
       if (initialState.workIntervals) this.workIntervals = initialState.workIntervals;
 
       // Restore timer
@@ -191,6 +197,7 @@ export class PomodoroEngine extends EventEmitter {
     this.isComplete = false;
     this.sessionStartedAt = freshNow;
     this.workIntervals = [{ start: freshNow, end: null }];
+    this.accumulatedElapsed = 0;
     this.startTickInterval();
     this.persistState();
 
@@ -207,6 +214,8 @@ export class PomodoroEngine extends EventEmitter {
     if (this.config.strictMode) return;
 
     this.isPaused = true;
+    this.accumulatedElapsed += Math.max(0, Math.floor((Date.now() - this.anchorTimestamp) / 1000));
+    this.anchorTimestamp = 0;
     this.stopTickInterval();
     // Close current work interval
     if (this.workIntervals.length > 0) {
@@ -256,6 +265,8 @@ export class PomodoroEngine extends EventEmitter {
     this.isComplete = false;
     this.timerMode = 'countdown';
     this.stopwatchElapsed = 0;
+    this.accumulatedElapsed = 0;
+    this.anchorTimestamp = 0;
     this.totalSeconds = this.computeDuration();
     this.secondsLeft = this.totalSeconds;
     this.sessionStartedAt = null;
@@ -287,6 +298,8 @@ export class PomodoroEngine extends EventEmitter {
     this.isPaused = false;
     this.timerMode = 'countdown';
     this.stopwatchElapsed = 0;
+    this.accumulatedElapsed = 0;
+    this.anchorTimestamp = 0;
     clearTimerState();
     this.emit('state:change', this.getState());
   }
@@ -312,6 +325,8 @@ export class PomodoroEngine extends EventEmitter {
     this.isComplete = false;
     this.timerMode = 'countdown';
     this.stopwatchElapsed = 0;
+    this.accumulatedElapsed = 0;
+    this.anchorTimestamp = 0;
     this.stopTickInterval();
     clearTimerState();
     this.emit('state:change', this.getState());
@@ -344,12 +359,10 @@ export class PomodoroEngine extends EventEmitter {
   switchToStopwatch(): void {
     if (this.timerMode === 'stopwatch') return;
 
-    // Convert elapsed so far
-    const elapsedSoFar = this.isRunning || this.isPaused
-      ? this.totalSeconds - this.secondsLeft
-      : 0;
+    // Convert elapsed so far using wall-clock anchoring
     this.timerMode = 'stopwatch';
-    this.stopwatchElapsed = elapsedSoFar;
+    this.stopwatchElapsed = this.accumulatedElapsed
+      + (this.anchorTimestamp ? Math.max(0, Math.floor((Date.now() - this.anchorTimestamp) / 1000)) : 0);
 
     this.persistState();
     this.emit('state:change', this.getState());
@@ -462,6 +475,7 @@ export class PomodoroEngine extends EventEmitter {
       if (this.timerMode === 'stopwatch') {
         // Stopwatch was running — reconstruct elapsed from wall clock
         const wallClockTotal = Math.floor((Date.now() - new Date(this.sessionStartedAt).getTime()) / 1000);
+        this.accumulatedElapsed = wallClockTotal;
         this.stopwatchElapsed = wallClockTotal;
         this.startTickInterval();
         return;
@@ -475,11 +489,16 @@ export class PomodoroEngine extends EventEmitter {
         this.completeExpiredSession();
         return;
       }
+      this.accumulatedElapsed = elapsed;
       this.secondsLeft = remaining;
       this.startTickInterval();
     } else if (this.isRunning && this.isPaused) {
       // Paused state — just leave it, no interval needed
-      // stopwatchElapsed is already correct from snapshot
+      // Reconstruct accumulatedElapsed from frozen state
+      this.accumulatedElapsed = this.timerMode === 'stopwatch'
+        ? this.stopwatchElapsed
+        : this.totalSeconds - this.secondsLeft;
+      this.anchorTimestamp = 0;
     }
     // If not running, nothing to do
   }
@@ -488,6 +507,7 @@ export class PomodoroEngine extends EventEmitter {
 
   private startTickInterval(): void {
     this.stopTickInterval();
+    this.anchorTimestamp = Date.now();
     this.interval = setInterval(() => {
       this.tick();
     }, 1000);
@@ -504,13 +524,16 @@ export class PomodoroEngine extends EventEmitter {
     if (this.disposed) return;
     if (!this.isRunning || this.isPaused) return;
 
+    const segmentElapsed = Math.max(0, Math.floor((Date.now() - this.anchorTimestamp) / 1000));
+    const wallElapsed = this.accumulatedElapsed + segmentElapsed;
+
     if (this.timerMode === 'stopwatch') {
-      this.stopwatchElapsed += 1;
+      this.stopwatchElapsed = wallElapsed;
       this.emit('tick', this.getState());
       return;
     }
 
-    this.secondsLeft -= 1;
+    this.secondsLeft = Math.max(0, this.totalSeconds - wallElapsed);
 
     if (this.secondsLeft <= 0) {
       this.secondsLeft = 0;
@@ -765,6 +788,9 @@ export class PomodoroEngine extends EventEmitter {
         overrideDuration: this.totalSeconds !== defaultDuration ? this.totalSeconds : null,
         timerMode: this.timerMode !== 'countdown' ? this.timerMode : undefined,
         stopwatchElapsed: this.timerMode === 'stopwatch' ? this.stopwatchElapsed : undefined,
+        accumulatedElapsed: this.isRunning && !this.isPaused
+          ? this.accumulatedElapsed + Math.floor((Date.now() - this.anchorTimestamp) / 1000)
+          : this.accumulatedElapsed,
         sequenceName: this.sequence?.name,
         sequenceBlocks: this.sequence?.blocks,
         sequenceBlockIndex: this.sequence && !this.sequenceComplete ? this.sequenceBlockIndex : undefined,
