@@ -215,7 +215,7 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
       return; // TextInput handles typing
     }
 
-    if (key.escape || input === 'q') { onClose(); return; }
+    if (input === 'q') { onClose(); return; }
     if (input === '/' || input === 'f') {
       setIsSearching(true);
       setIsTyping(true);
@@ -298,7 +298,7 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
             {searchQuery ? (
               <Text color={colors.focus}>  /{searchQuery}</Text>
             ) : (
-              <Text dimColor>  /:search  j/k:scroll  Esc:close</Text>
+              <Text dimColor>  /:search  j/k:scroll  q/Esc:close</Text>
             )}
           </>
         )}

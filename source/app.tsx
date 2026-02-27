@@ -305,6 +305,12 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       if (isZen) { setIsZen(false); return; }
     }
 
+    // ? toggles help, Esc closes help (close if open)
+    if (showHelp && !isTyping && (key.escape || keymap.matches('global.help', input, key))) {
+      setShowHelp(false);
+      return;
+    }
+
     if (showCommandPalette || showSearch || showInsights || showGlobalSearch || showHelp || showResetModal || isTyping) return;
 
     if (keymap.matches('global.zen', input, key) && (view === 'timer' || view === 'clock')) {
