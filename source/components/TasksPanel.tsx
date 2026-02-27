@@ -7,8 +7,9 @@ import type { CalendarConfig } from '../types.js';
 export type PaneId = 'calendar' | 'today' | 'tasks';
 
 interface TasksPanelProps {
-  todayEvents: CalendarEvent[];
-  todayTasks: Task[];
+  selectedDate: string;
+  selectedEvents: CalendarEvent[];
+  selectedTasks: Task[];
   allTasks: Task[];
   width: number;
   maxRows: number;
@@ -35,8 +36,9 @@ function TaskItem({ task, width, isGlobalPrivacy, done }: { task: Task; width: n
 }
 
 export function TasksPanel({
-  todayEvents,
-  todayTasks,
+  selectedDate,
+  selectedEvents,
+  selectedTasks,
   allTasks,
   width,
   maxRows,
@@ -63,42 +65,55 @@ export function TasksPanel({
 
   const sep = '─'.repeat(width - 1);
 
-  // Today items: events + tasks with deadlines today
-  const todayItems: { type: 'event' | 'task'; event?: CalendarEvent; task?: Task }[] = [];
-  for (const e of todayEvents) {
-    todayItems.push({ type: 'event', event: e });
+  // Selected day items: events + tasks with deadlines on that day
+  const dayItems: { type: 'event' | 'task'; event?: CalendarEvent; task?: Task }[] = [];
+  for (const e of selectedEvents) {
+    dayItems.push({ type: 'event', event: e });
   }
-  for (const t of todayTasks) {
-    todayItems.push({ type: 'task', task: t });
+  for (const t of selectedTasks) {
+    dayItems.push({ type: 'task', task: t });
   }
 
-  // Visible slice of today items (scrolled)
-  const todayVisible = todayItems.slice(todayScrollOffset, todayScrollOffset + todayContentRows);
-  const todayHasMore = todayItems.length > todayScrollOffset + todayContentRows;
+  // Only reserve indicator lines when list needs scrolling
+  const dayNeedsScroll = dayItems.length > todayContentRows;
+  const dayIndicatorCost = dayNeedsScroll ? 2 : 0;
+  const todayVisibleCount = Math.max(0, todayContentRows - dayIndicatorCost);
   const todayHasPrev = todayScrollOffset > 0;
+  const todayVisible = dayItems.slice(todayScrollOffset, todayScrollOffset + todayVisibleCount);
+  const todayHasMore = dayItems.length > todayScrollOffset + todayVisibleCount;
 
   // All tasks: pending first, then done
   const tasksList = [...allTasks.filter(t => !t.completed), ...allTasks.filter(t => t.completed)];
 
-  // Visible slice of tasks (scrolled)
-  const tasksVisible = tasksList.slice(tasksScrollOffset, tasksScrollOffset + tasksContentRows);
-  const tasksHasMore = tasksList.length > tasksScrollOffset + tasksContentRows;
+  // Only reserve indicator lines when list needs scrolling
+  const tasksNeedScroll = tasksList.length > tasksContentRows;
+  const tasksIndicatorCost = tasksNeedScroll ? 2 : 0;
+  const tasksVisibleCount = Math.max(0, tasksContentRows - tasksIndicatorCost);
   const tasksHasPrev = tasksScrollOffset > 0;
+  const tasksVisible = tasksList.slice(tasksScrollOffset, tasksScrollOffset + tasksVisibleCount);
+  const tasksHasMore = tasksList.length > tasksScrollOffset + tasksVisibleCount;
+
+  // Format date for header: "Feb 27" style
+  const dateParts = selectedDate.split('-');
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dateLabel = dateParts.length === 3
+    ? `${monthNames[Number(dateParts[1]) - 1]} ${Number(dateParts[2])}`
+    : selectedDate;
 
   return (
     <Box flexDirection="column" width={width}>
-      {/* ─── TODAY box ─── */}
+      {/* ─── Selected day box ─── */}
       <Box height={halfRows} flexDirection="column">
         <Text bold color={todayHeader}>
-          {isTodayFocused ? '▸ ' : '  '}TODAY{todayCollapsed ? ' [+]' : ''}
+          {isTodayFocused ? '▸ ' : '  '}{dateLabel}{todayCollapsed ? ' [+]' : ''}
         </Text>
         <Text color={colors.dim}>{sep}</Text>
 
         {!todayCollapsed && (
           <>
-            {todayHasPrev && <Text dimColor>  ↑ more</Text>}
-            {todayItems.length === 0 && (
-              <Text dimColor>  No events today</Text>
+            {dayNeedsScroll ? (todayHasPrev ? <Text dimColor>  ↑ more</Text> : <Text> </Text>) : null}
+            {dayItems.length === 0 && (
+              <Text dimColor>  No events</Text>
             )}
             {todayVisible.map((item, i) => {
               if (item.type === 'event' && item.event) {
@@ -124,7 +139,7 @@ export function TasksPanel({
               }
               return null;
             })}
-            {todayHasMore && <Text dimColor>  ↓ more</Text>}
+            {dayNeedsScroll ? (todayHasMore ? <Text dimColor>  ↓ more</Text> : <Text> </Text>) : null}
           </>
         )}
       </Box>
@@ -138,11 +153,11 @@ export function TasksPanel({
 
         {!tasksCollapsed && (
           <>
-            {tasksHasPrev && <Text dimColor>  ↑ more</Text>}
+            {tasksNeedScroll ? (tasksHasPrev ? <Text dimColor>  ↑ more</Text> : <Text> </Text>) : null}
             {tasksList.length === 0 && (
               <Text dimColor>  No tasks</Text>
             )}
-            {tasksVisible.map((task, i) => (
+            {tasksVisible.map((task) => (
               <TaskItem
                 key={task.id}
                 task={task}
@@ -151,7 +166,7 @@ export function TasksPanel({
                 done={task.completed}
               />
             ))}
-            {tasksHasMore && <Text dimColor>  ↓ more</Text>}
+            {tasksNeedScroll ? (tasksHasMore ? <Text dimColor>  ↓ more</Text> : <Text> </Text>) : null}
           </>
         )}
       </Box>
@@ -160,8 +175,8 @@ export function TasksPanel({
 }
 
 /** Get total item count for a pane (used by CalendarView to clamp scroll) */
-export function getTodayItemCount(todayEvents: CalendarEvent[], todayTasks: Task[]): number {
-  return todayEvents.length + todayTasks.length;
+export function getDayItemCount(events: CalendarEvent[], tasks: Task[]): number {
+  return events.length + tasks.length;
 }
 
 export function getTasksItemCount(allTasks: Task[]): number {

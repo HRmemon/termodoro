@@ -8,7 +8,7 @@ import { loadTasks } from '../lib/tasks.js';
 import { loadReminders } from '../lib/reminders.js';
 import { MonthGrid } from './MonthGrid.js';
 import { DayAgenda } from './DayAgenda.js';
-import { TasksPanel, getTodayItemCount, getTasksItemCount } from './TasksPanel.js';
+import { TasksPanel, getDayItemCount, getTasksItemCount } from './TasksPanel.js';
 import type { PaneId } from './TasksPanel.js';
 import { EventForm } from './EventForm.js';
 import { colors } from '../lib/theme.js';
@@ -140,20 +140,8 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   // All tasks for the right panel
   const allTasks = useMemo(() => loadTasks(), [eventVersion]);
 
-  // Today's events and tasks for the Today box
-  const todayEvents = useMemo(() => {
-    const rangeStart = today;
-    const rangeEnd = today;
-    const expanded = expandRecurring(allEvents, rangeStart, rangeEnd);
-    return getEventsForDate(expanded, today);
-  }, [allEvents, today]);
-
-  const todayTasks = useMemo(() => {
-    return loadTasks().filter((t: { deadline?: string }) => t.deadline === today);
-  }, [today, eventVersion]);
-
-  // Reset cursor when selected date changes
-  useEffect(() => { setDailySelectedIdx(0); }, [selectedDate]);
+  // Reset cursor and day-panel scroll when selected date changes
+  useEffect(() => { setDailySelectedIdx(0); setTodayScrollOffset(0); }, [selectedDate]);
 
   const reloadEvents = useCallback(() => setEventVersion(v => v + 1), []);
   const reloadIcs = useCallback(() => setIcsVersion(v => v + 1), []);
@@ -335,7 +323,7 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
 
     // Today/Tasks panes: j/k to scroll
     if (focusedPane === 'today') {
-      const totalItems = getTodayItemCount(todayEvents, todayTasks);
+      const totalItems = getDayItemCount(dayEvents, dayTasks);
       if (keymap.matches('nav.down', input, key)) {
         setTodayScrollOffset(prev => Math.min(prev + 1, Math.max(0, totalItems - 1)));
         return;
@@ -390,8 +378,9 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
 
   const rightPanel = (
     <TasksPanel
-      todayEvents={todayEvents}
-      todayTasks={todayTasks}
+      selectedDate={selectedDate}
+      selectedEvents={dayEvents}
+      selectedTasks={dayTasks}
       allTasks={allTasks}
       width={tasksPanelWidth}
       maxRows={maxGridRows}
