@@ -111,6 +111,23 @@ export function TasksPanel({
   const border = colors.dim;
   const innerWidth = width - 1; // 1 char for left │ border
 
+  // Count actual content lines rendered per box to pad with │ for remaining
+  let dayContentLines = 0;
+  if (!todayCollapsed) {
+    dayContentLines += todayTopCost;
+    dayContentLines += dayItems.length === 0 ? 1 : todayVisible.length;
+    dayContentLines += todayHasMoreFinal ? 1 : 0;
+  }
+  const dayPadLines = Math.max(0, (todayCollapsed ? halfRows - boxHeaderCost : todayContentRows) - dayContentLines);
+
+  let tasksContentLines = 0;
+  if (!tasksCollapsed) {
+    tasksContentLines += tasksTopCost;
+    tasksContentLines += tasksList.length === 0 ? 1 : tasksVisible.length;
+    tasksContentLines += tasksHasMoreFinal ? 1 : 0;
+  }
+  const tasksPadLines = Math.max(0, (tasksCollapsed ? halfRows - boxHeaderCost : tasksContentRows) - tasksContentLines);
+
   return (
     <Box flexDirection="column" width={width}>
       {/* ─── Selected day box ─── */}
@@ -182,6 +199,9 @@ export function TasksPanel({
             )}
           </>
         )}
+        {Array.from({ length: dayPadLines }).map((_, i) => (
+          <Box key={`dpad-${i}`} flexShrink={0}><Text color={border}>│</Text></Box>
+        ))}
       </Box>
 
       {/* ─── TASKS box ─── */}
@@ -229,6 +249,9 @@ export function TasksPanel({
             )}
           </>
         )}
+        {Array.from({ length: tasksPadLines }).map((_, i) => (
+          <Box key={`tpad-${i}`} flexShrink={0}><Text color={border}>│</Text></Box>
+        ))}
       </Box>
     </Box>
   );
