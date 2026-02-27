@@ -150,10 +150,10 @@ export function GlobalSearch({ onNavigate, onDismiss }: GlobalSearchProps) {
   }, [results, selectedIdx, onNavigate]);
 
   useInput((_input, key) => {
-    const input = _input;
+    // TextInput is always active — only handle non-character keys
     if (key.escape) { onDismiss(); return; }
-    if (input === 'j' || key.downArrow) { setSelectedIdx(i => Math.min(i + 1, results.length - 1)); return; }
-    if (input === 'k' || key.upArrow) { setSelectedIdx(i => Math.max(i - 1, 0)); return; }
+    if (key.downArrow) { setSelectedIdx(i => Math.min(i + 1, results.length - 1)); return; }
+    if (key.upArrow) { setSelectedIdx(i => Math.max(i - 1, 0)); return; }
     if (key.return && results.length > 0) {
       handleNavigate();
       return;
@@ -164,7 +164,7 @@ export function GlobalSearch({ onNavigate, onDismiss }: GlobalSearchProps) {
     <Box flexDirection="column" padding={2}>
       <Box marginBottom={1}>
         <Text bold color="white">Search</Text>
-        <Text dimColor>  Esc: close  Enter: navigate  j/k: select</Text>
+        <Text dimColor>  Esc: close  Enter: navigate  ↑↓: select</Text>
       </Box>
       <Box marginBottom={1}>
         <Text color="yellow">{'/ '}</Text>

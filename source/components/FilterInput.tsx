@@ -25,11 +25,11 @@ export function FilterInput({ label, value, onChange, onSubmit, placeholder, ite
   useInput((_input, key) => {
     if (!items || items.length === 0) return;
 
-    if (key.downArrow || (_input === 'j' && key.ctrl)) {
+    if (key.downArrow) {
       setHighlightIdx(i => Math.min(i + 1, filtered.length - 1));
       return;
     }
-    if (key.upArrow || (_input === 'k' && key.ctrl)) {
+    if (key.upArrow) {
       setHighlightIdx(i => Math.max(i - 1, 0));
       return;
     }
