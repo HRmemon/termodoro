@@ -16,6 +16,8 @@ interface TasksPanelProps {
   focusedPane: PaneId;
   todayCollapsed: boolean;
   tasksCollapsed: boolean;
+  todayScrollOffset: number;
+  tasksScrollOffset: number;
   calendarConfig?: CalendarConfig;
 }
 
@@ -42,35 +44,22 @@ export function TasksPanel({
   focusedPane,
   todayCollapsed,
   tasksCollapsed,
+  todayScrollOffset,
+  tasksScrollOffset,
   calendarConfig,
 }: TasksPanelProps) {
   const isTodayFocused = focusedPane === 'today';
   const isTasksFocused = focusedPane === 'tasks';
 
-  // Header styling based on focus
   const todayHeader = isTodayFocused ? colors.highlight : colors.dim;
   const tasksHeader = isTasksFocused ? colors.highlight : colors.dim;
 
-  // Split available rows between the two boxes
-  const headerCost = 2; // header + separator per box
-  const todayHeaderLines = headerCost;
-  const tasksHeaderLines = headerCost;
-
-  let todayAvail = 0;
-  let tasksAvail = 0;
-
-  if (todayCollapsed && tasksCollapsed) {
-    // Both collapsed — just headers
-  } else if (todayCollapsed) {
-    tasksAvail = maxRows - todayHeaderLines - tasksHeaderLines;
-  } else if (tasksCollapsed) {
-    todayAvail = maxRows - todayHeaderLines - tasksHeaderLines;
-  } else {
-    // Split roughly 40/60 (today gets less since it's one day)
-    const usable = maxRows - todayHeaderLines - tasksHeaderLines;
-    todayAvail = Math.max(2, Math.floor(usable * 0.4));
-    tasksAvail = Math.max(2, usable - todayAvail);
-  }
+  // Fixed 50/50 split: each box gets half of maxRows
+  // Each box: 1 header + 1 separator + content lines
+  const boxHeaderCost = 2;
+  const halfRows = Math.floor(maxRows / 2);
+  const todayContentRows = todayCollapsed ? 0 : halfRows - boxHeaderCost;
+  const tasksContentRows = tasksCollapsed ? 0 : halfRows - boxHeaderCost;
 
   const sep = '─'.repeat(width - 1);
 
@@ -83,83 +72,98 @@ export function TasksPanel({
     todayItems.push({ type: 'task', task: t });
   }
 
-  // All tasks split
-  const pending = allTasks.filter(t => !t.completed);
-  const done = allTasks.filter(t => t.completed);
+  // Visible slice of today items (scrolled)
+  const todayVisible = todayItems.slice(todayScrollOffset, todayScrollOffset + todayContentRows);
+  const todayHasMore = todayItems.length > todayScrollOffset + todayContentRows;
+  const todayHasPrev = todayScrollOffset > 0;
+
+  // All tasks: pending first, then done
+  const tasksList = [...allTasks.filter(t => !t.completed), ...allTasks.filter(t => t.completed)];
+
+  // Visible slice of tasks (scrolled)
+  const tasksVisible = tasksList.slice(tasksScrollOffset, tasksScrollOffset + tasksContentRows);
+  const tasksHasMore = tasksList.length > tasksScrollOffset + tasksContentRows;
+  const tasksHasPrev = tasksScrollOffset > 0;
 
   return (
     <Box flexDirection="column" width={width}>
-      {/* Today box */}
-      <Text bold color={todayHeader}>
-        {isTodayFocused ? '▸ ' : '  '}TODAY{todayCollapsed ? ' [+]' : ''}
-      </Text>
-      <Text color={colors.dim}>{sep}</Text>
+      {/* ─── TODAY box ─── */}
+      <Box height={halfRows} flexDirection="column">
+        <Text bold color={todayHeader}>
+          {isTodayFocused ? '▸ ' : '  '}TODAY{todayCollapsed ? ' [+]' : ''}
+        </Text>
+        <Text color={colors.dim}>{sep}</Text>
 
-      {!todayCollapsed && (
-        <>
-          {todayItems.length === 0 && (
-            <Text dimColor>  No events today</Text>
-          )}
-          {todayItems.slice(0, todayAvail).map((item, i) => {
-            if (item.type === 'event' && item.event) {
-              const e = item.event;
-              const icon = getEventIcon(e, calendarConfig, isGlobalPrivacy);
-              const title = isGlobalPrivacy || e.privacy
-                ? getPrivacyDisplay(e.title)
-                : e.title;
-              const maxLen = width - 5;
-              const display = title.length > maxLen ? title.slice(0, maxLen - 1) + '…' : title;
-              let eventColor = e.color ?? colors.highlight;
-              if (e.status === 'done') eventColor = colors.dim;
-              if (e.source === 'ics') eventColor = colors.break;
-              return (
-                <Box key={`te-${i}`}>
-                  <Text color={eventColor}>{icon} {display}</Text>
-                  {e.time && <Text dimColor> {e.time}</Text>}
-                </Box>
-              );
-            }
-            if (item.type === 'task' && item.task) {
-              return <TaskItem key={`tt-${i}`} task={item.task} width={width} isGlobalPrivacy={isGlobalPrivacy} done={item.task.completed} />;
-            }
-            return null;
-          })}
-          {todayItems.length > todayAvail && (
-            <Text dimColor>  +{todayItems.length - todayAvail} more</Text>
-          )}
-        </>
-      )}
+        {!todayCollapsed && (
+          <>
+            {todayHasPrev && <Text dimColor>  ↑ more</Text>}
+            {todayItems.length === 0 && (
+              <Text dimColor>  No events today</Text>
+            )}
+            {todayVisible.map((item, i) => {
+              if (item.type === 'event' && item.event) {
+                const e = item.event;
+                const icon = getEventIcon(e, calendarConfig, isGlobalPrivacy);
+                const title = isGlobalPrivacy || e.privacy
+                  ? getPrivacyDisplay(e.title)
+                  : e.title;
+                const maxLen = width - 5;
+                const display = title.length > maxLen ? title.slice(0, maxLen - 1) + '…' : title;
+                let eventColor = e.color ?? colors.highlight;
+                if (e.status === 'done') eventColor = colors.dim;
+                if (e.source === 'ics') eventColor = colors.break;
+                return (
+                  <Box key={`te-${i}`}>
+                    <Text color={eventColor}>{icon} {display}</Text>
+                    {e.time && <Text dimColor> {e.time}</Text>}
+                  </Box>
+                );
+              }
+              if (item.type === 'task' && item.task) {
+                return <TaskItem key={`tt-${i}`} task={item.task} width={width} isGlobalPrivacy={isGlobalPrivacy} done={item.task.completed} />;
+              }
+              return null;
+            })}
+            {todayHasMore && <Text dimColor>  ↓ more</Text>}
+          </>
+        )}
+      </Box>
 
-      {/* Spacing between boxes */}
-      <Text> </Text>
+      {/* ─── TASKS box ─── */}
+      <Box height={halfRows} flexDirection="column">
+        <Text bold color={tasksHeader}>
+          {isTasksFocused ? '▸ ' : '  '}TASKS{tasksCollapsed ? ' [+]' : ''}
+        </Text>
+        <Text color={colors.dim}>{sep}</Text>
 
-      {/* Tasks box */}
-      <Text bold color={tasksHeader}>
-        {isTasksFocused ? '▸ ' : '  '}TASKS{tasksCollapsed ? ' [+]' : ''}
-      </Text>
-      <Text color={colors.dim}>{sep}</Text>
-
-      {!tasksCollapsed && (
-        <>
-          {pending.length === 0 && done.length === 0 && (
-            <Text dimColor>  No tasks</Text>
-          )}
-          {pending.slice(0, tasksAvail).map(task => (
-            <TaskItem key={task.id} task={task} width={width} isGlobalPrivacy={isGlobalPrivacy} />
-          ))}
-          {done.length > 0 && pending.length < tasksAvail && (
-            done.slice(0, Math.max(0, tasksAvail - pending.length)).map(task => (
-              <TaskItem key={task.id} task={task} width={width} isGlobalPrivacy={isGlobalPrivacy} done />
-            ))
-          )}
-          {(() => {
-            const pendingShown = Math.min(pending.length, tasksAvail);
-            const doneShown = pending.length < tasksAvail ? Math.min(done.length, tasksAvail - pending.length) : 0;
-            const hidden = allTasks.length - pendingShown - doneShown;
-            return hidden > 0 ? <Text dimColor>  +{hidden} more</Text> : null;
-          })()}
-        </>
-      )}
+        {!tasksCollapsed && (
+          <>
+            {tasksHasPrev && <Text dimColor>  ↑ more</Text>}
+            {tasksList.length === 0 && (
+              <Text dimColor>  No tasks</Text>
+            )}
+            {tasksVisible.map((task, i) => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                width={width}
+                isGlobalPrivacy={isGlobalPrivacy}
+                done={task.completed}
+              />
+            ))}
+            {tasksHasMore && <Text dimColor>  ↓ more</Text>}
+          </>
+        )}
+      </Box>
     </Box>
   );
+}
+
+/** Get total item count for a pane (used by CalendarView to clamp scroll) */
+export function getTodayItemCount(todayEvents: CalendarEvent[], todayTasks: Task[]): number {
+  return todayEvents.length + todayTasks.length;
+}
+
+export function getTasksItemCount(allTasks: Task[]): number {
+  return allTasks.length;
 }

@@ -8,7 +8,7 @@ import { loadTasks } from '../lib/tasks.js';
 import { loadReminders } from '../lib/reminders.js';
 import { MonthGrid } from './MonthGrid.js';
 import { DayAgenda } from './DayAgenda.js';
-import { TasksPanel } from './TasksPanel.js';
+import { TasksPanel, getTodayItemCount, getTasksItemCount } from './TasksPanel.js';
 import type { PaneId } from './TasksPanel.js';
 import { EventForm } from './EventForm.js';
 import { colors } from '../lib/theme.js';
@@ -61,6 +61,8 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   const [focusedPane, setFocusedPane] = useState<PaneId>('calendar');
   const [todayCollapsed, setTodayCollapsed] = useState(false);
   const [tasksCollapsed, setTasksCollapsed] = useState(false);
+  const [todayScrollOffset, setTodayScrollOffset] = useState(0);
+  const [tasksScrollOffset, setTasksScrollOffset] = useState(0);
 
   const { stdout } = useStdout();
   const termRows = stdout?.rows ?? 24;
@@ -331,7 +333,30 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
       }
     }
 
-    // Today/Tasks panes: no special keys yet (just Tab to switch, Enter to collapse)
+    // Today/Tasks panes: j/k to scroll
+    if (focusedPane === 'today') {
+      const totalItems = getTodayItemCount(todayEvents, todayTasks);
+      if (keymap.matches('nav.down', input, key)) {
+        setTodayScrollOffset(prev => Math.min(prev + 1, Math.max(0, totalItems - 1)));
+        return;
+      }
+      if (keymap.matches('nav.up', input, key)) {
+        setTodayScrollOffset(prev => Math.max(prev - 1, 0));
+        return;
+      }
+    }
+
+    if (focusedPane === 'tasks') {
+      const totalItems = getTasksItemCount(allTasks);
+      if (keymap.matches('nav.down', input, key)) {
+        setTasksScrollOffset(prev => Math.min(prev + 1, Math.max(0, totalItems - 1)));
+        return;
+      }
+      if (keymap.matches('nav.up', input, key)) {
+        setTasksScrollOffset(prev => Math.max(prev - 1, 0));
+        return;
+      }
+    }
   });
 
   // Layout calculations
@@ -374,6 +399,8 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
       focusedPane={focusedPane}
       todayCollapsed={todayCollapsed}
       tasksCollapsed={tasksCollapsed}
+      todayScrollOffset={todayScrollOffset}
+      tasksScrollOffset={tasksScrollOffset}
       calendarConfig={calendarConfig}
     />
   );
