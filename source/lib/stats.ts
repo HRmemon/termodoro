@@ -62,27 +62,27 @@ function parseDate(dateStr: string): Date {
   return new Date(y!, (m! - 1), d!);
 }
 
-export function getSessionsForDateRange(start: string, end: string): Session[] {
-  const sessions = loadSessions();
+export function getSessionsForDateRange(start: string, end: string, sessions?: Session[]): Session[] {
+  const all = sessions ?? loadSessions();
   const startMs = parseDate(start).getTime();
   // end is inclusive: advance to end of day
   const endDate = parseDate(end);
   endDate.setHours(23, 59, 59, 999);
   const endMs = endDate.getTime();
 
-  return sessions.filter(s => {
+  return all.filter(s => {
     const t = new Date(s.startedAt).getTime();
     return t >= startMs && t <= endMs;
   });
 }
 
-export function getTodaySessions(): Session[] {
+export function getTodaySessions(sessions?: Session[]): Session[] {
   const today = toDateString(new Date());
-  return getSessionsForDateRange(today, today);
+  return getSessionsForDateRange(today, today, sessions);
 }
 
-export function getDailyStats(date: string): DailyStats {
-  const sessions = getSessionsForDateRange(date, date);
+export function getDailyStats(date: string, allSessions?: Session[]): DailyStats {
+  const sessions = getSessionsForDateRange(date, date, allSessions);
 
   let focusMinutes = 0;
   let breakMinutes = 0;
@@ -116,7 +116,8 @@ export function getDailyStats(date: string): DailyStats {
   };
 }
 
-export function getWeeklyStats(weekStartDate: string): WeeklyStats {
+export function getWeeklyStats(weekStartDate: string, allSessions?: Session[]): WeeklyStats {
+  const loaded = allSessions ?? loadSessions();
   const start = parseDate(weekStartDate);
   const heatmap: HeatmapDay[] = [];
 
@@ -124,7 +125,7 @@ export function getWeeklyStats(weekStartDate: string): WeeklyStats {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     const dateStr = toDateString(d);
-    const sessions = getSessionsForDateRange(dateStr, dateStr);
+    const sessions = getSessionsForDateRange(dateStr, dateStr, loaded);
 
     const focusMinutes = sessions
       .filter(s => s.type === 'work' && s.status === 'completed')
@@ -164,7 +165,6 @@ export function getDeepWorkRatio(sessions: Session[]): DeepWorkRatio {
   const ratio = totalActiveMinutes > 0 ? focusMinutes / totalActiveMinutes : 0;
 
   // Trend: compare focus ratio of last 7 days vs previous 7 days
-  const allSessions = loadSessions();
   const today = new Date();
 
   function getRatioForRange(daysBack: number, span: number): number {
@@ -175,7 +175,7 @@ export function getDeepWorkRatio(sessions: Session[]): DeepWorkRatio {
 
     const rangeStart = toDateString(startDate);
     const rangeEnd = toDateString(endDate);
-    const rangeSessions = allSessions.filter(s => {
+    const rangeSessions = sessions.filter(s => {
       const t = new Date(s.startedAt).getTime();
       const sMs = parseDate(rangeStart).getTime();
       const eDate = parseDate(rangeEnd);
@@ -232,8 +232,8 @@ export function getTaskBreakdown(sessions: Session[]): TaskBreakdown {
   };
 }
 
-export function getStreaks(): StreakInfo {
-  const allSessions = loadSessions();
+export function getStreaks(preloaded?: Session[]): StreakInfo {
+  const allSessions = preloaded ?? loadSessions();
   const today = new Date();
 
   // Build a set of dates that had at least one completed work session
@@ -269,7 +269,6 @@ export function getStreaks(): StreakInfo {
   // Record streak: find the longest consecutive run across all history
   let recordStreak = 0;
   let runLength = 0;
-  let recordCursor = new Date(today);
 
   // Find the earliest date we have data for
   const sortedDates = Array.from(activeDates).sort();
@@ -297,7 +296,7 @@ export function getStreaks(): StreakInfo {
   const weekStartStr = toDateString(weekStart);
   const weekEndStr = toDateString(today);
 
-  const weekSessions = getSessionsForDateRange(weekStartStr, weekEndStr);
+  const weekSessions = getSessionsForDateRange(weekStartStr, weekEndStr, allSessions);
   const deepWorkMinutes = weekSessions
     .filter(s => s.type === 'work' && s.status === 'completed')
     .reduce((sum, s) => sum + s.durationActual / 60, 0);

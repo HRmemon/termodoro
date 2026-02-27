@@ -88,7 +88,7 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
           const d = new Date();
           d.setDate(d.getDate() - i);
           const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          const daySessions = getSessionsForDateRange(ds, ds)
+          const daySessions = getSessionsForDateRange(ds, ds, allSessions)
             .filter(s => s.type === 'work' && s.status === 'completed' && s.project === task.project);
           vals.push(daySessions.length);
         }
@@ -96,11 +96,11 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
       }
     }
 
-    const todaySessions = getSessionsForDateRange(today, today);
+    const todaySessions = getSessionsForDateRange(today, today, allSessions);
 
     return {
-      daily: getDailyStats(today),
-      weekly: getWeeklyStats(weekStart),
+      daily: getDailyStats(today, allSessions),
+      weekly: getWeeklyStats(weekStart, allSessions),
       breakdown: getTaskBreakdown(allSessions),
       recentSessions: allSessions
         .filter(s => s.type === 'work' && s.status === 'completed')
@@ -110,7 +110,7 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
         .filter(([name]) => name !== '(none)')
         .sort((a, b) => b[1].pomodoros - a[1].pomodoros),
       deepWork: getDeepWorkRatio(allSessions),
-      streaks: getStreaks(),
+      streaks: getStreaks(allSessions),
       todaySessions,
       projectActivity,
     };

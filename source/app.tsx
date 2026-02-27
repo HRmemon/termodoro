@@ -111,16 +111,18 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     return loadSequences();
   }, [view]);
 
-  const todayStats = useMemo(() => {
+  const statusBarData = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    const sessions = loadSessions().filter(s => s.startedAt.startsWith(today) && s.type === 'work' && s.status === 'completed');
+    const allSessions = loadSessions();
+    const todaySessions = allSessions.filter(
+      s => s.startedAt.startsWith(today) && s.type === 'work' && s.status === 'completed'
+    );
     return {
-      count: sessions.length,
-      focusMinutes: Math.round(sessions.reduce((sum, s) => sum + s.durationActual, 0) / 60),
+      todayCount: todaySessions.length,
+      todayFocusMinutes: Math.round(todaySessions.reduce((sum, s) => sum + s.durationActual, 0) / 60),
+      streak: getStreaks(allSessions).currentStreak,
     };
   }, [timer.isComplete, engine.sessionNumber]);
-
-  const streak = useMemo(() => getStreaks().currentStreak, [timer.isComplete, engine.sessionNumber]);
 
   // Reminder checker — runs every 30s
   useEffect(() => {
@@ -471,9 +473,9 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       isRunning={timer.isRunning}
       isPaused={timer.isPaused}
       timerMode={timer.timerMode}
-      streak={streak}
-      todaySessions={todayStats.count}
-      todayFocusMinutes={todayStats.focusMinutes}
+      streak={statusBarData.streak}
+      todaySessions={statusBarData.todayCount}
+      todayFocusMinutes={statusBarData.todayFocusMinutes}
     />
   );
 

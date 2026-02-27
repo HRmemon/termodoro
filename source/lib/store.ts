@@ -45,15 +45,31 @@ function readJSON<T>(filePath: string, fallback: T): T {
 // Sessions — delegated to SQLite via session-db
 migrateFromJson(); // One-time migration from sessions.json on first load
 
+// --- Session cache (write-invalidation) ---
+// Avoids redundant SQLite queries within the same synchronous call frame.
+// Invalidated on every write; cross-process reads go through SQLite WAL.
+let _sessionCache: Session[] | null = null;
+let _cacheVersion = 0;
+let _readVersion = -1;
+
 export function loadSessions(): Session[] {
-  return getAllSessions();
+  if (_sessionCache && _readVersion === _cacheVersion) {
+    return _sessionCache;
+  }
+  _sessionCache = getAllSessions();
+  _readVersion = _cacheVersion;
+  return _sessionCache;
 }
 
 export function saveSessions(sessions: Session[]): void {
+  _sessionCache = null;
+  _cacheVersion++;
   replaceAllSessions(sessions);
 }
 
 export function appendSession(session: Session): void {
+  _sessionCache = null;
+  _cacheVersion++;
   insertSession(session); // Atomic INSERT, no read-modify-write
 }
 
