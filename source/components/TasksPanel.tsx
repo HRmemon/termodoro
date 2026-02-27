@@ -24,13 +24,17 @@ interface TasksPanelProps {
 
 function TaskItem({ task, width, isGlobalPrivacy, done }: { task: Task; width: number; isGlobalPrivacy?: boolean; done?: boolean }) {
   const name = isGlobalPrivacy ? getPrivacyDisplay(task.text) : task.text;
-  const maxLen = width - 5;
-  const display = name.length > maxLen ? name.slice(0, maxLen - 1) + '…' : name;
+  const projectStr = task.project ? ` #${task.project}` : '';
+  const bulletStr = done ? '✔ ' : '• ';
+
+  const maxLen = Math.max(0, width - bulletStr.length - projectStr.length);
+  const display = name.length > maxLen ? name.slice(0, Math.max(0, maxLen - 1)) + '…' : name;
+
   return (
-    <Box>
-      <Text color={done ? colors.dim : colors.highlight}>{done ? '✔ ' : '• '}</Text>
+    <Box flexShrink={0}>
+      <Text color={done ? colors.dim : colors.highlight}>{bulletStr}</Text>
       <Text color={done ? colors.dim : colors.text}>{display}</Text>
-      {task.project && <Text dimColor> #{task.project}</Text>}
+      {task.project && <Text dimColor>{projectStr}</Text>}
     </Box>
   );
 }
@@ -74,24 +78,28 @@ export function TasksPanel({
     dayItems.push({ type: 'task', task: t });
   }
 
-  // Only reserve indicator lines when list needs scrolling
-  const dayNeedsScroll = dayItems.length > todayContentRows;
-  const dayIndicatorCost = dayNeedsScroll ? 2 : 0;
-  const todayVisibleCount = Math.max(0, todayContentRows - dayIndicatorCost);
+  // Compute visible items with stable scroll indicators
+  // Top indicator shown only when scrolled down; bottom only when more items below
   const todayHasPrev = todayScrollOffset > 0;
+  const todayTopCost = todayHasPrev ? 1 : 0;
+  const todayTentative = Math.max(0, todayContentRows - todayTopCost);
+  const todayHasMore = dayItems.length > todayScrollOffset + todayTentative;
+  const todayBottomCost = todayHasMore ? 1 : 0;
+  const todayVisibleCount = Math.max(0, todayContentRows - todayTopCost - todayBottomCost);
   const todayVisible = dayItems.slice(todayScrollOffset, todayScrollOffset + todayVisibleCount);
-  const todayHasMore = dayItems.length > todayScrollOffset + todayVisibleCount;
+  const todayHasMoreFinal = dayItems.length > todayScrollOffset + todayVisibleCount;
 
   // All tasks: pending first, then done
   const tasksList = [...allTasks.filter(t => !t.completed), ...allTasks.filter(t => t.completed)];
 
-  // Only reserve indicator lines when list needs scrolling
-  const tasksNeedScroll = tasksList.length > tasksContentRows;
-  const tasksIndicatorCost = tasksNeedScroll ? 2 : 0;
-  const tasksVisibleCount = Math.max(0, tasksContentRows - tasksIndicatorCost);
   const tasksHasPrev = tasksScrollOffset > 0;
+  const tasksTopCost = tasksHasPrev ? 1 : 0;
+  const tasksTentative = Math.max(0, tasksContentRows - tasksTopCost);
+  const tasksHasMore = tasksList.length > tasksScrollOffset + tasksTentative;
+  const tasksBottomCost = tasksHasMore ? 1 : 0;
+  const tasksVisibleCount = Math.max(0, tasksContentRows - tasksTopCost - tasksBottomCost);
   const tasksVisible = tasksList.slice(tasksScrollOffset, tasksScrollOffset + tasksVisibleCount);
-  const tasksHasMore = tasksList.length > tasksScrollOffset + tasksVisibleCount;
+  const tasksHasMoreFinal = tasksList.length > tasksScrollOffset + tasksVisibleCount;
 
   // Format date for header: "Feb 27" style
   const dateParts = selectedDate.split('-');
@@ -103,17 +111,27 @@ export function TasksPanel({
   return (
     <Box flexDirection="column" width={width}>
       {/* ─── Selected day box ─── */}
-      <Box height={halfRows} flexDirection="column">
-        <Text bold color={todayHeader}>
-          {isTodayFocused ? '▸ ' : '  '}{dateLabel}{todayCollapsed ? ' [+]' : ''}
-        </Text>
-        <Text color={colors.dim}>{sep}</Text>
+      <Box height={halfRows} flexDirection="column" overflow="hidden">
+        <Box flexShrink={0}>
+          <Text bold color={todayHeader}>
+            {isTodayFocused ? '▸ ' : '  '}{dateLabel}{todayCollapsed ? ' [+]' : ''}
+          </Text>
+        </Box>
+        <Box flexShrink={0}>
+          <Text color={colors.dim}>{sep}</Text>
+        </Box>
 
         {!todayCollapsed && (
           <>
-            {dayNeedsScroll ? (todayHasPrev ? <Text dimColor>  ↑ more</Text> : <Text> </Text>) : null}
+            {todayHasPrev && (
+              <Box flexShrink={0}>
+                <Text dimColor>  ↑ more</Text>
+              </Box>
+            )}
             {dayItems.length === 0 && (
-              <Text dimColor>  No events</Text>
+              <Box flexShrink={0}>
+                <Text dimColor>  No events</Text>
+              </Box>
             )}
             {todayVisible.map((item, i) => {
               if (item.type === 'event' && item.event) {
@@ -122,15 +140,20 @@ export function TasksPanel({
                 const title = isGlobalPrivacy || e.privacy
                   ? getPrivacyDisplay(e.title)
                   : e.title;
-                const maxLen = width - 5;
-                const display = title.length > maxLen ? title.slice(0, maxLen - 1) + '…' : title;
+
+                const timeStr = e.time ? ` ${e.time}` : '';
+                const iconStr = `${icon} `;
+
+                const maxLen = Math.max(0, width - iconStr.length - timeStr.length);
+                const display = title.length > maxLen ? title.slice(0, Math.max(0, maxLen - 1)) + '…' : title;
+
                 let eventColor = e.color ?? colors.highlight;
                 if (e.status === 'done') eventColor = colors.dim;
                 if (e.source === 'ics') eventColor = colors.break;
                 return (
-                  <Box key={`te-${i}`}>
-                    <Text color={eventColor}>{icon} {display}</Text>
-                    {e.time && <Text dimColor> {e.time}</Text>}
+                  <Box key={`te-${i}`} flexShrink={0}>
+                    <Text color={eventColor}>{iconStr}{display}</Text>
+                    {e.time && <Text dimColor>{timeStr}</Text>}
                   </Box>
                 );
               }
@@ -139,23 +162,37 @@ export function TasksPanel({
               }
               return null;
             })}
-            {dayNeedsScroll ? (todayHasMore ? <Text dimColor>  ↓ more</Text> : <Text> </Text>) : null}
+            {todayHasMoreFinal && (
+              <Box flexShrink={0}>
+                <Text dimColor>  ↓ more</Text>
+              </Box>
+            )}
           </>
         )}
       </Box>
 
       {/* ─── TASKS box ─── */}
-      <Box height={halfRows} flexDirection="column">
-        <Text bold color={tasksHeader}>
-          {isTasksFocused ? '▸ ' : '  '}TASKS{tasksCollapsed ? ' [+]' : ''}
-        </Text>
-        <Text color={colors.dim}>{sep}</Text>
+      <Box height={halfRows} flexDirection="column" overflow="hidden">
+        <Box flexShrink={0}>
+          <Text bold color={tasksHeader}>
+            {isTasksFocused ? '▸ ' : '  '}TASKS{tasksCollapsed ? ' [+]' : ''}
+          </Text>
+        </Box>
+        <Box flexShrink={0}>
+          <Text color={colors.dim}>{sep}</Text>
+        </Box>
 
         {!tasksCollapsed && (
           <>
-            {tasksNeedScroll ? (tasksHasPrev ? <Text dimColor>  ↑ more</Text> : <Text> </Text>) : null}
+            {tasksHasPrev && (
+              <Box flexShrink={0}>
+                <Text dimColor>  ↑ more</Text>
+              </Box>
+            )}
             {tasksList.length === 0 && (
-              <Text dimColor>  No tasks</Text>
+              <Box flexShrink={0}>
+                <Text dimColor>  No tasks</Text>
+              </Box>
             )}
             {tasksVisible.map((task) => (
               <TaskItem
@@ -166,7 +203,11 @@ export function TasksPanel({
                 done={task.completed}
               />
             ))}
-            {tasksNeedScroll ? (tasksHasMore ? <Text dimColor>  ↓ more</Text> : <Text> </Text>) : null}
+            {tasksHasMoreFinal && (
+              <Box flexShrink={0}>
+                <Text dimColor>  ↓ more</Text>
+              </Box>
+            )}
           </>
         )}
       </Box>
