@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { useInput, useStdout } from 'ink';
+import { useInput } from 'ink';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Keymap } from '../lib/keymap.js';
 import { colors } from '../lib/theme.js';
+import { useFullScreen } from '../hooks/useFullScreen.js';
 
 interface HelpViewProps {
   onClose: () => void;
@@ -159,7 +160,7 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
 
-  const { stdout } = useStdout();
+  const { columns: termCols, rows: termRows } = useFullScreen();
 
   const sections = useMemo(() => buildSections(keymap), [keymap]);
 
@@ -249,8 +250,6 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
   });
 
   // Column width for key:label pairs (roughly 1/3 of terminal)
-  const termRows = stdout?.rows ?? 24;
-  const termCols = stdout?.columns ?? 80;
   const colWidth = Math.floor((termCols - 8) / 3);
 
   // Build flat text lines for rendering
@@ -270,7 +269,8 @@ export function HelpView({ onClose, keymap, setIsTyping }: HelpViewProps) {
   }, [lines]);
 
   // Estimate available rows inside Layout (terminal - Layout chrome)
-  const layoutChrome = 10; // borders, status bar, keys bar, view header
+  // safeRows = rows-1, top border(1), mid divider(1), status row(1), keys divider(1), keys bar+border(2) = 7
+  const layoutChrome = 7;
   const availableRows = Math.max(5, termRows - layoutChrome);
   const bodyHeight = availableRows - 1; // 1 for search bar
   const totalLines = renderLines.length;

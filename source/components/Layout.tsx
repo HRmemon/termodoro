@@ -14,10 +14,10 @@ interface LayoutProps {
   sidebarWidth?: number;
   layout?: LayoutConfig;
   config?: Config;
-  overlayTitle?: string;
+  hideViewHeader?: boolean;
 }
 
-export function Layout({ activeView, statusLine, keysBar, children, sidebarWidth: sidebarWidthProp, layout, config, overlayTitle }: LayoutProps) {
+export function Layout({ activeView, statusLine, keysBar, children, sidebarWidth: sidebarWidthProp, layout, config, hideViewHeader }: LayoutProps) {
   const { columns, rows } = useFullScreen();
 
   // Render 1 row less than terminal height to prevent tmux jitter
@@ -80,7 +80,7 @@ export function Layout({ activeView, statusLine, keysBar, children, sidebarWidth
           borderColor="gray"
           paddingX={paddingX}
         >
-          {!compact && !overlayTitle && (
+          {!compact && !hideViewHeader && (
             <Box marginBottom={1}>
               <Text dimColor>{viewNum ? `[${viewNum}] ` : ''}</Text>
               <Text bold color={colors.text}>{viewTitle}</Text>

@@ -497,79 +497,80 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   ) : null;
 
   return (
-    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config} overlayTitle={showHelp ? 'Keybindings' : undefined}>
+    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config} hideViewHeader={showHelp}>
       {showHelp ? (
         <HelpView onClose={() => setShowHelp(false)} keymap={keymap} setIsTyping={setIsTyping} />
       ) : (
-      <>
-      {view === 'timer' && (
-        <TimerView
-          secondsLeft={timer.secondsLeft}
-          totalSeconds={timer.totalSeconds}
-          sessionType={engine.sessionType}
-          isPaused={timer.isPaused}
-          isRunning={timer.isRunning}
-          sessionNumber={engine.sessionNumber}
-          totalWorkSessions={engine.totalWorkSessions}
-          sequenceBlocks={sequence.sequenceBlocks}
-          currentBlockIndex={sequence.sequenceBlockIndex}
-          setIsTyping={setIsTyping}
-          timerFormat={config.timerFormat}
-          onSetCustomDuration={handleSetCustomDuration}
-          currentProject={engine.currentProject}
-          onSetProject={(p) => actions.setProject(p)}
-          sequences={allSequences}
-          activeSequence={sequence.sequenceName ? { name: sequence.sequenceName, blocks: sequence.sequenceBlocks ?? [] } : null}
-          onActivateSequence={handleActivateSequence}
-          onClearSequence={handleClearSequence}
-          onEditSequences={() => { setConfigSeqMode(true); setView('config'); }}
-          timerMode={timer.timerMode}
-          stopwatchElapsed={timer.stopwatchElapsed}
-          onSwitchToStopwatch={() => actions.switchToStopwatch()}
-          onStopStopwatch={() => actions.stopStopwatch()}
-          keymap={keymap}
-        />
+        <>
+          {view === 'timer' && (
+            <TimerView
+              secondsLeft={timer.secondsLeft}
+              totalSeconds={timer.totalSeconds}
+              sessionType={engine.sessionType}
+              isPaused={timer.isPaused}
+              isRunning={timer.isRunning}
+              sessionNumber={engine.sessionNumber}
+              totalWorkSessions={engine.totalWorkSessions}
+              sequenceBlocks={sequence.sequenceBlocks}
+              currentBlockIndex={sequence.sequenceBlockIndex}
+              setIsTyping={setIsTyping}
+              timerFormat={config.timerFormat}
+              onSetCustomDuration={handleSetCustomDuration}
+              currentProject={engine.currentProject}
+              onSetProject={(p) => actions.setProject(p)}
+              sequences={allSequences}
+              activeSequence={sequence.sequenceName ? { name: sequence.sequenceName, blocks: sequence.sequenceBlocks ?? [] } : null}
+              onActivateSequence={handleActivateSequence}
+              onClearSequence={handleClearSequence}
+              onEditSequences={() => { setConfigSeqMode(true); setView('config'); }}
+              timerMode={timer.timerMode}
+              stopwatchElapsed={timer.stopwatchElapsed}
+              onSwitchToStopwatch={() => actions.switchToStopwatch()}
+              onStopStopwatch={() => actions.stopStopwatch()}
+              keymap={keymap}
+            />
+          )}
+          {view === 'stats' && <ReportsView keymap={keymap} />}
+          {view === 'config' && (
+            <ConfigView
+              key={editGeneration}
+              config={config}
+              onConfigChange={(newConfig) => {
+                setConfig(newConfig);
+                actions.updateConfig();
+              }}
+              setIsTyping={setIsTyping}
+              initialSeqMode={configSeqMode}
+              onSeqModeConsumed={() => setConfigSeqMode(false)}
+              keymap={keymap}
+            />
+          )}
+          {view === 'clock' && <ClockView />}
+          {view === 'reminders' && (
+            <RemindersView
+              key={editGeneration}
+              setIsTyping={setIsTyping}
+              compactTime={config.compactTime}
+              focusId={reminderFocusId}
+              onFocusConsumed={() => setReminderFocusId(null)}
+              keymap={keymap}
+            />
+          )}
+          {view === 'tasks' && (
+            <TasksView
+              key={editGeneration}
+              setIsTyping={setIsTyping}
+              focusId={taskFocusId}
+              onFocusConsumed={() => setTaskFocusId(null)}
+              keymap={keymap}
+            />
+          )}
+          {view === 'web' && <WebView keymap={keymap} />}
+          {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
+          {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
+          {view === 'calendar' && <CalendarView setIsTyping={setIsTyping} config={config} keymap={keymap} />}
+        </>
       )}
-      {view === 'stats' && <ReportsView keymap={keymap} />}
-      {view === 'config' && (
-        <ConfigView
-          key={editGeneration}
-          config={config}
-          onConfigChange={(newConfig) => {
-            setConfig(newConfig);
-            actions.updateConfig();
-          }}
-          setIsTyping={setIsTyping}
-          initialSeqMode={configSeqMode}
-          onSeqModeConsumed={() => setConfigSeqMode(false)}
-          keymap={keymap}
-        />
-      )}
-      {view === 'clock' && <ClockView />}
-      {view === 'reminders' && (
-        <RemindersView
-          key={editGeneration}
-          setIsTyping={setIsTyping}
-          compactTime={config.compactTime}
-          focusId={reminderFocusId}
-          onFocusConsumed={() => setReminderFocusId(null)}
-          keymap={keymap}
-        />
-      )}
-      {view === 'tasks' && (
-        <TasksView
-          key={editGeneration}
-          setIsTyping={setIsTyping}
-          focusId={taskFocusId}
-          onFocusConsumed={() => setTaskFocusId(null)}
-          keymap={keymap}
-        />
-      )}
-      {view === 'web' && <WebView keymap={keymap} />}
-      {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
-      {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
-      {view === 'calendar' && <CalendarView setIsTyping={setIsTyping} config={config} keymap={keymap} />}
-      </>)}
     </Layout>
   );
 }
