@@ -101,6 +101,9 @@ export class PomodoroEngine extends EventEmitter {
   private sequenceBlockIndex = 0;
   private sequenceComplete = false;
 
+  // Lifecycle
+  private disposed = false;
+
   constructor(config: Config, initialState?: EngineRestoreState) {
     super();
     this.config = config;
@@ -159,6 +162,7 @@ export class PomodoroEngine extends EventEmitter {
   // --- Public API ---
 
   start(): void {
+    if (this.disposed) return;
     if (this.isRunning && !this.isPaused) return;
 
     if (this.isPaused) {
@@ -384,6 +388,7 @@ export class PomodoroEngine extends EventEmitter {
     const isBreak = this.sessionType !== 'work';
     if ((isBreak && this.config.autoStartBreaks) || (!isBreak && this.config.autoStartWork)) {
       process.nextTick(() => {
+        if (this.disposed) return;
         if (isBreak) {
           this.emit('break:start', { sessionType: this.sessionType, duration: this.totalSeconds });
         }
@@ -436,6 +441,7 @@ export class PomodoroEngine extends EventEmitter {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.stopTickInterval();
     // Persist state before exit if running
     if (this.isRunning) {
@@ -495,6 +501,7 @@ export class PomodoroEngine extends EventEmitter {
   }
 
   private tick(): void {
+    if (this.disposed) return;
     if (!this.isRunning || this.isPaused) return;
 
     if (this.timerMode === 'stopwatch') {
@@ -557,6 +564,7 @@ export class PomodoroEngine extends EventEmitter {
     if ((isBreak && this.config.autoStartBreaks) || (!isBreak && this.config.autoStartWork)) {
       // Use nextTick to let current event processing finish before starting
       process.nextTick(() => {
+        if (this.disposed) return;
         if (isBreak) {
           this.emit('break:start', { sessionType: this.sessionType, duration: this.totalSeconds });
         }
