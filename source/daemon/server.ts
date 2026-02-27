@@ -9,6 +9,7 @@ import { loadSequences } from '../lib/sequences.js';
 import { parseSequenceString } from '../hooks/useSequence.js';
 import type { DaemonCommand, DaemonResponse, DaemonEvent, DaemonEventType } from './protocol.js';
 import { DAEMON_SOCKET_PATH, DAEMON_PID_PATH } from './protocol.js';
+import { validateCommand } from './validate-command.js';
 import { writeStatusFile, clearStatusFile, invalidateTodayStats } from './status-writer.js';
 import { executeHook } from './hooks.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
@@ -287,7 +288,15 @@ export function startDaemon(): void {
         if (!line) continue;
 
         try {
-          const cmd = JSON.parse(line) as DaemonCommand;
+          const parsed = JSON.parse(line);
+          const validated = validateCommand(parsed);
+
+          if (typeof validated === 'string') {
+            send(socket, { ok: false, error: validated });
+            continue;
+          }
+
+          const cmd = validated;
 
           // Subscribe is special — add to subscribers set
           if (cmd.cmd === 'subscribe') {
