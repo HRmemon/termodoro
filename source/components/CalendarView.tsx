@@ -401,7 +401,9 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   const totalContentWidth = termCols - sidebarW - 4;
   const tasksPanelWidth = Math.max(16, Math.floor(totalContentWidth * 0.28));
   const calendarWidth = totalContentWidth - tasksPanelWidth - 3;
-  const maxGridRows = termRows - 8;
+  // Layout overhead: 1 top border + 2 view header + 1 mid divider + 1 status
+  // + 1 simpleDivider + 3 keysBar (2 content + 1 bottom border) + 1 safeRows adjustment = 10
+  const maxGridRows = termRows - 10;
 
   if (viewMode === 'add') {
     return (

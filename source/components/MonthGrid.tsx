@@ -68,9 +68,7 @@ export function MonthGrid({
 
   const wnWidth = showWeekNumbers ? 4 : 0;
   const gridWidth = contentWidth - wnWidth;
-  const rawCellWidth = Math.max(4, Math.floor(gridWidth / 7));
-  // Reserve 1 char for vertical separator between cells (6 separators for 7 cells)
-  const cellWidth = rawCellWidth;
+  const cellWidth = Math.max(4, Math.floor(gridWidth / 7));
   const vSep = '·';
   const totalDays = getMonthDays(year, month);
   const firstDow = getDayOfWeek(year, month, 1, mondayStart);
@@ -113,13 +111,22 @@ export function MonthGrid({
   }
 
   // Calculate how many event lines fit per cell
-  const headerRows = 2; // month title + day names
-  const availForWeeks = maxRows - headerRows;
-  // Each week uses 1 separator row (dim border) + content rows
-  const separatorRows = weeks.length - 1; // no separator after last week
-  const rowsPerWeek = Math.max(2, Math.floor((availForWeeks - separatorRows) / weeks.length));
-  const maxEventLines = calendarConfig?.maxEventLines ?? 3;
-  const eventLines = Math.min(Math.max(0, rowsPerWeek - 1), maxEventLines);
+  // Layout: 1 month title + 1 day names + 1 divider + week rows with separators between them
+  const headerRows = 3; // month title + day names + divider
+  const availForWeeks = Math.max(0, maxRows - headerRows);
+  const separatorRows = Math.max(0, weeks.length - 1);
+  const totalCellRows = Math.max(0, availForWeeks - separatorRows);
+
+  const baseRowsPerWeek = weeks.length > 0 ? Math.floor(totalCellRows / weeks.length) : 0;
+  const remainder = weeks.length > 0 ? totalCellRows % weeks.length : 0;
+
+  // Per-week event lines: distribute remainder to first N weeks
+  // All allocated space (minus day-number row) becomes event slots — no cap
+  const eventLinesPerWeek: number[] = [];
+  for (let wi = 0; wi < weeks.length; wi++) {
+    const allocatedRows = baseRowsPerWeek + (wi < remainder ? 1 : 0);
+    eventLinesPerWeek.push(Math.max(0, allocatedRows - 1));
+  }
   const dimBorder = '·'.repeat(cellWidth * 7 + wnWidth);
 
   return (
@@ -145,6 +152,9 @@ export function MonthGrid({
           );
         })}
       </Box>
+
+      {/* Divider below day names */}
+      <Text color={colors.dim}>{dimBorder}</Text>
 
       {/* Week rows */}
       {weeks.map((week, wi) => {
@@ -206,7 +216,7 @@ export function MonthGrid({
             </Box>
 
             {/* Event lines inside cells */}
-            {Array.from({ length: eventLines }).map((_, lineIdx) => (
+            {Array.from({ length: eventLinesPerWeek[wi] }).map((_, lineIdx) => (
               <Box key={`ev-${wi}-${lineIdx}`}>
                 {showWeekNumbers && <Text>{'    '}</Text>}
                 {week.map((cell, ci) => {
@@ -214,16 +224,17 @@ export function MonthGrid({
                   const isFiller = !!cell.filler;
 
                   const events = eventsByDate.get(cell.dateStr) ?? [];
+                  const weekEventLines = eventLinesPerWeek[wi]!;
 
                   // Overflow indicator: replace last slot when more events exist
-                  if (lineIdx === eventLines - 1 && events.length > eventLines) {
-                    const hidden = events.length - eventLines + 1;
+                  if (lineIdx === weekEventLines - 1 && events.length > weekEventLines) {
+                    const hidden = events.length - weekEventLines + 1;
                     const label = `+${hidden} more`;
                     const maxLen = cellWidth - (sep ? 1 : 0);
                     const overflow = label.length > maxLen ? `+${hidden}` : label;
                     const pad = ' '.repeat(Math.max(0, maxLen - overflow.length));
                     return (
-                      <Text key={`overflow-${cell.dateStr}`} dimColor>{overflow}{pad}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>
+                      <Text key={`overflow-${cell.dateStr}`} color={colors.dim}>{overflow}{pad}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>
                     );
                   }
 
