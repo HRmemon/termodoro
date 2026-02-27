@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import type { Session, DayPlan, SessionType, SequenceBlock, WorkInterval } from '../types.js';
 import { getAllSessions, insertSession, replaceAllSessions, migrateFromJson, getDbPath } from './session-db.js';
+import { atomicWriteJSON } from './fs-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
@@ -28,17 +29,6 @@ export interface TimerSnapshot {
   sequenceBlocks?: SequenceBlock[];
   sequenceBlockIndex?: number;
   workIntervals?: WorkInterval[];
-}
-
-function ensureDir(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-function atomicWrite(filePath: string, data: unknown): void {
-  ensureDir();
-  const tmp = filePath + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf-8');
-  fs.renameSync(tmp, filePath);
 }
 
 function readJSON<T>(filePath: string, fallback: T): T {
@@ -73,7 +63,7 @@ export function loadPlans(): DayPlan[] {
 }
 
 export function savePlans(plans: DayPlan[]): void {
-  atomicWrite(PLANS_PATH, plans);
+  atomicWriteJSON(PLANS_PATH, plans);
 }
 
 export function getPlanForDate(date: string): DayPlan | undefined {
@@ -98,12 +88,12 @@ export function loadUnlockedAchievements(): string[] {
 }
 
 export function saveUnlockedAchievements(ids: string[]): void {
-  atomicWrite(ACHIEVEMENTS_PATH, ids);
+  atomicWriteJSON(ACHIEVEMENTS_PATH, ids);
 }
 
 // Timer state persistence
 export function saveTimerState(snapshot: TimerSnapshot): void {
-  atomicWrite(TIMER_STATE_PATH, snapshot);
+  atomicWriteJSON(TIMER_STATE_PATH, snapshot);
 }
 
 export function loadTimerState(): TimerSnapshot | null {
@@ -125,7 +115,7 @@ const STICKY_PROJECT_PATH = path.join(DATA_DIR, 'sticky-project.json');
 
 export function saveStickyProject(project: string | undefined): void {
   if (project) {
-    atomicWrite(STICKY_PROJECT_PATH, { project });
+    atomicWriteJSON(STICKY_PROJECT_PATH, { project });
   } else {
     try {
       if (fs.existsSync(STICKY_PROJECT_PATH)) fs.unlinkSync(STICKY_PROJECT_PATH);

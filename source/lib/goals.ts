@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import { loadSessions } from './store.js';
 import { getProjects } from './tasks.js';
+import { atomicWriteJSON } from './fs-utils.js';
 
 export interface TrackedGoal {
   id: string;
@@ -23,10 +24,6 @@ export interface GoalsData {
 
 const GOALS_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'goals.json');
 
-function ensureDir() {
-  fs.mkdirSync(path.dirname(GOALS_PATH), { recursive: true });
-}
-
 export function loadGoals(): GoalsData {
   try {
     if (fs.existsSync(GOALS_PATH)) {
@@ -41,8 +38,7 @@ export function loadGoals(): GoalsData {
 }
 
 export function saveGoals(data: GoalsData): void {
-  ensureDir();
-  fs.writeFileSync(GOALS_PATH, JSON.stringify(data, null, 2));
+  atomicWriteJSON(GOALS_PATH, data);
 }
 
 export function addGoal(goal: TrackedGoal): GoalsData {

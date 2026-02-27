@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { atomicWriteJSON } from './fs-utils.js';
 
 export interface SlotCategory {
   code: string;
@@ -39,11 +40,10 @@ export function loadTrackerConfig(): TrackerConfig {
 }
 
 export function saveTrackerConfig(config: TrackerConfig): void {
-  fs.mkdirSync(path.dirname(TRACKER_CONFIG_PATH), { recursive: true });
   // Preserve other fields (like domainRules) when saving just categories
   const existing = loadTrackerConfigFull();
   const full = { ...existing, categories: config.categories };
-  fs.writeFileSync(TRACKER_CONFIG_PATH, JSON.stringify(full, null, 2));
+  atomicWriteJSON(TRACKER_CONFIG_PATH, full);
 }
 
 export function getCategories(): SlotCategory[] {
@@ -134,7 +134,7 @@ export function loadWeek(weekStr: string): WeekData | null {
 }
 
 export function saveWeek(data: WeekData): void {
-  fs.writeFileSync(weekFilePath(data.week), JSON.stringify(data, null, 2));
+  atomicWriteJSON(weekFilePath(data.week), data);
 }
 
 export function listWeeks(): string[] {
@@ -400,8 +400,7 @@ export function loadTrackerConfigFull(): TrackerConfigFull {
 }
 
 export function saveTrackerConfigFull(config: TrackerConfigFull): void {
-  fs.mkdirSync(path.dirname(TRACKER_CONFIG_PATH), { recursive: true });
-  fs.writeFileSync(TRACKER_CONFIG_PATH, JSON.stringify(config, null, 2));
+  atomicWriteJSON(TRACKER_CONFIG_PATH, config);
 }
 
 export function matchDomain(domain: string, rules: DomainRule[]): string | null {

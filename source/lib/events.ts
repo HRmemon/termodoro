@@ -4,20 +4,10 @@ import * as os from 'node:os';
 import { nanoid } from 'nanoid';
 import type { CalendarEvent } from '../types.js';
 import { localDateStr, addDays, dateToNum, getMonthDays } from './date-utils.js';
+import { atomicWriteJSON } from './fs-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const EVENTS_PATH = path.join(DATA_DIR, 'events.json');
-
-function ensureDir(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-function atomicWrite(filePath: string, data: unknown): void {
-  ensureDir();
-  const tmp = filePath + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf-8');
-  fs.renameSync(tmp, filePath);
-}
 
 export function loadEvents(): CalendarEvent[] {
   try {
@@ -29,7 +19,7 @@ export function loadEvents(): CalendarEvent[] {
 }
 
 export function saveEvents(events: CalendarEvent[]): void {
-  atomicWrite(EVENTS_PATH, events);
+  atomicWriteJSON(EVENTS_PATH, events);
 }
 
 export function addEvent(event: Omit<CalendarEvent, 'id'>): CalendarEvent {

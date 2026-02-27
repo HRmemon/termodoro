@@ -3,21 +3,11 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { nanoid } from 'nanoid';
 import type { Task } from '../types.js';
+import { atomicWriteJSON } from './fs-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const TASKS_PATH = path.join(DATA_DIR, 'tasks.json');
 const PROJECTS_PATH = path.join(DATA_DIR, 'projects.json');
-
-function ensureDir(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-function atomicWrite(filePath: string, data: unknown): void {
-  ensureDir();
-  const tmp = filePath + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf-8');
-  fs.renameSync(tmp, filePath);
-}
 
 export function loadTasks(): Task[] {
   try {
@@ -31,7 +21,7 @@ export function loadTasks(): Task[] {
 }
 
 export function saveTasks(tasks: Task[]): void {
-  atomicWrite(TASKS_PATH, tasks);
+  atomicWriteJSON(TASKS_PATH, tasks);
 }
 
 export function addTask(text: string, expectedPomodoros: number = 1, project?: string, description?: string): Task {
@@ -112,7 +102,7 @@ export function loadProjects(): string[] {
 }
 
 export function saveProjects(projects: string[]): void {
-  atomicWrite(PROJECTS_PATH, projects);
+  atomicWriteJSON(PROJECTS_PATH, projects);
 }
 
 export function addProject(name: string): void {

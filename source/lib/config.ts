@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import type { Config } from '../types.js';
 import { DEFAULT_SOUND_CONFIG } from './sounds.js';
+import { atomicWriteJSON } from './fs-utils.js';
 
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'pomodorocli');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
@@ -57,10 +58,7 @@ export function loadConfig(): Config {
 }
 
 export function saveConfig(config: Config): void {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  const tmp = CONFIG_PATH + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-  fs.renameSync(tmp, CONFIG_PATH);
+  atomicWriteJSON(CONFIG_PATH, config);
 }
 
 export function getDefaultConfig(): Config {

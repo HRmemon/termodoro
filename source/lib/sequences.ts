@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { SessionSequence } from '../types.js';
+import { atomicWriteJSON } from './fs-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const SEQUENCES_PATH = path.join(DATA_DIR, 'sequences.json');
@@ -54,8 +55,7 @@ export function loadSequences(): SessionSequence[] {
 }
 
 export function saveSequences(sequences: SessionSequence[]): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(SEQUENCES_PATH, JSON.stringify(sequences, null, 2) + '\n', 'utf-8');
+  atomicWriteJSON(SEQUENCES_PATH, sequences);
 }
 
 export function saveSequence(seq: SessionSequence): void {
