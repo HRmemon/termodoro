@@ -3,6 +3,122 @@ import * as path from 'node:path';
 import { loadSessions, saveSessions, getDataDir, getSessionsPath } from './store.js';
 import type { Session } from '../types.js';
 
+// --- CSV / Import Safety Helpers ---
+
+const FORMULA_PREFIXES = /^[=+\-@\t\r]/;
+
+function escapeCSVField(value: string): string {
+  let safe = value;
+  if (FORMULA_PREFIXES.test(safe)) {
+    safe = "'" + safe;
+  }
+  return '"' + safe.replace(/"/g, '""') + '"';
+}
+
+function stripFormulaPrefix(value: string): string {
+  return value.startsWith("'") && FORMULA_PREFIXES.test(value.slice(1))
+    ? value.slice(1) : value;
+}
+
+function parseCSVLine(line: string): string[] {
+  const fields: string[] = [];
+  let i = 0;
+  while (i <= line.length) {
+    if (i === line.length) { fields.push(''); break; }
+    if (line[i] === '"') {
+      let value = '';
+      i++; // skip opening quote
+      while (i < line.length) {
+        if (line[i] === '"') {
+          if (line[i + 1] === '"') { value += '"'; i += 2; }
+          else { i++; break; }
+        } else { value += line[i]!; i++; }
+      }
+      fields.push(value);
+      if (line[i] === ',') i++;
+    } else {
+      const next = line.indexOf(',', i);
+      if (next === -1) { fields.push(line.slice(i)); break; }
+      fields.push(line.slice(i, next));
+      i = next + 1;
+    }
+  }
+  return fields;
+}
+
+// --- Session Validation ---
+
+const VALID_TYPES = new Set(['work', 'short-break', 'long-break']);
+const VALID_STATUSES = new Set(['completed', 'skipped', 'abandoned']);
+const VALID_ENERGY = new Set(['high', 'medium', 'low']);
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+
+interface ValidationResult { valid: boolean; errors: string[]; }
+
+function validateSession(data: unknown): ValidationResult {
+  const errors: string[] = [];
+  if (typeof data !== 'object' || data === null)
+    return { valid: false, errors: ['Session is not an object'] };
+  const s = data as Record<string, unknown>;
+
+  // Required strings
+  if (typeof s['id'] !== 'string' || s['id'].length === 0)
+    errors.push('id: required non-empty string');
+  if (!VALID_TYPES.has(s['type'] as string))
+    errors.push(`type: must be one of ${[...VALID_TYPES].join(', ')}`);
+  if (!VALID_STATUSES.has(s['status'] as string))
+    errors.push(`status: must be one of ${[...VALID_STATUSES].join(', ')}`);
+  if (typeof s['startedAt'] !== 'string' || !ISO_DATE_RE.test(s['startedAt']))
+    errors.push('startedAt: required ISO date string');
+  if (typeof s['endedAt'] !== 'string' || !ISO_DATE_RE.test(s['endedAt']))
+    errors.push('endedAt: required ISO date string');
+
+  // Required numbers
+  if (typeof s['durationPlanned'] !== 'number' || !Number.isFinite(s['durationPlanned']) || s['durationPlanned'] < 0)
+    errors.push('durationPlanned: required non-negative finite number');
+  if (typeof s['durationActual'] !== 'number' || !Number.isFinite(s['durationActual']) || s['durationActual'] < 0)
+    errors.push('durationActual: required non-negative finite number');
+
+  // Optional strings
+  for (const field of ['label', 'project', 'tag'] as const) {
+    if (s[field] !== undefined && typeof s[field] !== 'string')
+      errors.push(`${field}: must be a string if present`);
+  }
+
+  // Optional energyLevel
+  if (s['energyLevel'] !== undefined && !VALID_ENERGY.has(s['energyLevel'] as string))
+    errors.push(`energyLevel: must be one of ${[...VALID_ENERGY].join(', ')} if present`);
+
+  // Optional distractionScore
+  if (s['distractionScore'] !== undefined) {
+    if (typeof s['distractionScore'] !== 'number' || !Number.isInteger(s['distractionScore'])
+        || s['distractionScore'] < 0 || s['distractionScore'] > 10)
+      errors.push('distractionScore: must be an integer 0-10 if present');
+  }
+
+  // intervals array
+  if (s['intervals'] !== undefined) {
+    if (!Array.isArray(s['intervals']))
+      errors.push('intervals: must be an array');
+    else
+      (s['intervals'] as unknown[]).forEach((iv: unknown, idx: number) => {
+        if (typeof iv !== 'object' || iv === null) {
+          errors.push(`intervals[${idx}]: not an object`);
+          return;
+        }
+        const w = iv as Record<string, unknown>;
+        if (typeof w['start'] !== 'string' || !ISO_DATE_RE.test(w['start']))
+          errors.push(`intervals[${idx}].start: must be ISO date string`);
+        if (w['end'] !== null && (typeof w['end'] !== 'string' || !ISO_DATE_RE.test(w['end'])))
+          errors.push(`intervals[${idx}].end: must be ISO date string or null`);
+      });
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+// --- Export / Import ---
+
 export function handleExport(outputPath?: string): void {
   const sessions = loadSessions();
   if (sessions.length === 0) {
@@ -23,7 +139,10 @@ export function handleExport(outputPath?: string): void {
     JSON.stringify(s.intervals ?? []),
   ]);
 
-  const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+  const csv = [
+    headers.join(','),
+    ...rows.map(r => r.map(v => escapeCSVField(String(v))).join(',')),
+  ].join('\n');
   const out = outputPath ?? 'sessions.csv';
   fs.writeFileSync(out, csv + '\n', 'utf-8');
   console.log(`Exported ${sessions.length} sessions to ${out}`);
@@ -37,30 +156,54 @@ export function handleImport(filePath: string): void {
 
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.json') {
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Session[];
-    const data = raw.map(s => ({ ...s, intervals: s.intervals ?? [] }));
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    if (!Array.isArray(raw)) {
+      console.error('JSON file must contain an array of sessions.');
+      process.exit(1);
+    }
     const existing = loadSessions();
     const existingIds = new Set(existing.map(s => s.id));
-    const newSessions = data.filter(s => !existingIds.has(s.id));
-    saveSessions([...existing, ...newSessions]);
-    console.log(`Imported ${newSessions.length} new sessions (${data.length - newSessions.length} duplicates skipped).`);
+    let imported = 0, skipped = 0;
+
+    for (let i = 0; i < raw.length; i++) {
+      const result = validateSession(raw[i]);
+      if (!result.valid) {
+        console.error(`Session at index ${i} is invalid, skipping:`);
+        result.errors.forEach(e => console.error(`  - ${e}`));
+        skipped++;
+        continue;
+      }
+      const session = raw[i] as Session;
+      session.intervals = session.intervals ?? [];
+      if (existingIds.has(session.id)) { skipped++; continue; }
+      existing.push(session);
+      existingIds.add(session.id);
+      imported++;
+    }
+    saveSessions(existing);
+    console.log(`Imported ${imported} sessions (${skipped} skipped).`);
   } else if (ext === '.csv') {
     const lines = fs.readFileSync(filePath, 'utf-8').trim().split('\n');
     if (lines.length < 2) {
       console.log('CSV file is empty or has no data rows.');
       return;
     }
-    const headers = lines[0]!.split(',');
+    const headers = parseCSVLine(lines[0]!);
     const existing = loadSessions();
     const existingIds = new Set(existing.map(s => s.id));
     let imported = 0;
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i]!.match(/(".*?"|[^,]+)/g)?.map(v => v.replace(/^"|"$/g, '')) ?? [];
+      const values = parseCSVLine(lines[i]!);
       const obj: Record<string, string> = {};
       headers.forEach((h, idx) => { obj[h] = values[idx] ?? ''; });
 
       if (existingIds.has(obj['id']!)) continue;
+
+      // Strip formula prefixes from string fields
+      for (const field of ['label', 'project', 'tag']) {
+        if (obj[field]) obj[field] = stripFormulaPrefix(obj[field]!);
+      }
 
       let intervals: Session['intervals'] = [];
       if (obj['intervals']) {
@@ -81,7 +224,15 @@ export function handleImport(filePath: string): void {
         durationActual: parseInt(obj['durationActual']!, 10),
         intervals,
       };
+
+      const result = validateSession(session);
+      if (!result.valid) {
+        console.error(`Row ${i} invalid, skipping: ${result.errors.join('; ')}`);
+        continue;
+      }
+
       existing.push(session);
+      existingIds.add(session.id);
       imported++;
     }
 
