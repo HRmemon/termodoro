@@ -70,7 +70,8 @@ export function TasksPanel({
   const sep = '─'.repeat(Math.max(0, width - 2));
 
   // Selected day items: events + tasks with deadlines on that day
-  const dayItems: { type: 'event' | 'task'; event?: CalendarEvent; task?: Task }[] = [];
+  type DayItem = { type: 'event'; event: CalendarEvent } | { type: 'task'; task: Task };
+  const dayItems: DayItem[] = [];
   for (const e of selectedEvents) {
     dayItems.push({ type: 'event', event: e });
   }
@@ -157,7 +158,7 @@ export function TasksPanel({
               </Box>
             )}
             {todayVisible.map((item, i) => {
-              if (item.type === 'event' && item.event) {
+              if (item.type === 'event') {
                 const e = item.event;
                 const icon = getEventIcon(e, calendarConfig, isGlobalPrivacy);
                 const title = isGlobalPrivacy || e.privacy
@@ -181,15 +182,13 @@ export function TasksPanel({
                   </Box>
                 );
               }
-              if (item.type === 'task' && item.task) {
-                return (
-                  <Box key={`tt-${i}`} flexShrink={0}>
-                    <Text color={border}>│</Text>
-                    <TaskItem task={item.task} width={innerWidth} isGlobalPrivacy={isGlobalPrivacy} done={item.task.completed} />
-                  </Box>
-                );
-              }
-              return null;
+              // item.type === 'task'
+              return (
+                <Box key={`tt-${i}`} flexShrink={0}>
+                  <Text color={border}>│</Text>
+                  <TaskItem task={item.task} width={innerWidth} isGlobalPrivacy={isGlobalPrivacy} done={item.task.completed} />
+                </Box>
+              );
             })}
             {todayHasMoreFinal && (
               <Box flexShrink={0}>

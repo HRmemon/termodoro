@@ -83,25 +83,32 @@ export function EventForm({ initialDate, editEvent, onSubmit, onCancel, setIsTyp
         const [, pm, pd] = val.split('-').map(Number);
         if (parsed.getMonth() + 1 === pm && parsed.getDate() === pd) {
           setDate(val);
+          setStep('time');
+          return;
         }
       }
     }
-    setStep('time');
+    // Invalid date — stay on this step (keep previous valid date)
   };
 
   const handleTimeSubmit = (val: string) => {
+    // Empty = all-day event, advance
+    if (!val.trim()) {
+      setTime('');
+      setStep('frequency');
+      return;
+    }
     // Validate HH:MM with valid hours/minutes
     if (/^\d{2}:\d{2}$/.test(val)) {
       const [h, m] = val.split(':').map(Number);
       if (h! >= 0 && h! <= 23 && m! >= 0 && m! <= 59) {
         setTime(val);
-      } else {
-        setTime('');
+        setStep('frequency');
+        return;
       }
-    } else {
-      setTime('');
     }
-    setStep('frequency');
+    // Invalid time — stay on this step
+    setTime('');
   };
 
   const isTextStep = step === 'title' || step === 'date' || step === 'time';

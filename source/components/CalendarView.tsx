@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import type { CalendarEvent, Config } from '../types.js';
-import { loadEvents, addEvent, updateEvent, deleteEvent, getEventsForMonth, getEventsForDate, expandRecurring } from '../lib/events.js';
+import { loadEvents, addEvent, updateEvent, deleteEvent, expandRecurring } from '../lib/events.js';
 import { loadIcsEvents } from '../lib/ics.js';
 import { loadSessions } from '../lib/store.js';
 import { loadTasks } from '../lib/tasks.js';
@@ -12,40 +12,21 @@ import { TasksPanel, getDayItemCount, getTasksItemCount } from './TasksPanel.js'
 import type { PaneId } from './TasksPanel.js';
 import { EventForm } from './EventForm.js';
 import type { Keymap } from '../lib/keymap.js';
+import { getTodayStr, parseDateParts, formatDateStr, getMonthDays, addDays } from '../lib/date-utils.js';
 
 type ViewMode = 'monthly' | 'daily' | 'add' | 'edit';
 
 const PANES: PaneId[] = ['calendar', 'today', 'tasks'];
 
+// Layout overhead from Layout.tsx: top border(1) + view header+margin(2) + mid divider(1)
+// + status row(1) + simpleDivider(1) + keysBar content+border(3) + safeRows -1 adjustment(1) = 10
+const LAYOUT_OVERHEAD_ROWS = 10;
+const TASKS_PANEL_RATIO = 0.28;
+
 interface CalendarViewProps {
   setIsTyping: (v: boolean) => void;
   config: Config;
   keymap: Keymap;
-}
-
-function getTodayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function parseDateParts(dateStr: string): { year: number; month: number; day: number } {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return { year: y!, month: m!, day: d! };
-}
-
-function formatDateStr(year: number, month: number, day?: number): string {
-  const d = day ?? 1;
-  return `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
-function getMonthDays(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
-
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps) {
@@ -91,50 +72,47 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   const allEvents = useMemo(() => [...allUserEvents, ...icsEvents], [allUserEvents, icsEvents]);
 
   // Month data — include filler days from adjacent months
+  // Single expandRecurring call covering the full visible range (filler + month + filler)
   const eventsByDate = useMemo(() => {
-    const map = getEventsForMonth(allEvents, year, month);
-
-    // Compute filler date range
     const mondayStart = (calendarConfig?.weekStartsOn ?? 1) === 1;
     const firstDow = (() => {
       const d = new Date(year, month - 1, 1).getDay();
       return mondayStart ? (d + 6) % 7 : d;
     })();
-
-    // Previous month filler days
-    if (firstDow > 0) {
-      const prevMonth = month === 1 ? 12 : month - 1;
-      const prevYear = month === 1 ? year - 1 : year;
-      const prevMonthDays = new Date(prevYear, prevMonth, 0).getDate();
-      const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevMonthDays - firstDow + 1).padStart(2, '0')}`;
-      const prevEnd = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevMonthDays).padStart(2, '0')}`;
-      const prevExpanded = expandRecurring(allEvents, prevStart, prevEnd);
-      for (const e of prevExpanded) {
-        if (e.date >= prevStart && e.date <= prevEnd) {
-          if (!map.has(e.date)) map.set(e.date, []);
-          map.get(e.date)!.push(e);
-        }
-      }
-    }
-
-    // Next month filler days
-    const totalDays = new Date(year, month, 0).getDate();
+    const totalDays = getMonthDays(year, month);
     const lastDow = (() => {
       const d = new Date(year, month - 1, totalDays).getDay();
       return mondayStart ? (d + 6) % 7 : d;
     })();
     const trailingDays = lastDow < 6 ? 6 - lastDow : 0;
-    if (trailingDays > 0) {
-      const nextMonth = month === 12 ? 1 : month + 1;
-      const nextYear = month === 12 ? year + 1 : year;
-      const nextStart = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
-      const nextEnd = `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(trailingDays).padStart(2, '0')}`;
-      const nextExpanded = expandRecurring(allEvents, nextStart, nextEnd);
-      for (const e of nextExpanded) {
-        if (e.date >= nextStart && e.date <= nextEnd) {
-          if (!map.has(e.date)) map.set(e.date, []);
-          map.get(e.date)!.push(e);
+
+    // Compute the full visible range including filler days
+    const visibleStart = firstDow > 0
+      ? addDays(formatDateStr(year, month, 1), -firstDow)
+      : formatDateStr(year, month, 1);
+    const visibleEnd = trailingDays > 0
+      ? addDays(formatDateStr(year, month, totalDays), trailingDays)
+      : formatDateStr(year, month, totalDays);
+
+    const expanded = expandRecurring(allEvents, visibleStart, visibleEnd);
+    const map = new Map<string, CalendarEvent[]>();
+
+    // Initialize all days in the current month
+    for (let d = 1; d <= totalDays; d++) {
+      map.set(formatDateStr(year, month, d), []);
+    }
+
+    // Distribute events across their date ranges
+    for (const event of expanded) {
+      const start = event.date;
+      const end = event.endDate ?? event.date;
+      let cur = start;
+      while (cur <= end && cur <= visibleEnd) {
+        if (cur >= visibleStart) {
+          if (!map.has(cur)) map.set(cur, []);
+          map.get(cur)!.push(event);
         }
+        cur = addDays(cur, 1);
       }
     }
 
@@ -154,33 +132,29 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
       map.set(dateKey, (map.get(dateKey) ?? 0) + Math.round(s.durationActual / 60));
     }
     return map;
-  }, [year, month]);
+  }, [year, month, calendarConfig?.showSessionHeatmap]);
 
-  // Daily agenda data
+  // Daily agenda data — reuse eventsByDate which already includes filler days
   const dayEvents = useMemo(() => {
-    const rangeStart = formatDateStr(year, month, 1);
-    const lastDay = getMonthDays(year, month);
-    const rangeEnd = formatDateStr(year, month, lastDay);
-    const expanded = expandRecurring(allEvents, rangeStart, rangeEnd);
-    return getEventsForDate(expanded, selectedDate);
-  }, [allEvents, selectedDate, year, month]);
+    return eventsByDate.get(selectedDate) ?? [];
+  }, [eventsByDate, selectedDate]);
 
   const dayTasks = useMemo(() => {
     if (calendarConfig?.showTaskDeadlines === false) return [];
     return loadTasks().filter((t: { deadline?: string }) => t.deadline === selectedDate);
-  }, [selectedDate, eventVersion]);
+  }, [selectedDate, eventVersion, calendarConfig?.showTaskDeadlines]);
 
   const dayReminders = useMemo(() => {
     if (calendarConfig?.showReminders === false) return [];
     const reminders = loadReminders();
     return reminders.filter((r: { enabled: boolean; recurring: boolean }) => r.enabled && (r.recurring || selectedDate === today));
-  }, [selectedDate, eventVersion, today]);
+  }, [selectedDate, eventVersion, today, calendarConfig?.showReminders]);
 
   const daySessions = useMemo(() => {
     return loadSessions().filter(
       (s: { startedAt: string; type: string; status: string }) => s.startedAt.startsWith(selectedDate) && s.type === 'work' && s.status === 'completed'
     );
-  }, [selectedDate]);
+  }, [selectedDate, eventVersion]);
 
   // All tasks for the right panel
   const allTasks = useMemo(() => loadTasks(), [eventVersion]);
@@ -399,11 +373,9 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   // Layout calculations
   const sidebarW = config.sidebarWidth ?? 20;
   const totalContentWidth = termCols - sidebarW - 4;
-  const tasksPanelWidth = Math.max(16, Math.floor(totalContentWidth * 0.28));
+  const tasksPanelWidth = Math.max(16, Math.floor(totalContentWidth * TASKS_PANEL_RATIO));
   const calendarWidth = totalContentWidth - tasksPanelWidth - 3;
-  // Layout overhead: 1 top border + 2 view header + 1 mid divider + 1 status
-  // + 1 simpleDivider + 3 keysBar (2 content + 1 bottom border) + 1 safeRows adjustment = 10
-  const maxGridRows = termRows - 10;
+  const maxGridRows = termRows - LAYOUT_OVERHEAD_ROWS;
 
   if (viewMode === 'add') {
     return (

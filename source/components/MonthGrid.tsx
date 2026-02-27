@@ -2,6 +2,7 @@ import { Box, Text } from 'ink';
 import type { CalendarEvent, CalendarConfig } from '../types.js';
 import { colors } from '../lib/theme.js';
 import { getEventIcon, getPrivacyDisplay } from '../lib/event-icons.js';
+import { getMonthDays, formatDateStr } from '../lib/date-utils.js';
 
 interface MonthGridProps {
   year: number;
@@ -26,18 +27,10 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-function getMonthDays(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
-
 function getDayOfWeek(year: number, month: number, day: number, mondayStart: boolean): number {
   const d = new Date(year, month - 1, day).getDay();
   if (mondayStart) return (d + 6) % 7;
   return d;
-}
-
-function formatDateStr(year: number, month: number, day: number): string {
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 function getWeekNumber(date: Date): number {
