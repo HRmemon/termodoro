@@ -66,7 +66,10 @@ export function MonthGrid({
 
   const wnWidth = showWeekNumbers ? 4 : 0;
   const gridWidth = contentWidth - wnWidth;
-  const cellWidth = Math.max(4, Math.floor(gridWidth / 7));
+  const rawCellWidth = Math.max(4, Math.floor(gridWidth / 7));
+  // Reserve 1 char for vertical separator between cells (6 separators for 7 cells)
+  const cellWidth = rawCellWidth;
+  const vSep = '·';
   const totalDays = getMonthDays(year, month);
   const firstDow = getDayOfWeek(year, month, 1, mondayStart);
 
@@ -112,11 +115,11 @@ export function MonthGrid({
         {showWeekNumbers && <Box width={wnWidth}><Text dimColor>{'    '}</Text></Box>}
         {dayNames.map((name, i) => {
           const isWeekend = mondayStart ? i >= 5 : (i === 0 || i === 6);
-          const truncName = name.slice(0, cellWidth - 1);
-          const pad = ' '.repeat(Math.max(0, cellWidth - truncName.length));
+          const truncName = name.slice(0, cellWidth - 2);
+          const pad = ' '.repeat(Math.max(0, cellWidth - 1 - truncName.length));
           return (
             <Text key={name} color={isWeekend ? colors.break : colors.dim}>
-              {truncName}{pad}
+              {truncName}{pad}{i < 6 ? <Text color={colors.dim}>{vSep}</Text> : ''}
             </Text>
           );
         })}
@@ -137,8 +140,9 @@ export function MonthGrid({
                 <Text dimColor>{wn > 0 ? String(wn).padStart(3, ' ') + ' ' : '    '}</Text>
               )}
               {week.map((cell, ci) => {
+                const sep = ci < 6 ? vSep : '';
                 if (!cell) {
-                  return <Text key={`empty-${ci}`}>{' '.repeat(cellWidth)}</Text>;
+                  return <Text key={`empty-${ci}`}>{' '.repeat(cellWidth - (sep ? 1 : 0))}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>;
                 }
 
                 const isToday = cell.dateStr === today;
@@ -159,13 +163,14 @@ export function MonthGrid({
                   : '';
 
                 const labelLen = dayStr.length + todayMark.length + hmChar.length;
-                const padLen = Math.max(0, cellWidth - labelLen);
+                const padLen = Math.max(0, cellWidth - labelLen - (sep ? 1 : 0));
 
                 return (
                   <Text key={cell.dateStr}>
                     <Text color={dayColor} bold={isToday || isSelected}>{dayStr}{todayMark}</Text>
                     {hmChar && <Text color="green">{hmChar}</Text>}
                     <Text>{' '.repeat(padLen)}</Text>
+                    {sep && <Text color={colors.dim}>{sep}</Text>}
                   </Text>
                 );
               })}
@@ -176,8 +181,9 @@ export function MonthGrid({
               <Box key={`ev-${wi}-${lineIdx}`}>
                 {showWeekNumbers && <Text>{'    '}</Text>}
                 {week.map((cell, ci) => {
+                  const sep = ci < 6 ? vSep : '';
                   if (!cell) {
-                    return <Text key={`empty-ev-${ci}`}>{' '.repeat(cellWidth)}</Text>;
+                    return <Text key={`empty-ev-${ci}`}>{' '.repeat(cellWidth - (sep ? 1 : 0))}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>;
                   }
 
                   const events = eventsByDate.get(cell.dateStr) ?? [];
@@ -186,19 +192,19 @@ export function MonthGrid({
                   if (lineIdx === eventLines - 1 && events.length > eventLines) {
                     const hidden = events.length - eventLines + 1;
                     const overflow = `+${hidden}`;
-                    const pad = ' '.repeat(Math.max(0, cellWidth - overflow.length));
+                    const pad = ' '.repeat(Math.max(0, cellWidth - overflow.length - (sep ? 1 : 0)));
                     return (
-                      <Text key={`overflow-${cell.dateStr}`} dimColor>{overflow}{pad}</Text>
+                      <Text key={`overflow-${cell.dateStr}`} dimColor>{overflow}{pad}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>
                     );
                   }
 
                   const event = events[lineIdx];
                   if (!event) {
-                    return <Text key={`noev-${ci}-${lineIdx}`}>{' '.repeat(cellWidth)}</Text>;
+                    return <Text key={`noev-${ci}-${lineIdx}`}>{' '.repeat(cellWidth - (sep ? 1 : 0))}{sep && <Text color={colors.dim}>{sep}</Text>}</Text>;
                   }
 
                   const icon = getEventIcon(event, calendarConfig, isGlobalPrivacy);
-                  const maxLen = cellWidth - 2; // icon + space
+                  const maxLen = cellWidth - 2 - (sep ? 1 : 0); // icon + space + separator
                   let display: string;
                   if (isGlobalPrivacy || event.privacy) {
                     display = getPrivacyDisplay(event.title).slice(0, maxLen);
@@ -215,12 +221,13 @@ export function MonthGrid({
                   if (event.source === 'ics') eventColor = colors.break;
 
                   const content = `${prefix} ${display}`;
-                  const pad = ' '.repeat(Math.max(0, cellWidth - content.length));
+                  const pad = ' '.repeat(Math.max(0, cellWidth - content.length - (sep ? 1 : 0)));
 
                   return (
                     <Text key={`ev-${cell.dateStr}-${lineIdx}`}>
                       <Text color={eventColor}>{content}</Text>
                       <Text>{pad}</Text>
+                      {sep && <Text color={colors.dim}>{sep}</Text>}
                     </Text>
                   );
                 })}

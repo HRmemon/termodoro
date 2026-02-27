@@ -409,9 +409,8 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
             selectedIdx={dailySelectedIdx}
           />
         </Box>
-        <Box width={1} marginX={1}>
-          <Text color={colors.dim}>│</Text>
-        </Box>
+        <Box width={1} />
+
         {rightPanel}
       </Box>
     );

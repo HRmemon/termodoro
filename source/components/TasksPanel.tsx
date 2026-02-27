@@ -67,7 +67,7 @@ export function TasksPanel({
   const todayContentRows = todayCollapsed ? 0 : halfRows - boxHeaderCost;
   const tasksContentRows = tasksCollapsed ? 0 : halfRows - boxHeaderCost;
 
-  const sep = '─'.repeat(width - 1);
+  const sep = '─'.repeat(Math.max(0, width - 2));
 
   // Selected day items: events + tasks with deadlines on that day
   const dayItems: { type: 'event' | 'task'; event?: CalendarEvent; task?: Task }[] = [];
@@ -108,29 +108,35 @@ export function TasksPanel({
     ? `${monthNames[Number(dateParts[1]) - 1]} ${Number(dateParts[2])}`
     : selectedDate;
 
+  const border = colors.dim;
+  const innerWidth = width - 1; // 1 char for left │ border
+
   return (
     <Box flexDirection="column" width={width}>
       {/* ─── Selected day box ─── */}
       <Box height={halfRows} flexDirection="column" overflow="hidden">
         <Box flexShrink={0}>
+          <Text color={border}>│</Text>
           <Text bold color={todayHeader}>
-            {isTodayFocused ? '▸ ' : '  '}{dateLabel}{todayCollapsed ? ' [+]' : ''}
+            {isTodayFocused ? '▸ ' : ' '}{dateLabel}{todayCollapsed ? ' [+]' : ''}
           </Text>
         </Box>
         <Box flexShrink={0}>
-          <Text color={colors.dim}>{sep}</Text>
+          <Text color={border}>├{sep}</Text>
         </Box>
 
         {!todayCollapsed && (
           <>
             {todayHasPrev && (
               <Box flexShrink={0}>
-                <Text dimColor>  ↑ more</Text>
+                <Text color={border}>│</Text>
+                <Text dimColor> ↑ more</Text>
               </Box>
             )}
             {dayItems.length === 0 && (
               <Box flexShrink={0}>
-                <Text dimColor>  No events</Text>
+                <Text color={border}>│</Text>
+                <Text dimColor> No events</Text>
               </Box>
             )}
             {todayVisible.map((item, i) => {
@@ -144,7 +150,7 @@ export function TasksPanel({
                 const timeStr = e.time ? ` ${e.time}` : '';
                 const iconStr = `${icon} `;
 
-                const maxLen = Math.max(0, width - iconStr.length - timeStr.length);
+                const maxLen = Math.max(0, innerWidth - iconStr.length - timeStr.length);
                 const display = title.length > maxLen ? title.slice(0, Math.max(0, maxLen - 1)) + '…' : title;
 
                 let eventColor = e.color ?? colors.highlight;
@@ -152,19 +158,26 @@ export function TasksPanel({
                 if (e.source === 'ics') eventColor = colors.break;
                 return (
                   <Box key={`te-${i}`} flexShrink={0}>
+                    <Text color={border}>│</Text>
                     <Text color={eventColor}>{iconStr}{display}</Text>
                     {e.time && <Text dimColor>{timeStr}</Text>}
                   </Box>
                 );
               }
               if (item.type === 'task' && item.task) {
-                return <TaskItem key={`tt-${i}`} task={item.task} width={width} isGlobalPrivacy={isGlobalPrivacy} done={item.task.completed} />;
+                return (
+                  <Box key={`tt-${i}`} flexShrink={0}>
+                    <Text color={border}>│</Text>
+                    <TaskItem task={item.task} width={innerWidth} isGlobalPrivacy={isGlobalPrivacy} done={item.task.completed} />
+                  </Box>
+                );
               }
               return null;
             })}
             {todayHasMoreFinal && (
               <Box flexShrink={0}>
-                <Text dimColor>  ↓ more</Text>
+                <Text color={border}>│</Text>
+                <Text dimColor> ↓ more</Text>
               </Box>
             )}
           </>
@@ -174,38 +187,44 @@ export function TasksPanel({
       {/* ─── TASKS box ─── */}
       <Box height={halfRows} flexDirection="column" overflow="hidden">
         <Box flexShrink={0}>
+          <Text color={border}>│</Text>
           <Text bold color={tasksHeader}>
-            {isTasksFocused ? '▸ ' : '  '}TASKS{tasksCollapsed ? ' [+]' : ''}
+            {isTasksFocused ? '▸ ' : ' '}TASKS{tasksCollapsed ? ' [+]' : ''}
           </Text>
         </Box>
         <Box flexShrink={0}>
-          <Text color={colors.dim}>{sep}</Text>
+          <Text color={border}>├{sep}</Text>
         </Box>
 
         {!tasksCollapsed && (
           <>
             {tasksHasPrev && (
               <Box flexShrink={0}>
-                <Text dimColor>  ↑ more</Text>
+                <Text color={border}>│</Text>
+                <Text dimColor> ↑ more</Text>
               </Box>
             )}
             {tasksList.length === 0 && (
               <Box flexShrink={0}>
-                <Text dimColor>  No tasks</Text>
+                <Text color={border}>│</Text>
+                <Text dimColor> No tasks</Text>
               </Box>
             )}
             {tasksVisible.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                width={width}
-                isGlobalPrivacy={isGlobalPrivacy}
-                done={task.completed}
-              />
+              <Box key={task.id} flexShrink={0}>
+                <Text color={border}>│</Text>
+                <TaskItem
+                  task={task}
+                  width={innerWidth}
+                  isGlobalPrivacy={isGlobalPrivacy}
+                  done={task.completed}
+                />
+              </Box>
             ))}
             {tasksHasMoreFinal && (
               <Box flexShrink={0}>
-                <Text dimColor>  ↓ more</Text>
+                <Text color={border}>│</Text>
+                <Text dimColor> ↓ more</Text>
               </Box>
             )}
           </>
