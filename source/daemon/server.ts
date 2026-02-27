@@ -37,6 +37,35 @@ function resolveSequence(name: string) {
   return loadSequences().find(s => s.name === name) ?? null;
 }
 
+/**
+ * Attempt to connect to the daemon socket.
+ * Returns true if a process is actively accepting connections on the socket.
+ * Returns false for any error: ENOENT (no socket), ECONNREFUSED (socket exists but
+ * no listener), EACCES (permission denied), or timeout.
+ *
+ * This is more reliable than process.kill(pid, 0) because:
+ * - It cannot be fooled by PID recycling.
+ * - It directly verifies a listener is present, not just that a PID exists.
+ */
+function isSocketLive(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = net.createConnection(socketPath);
+    const timer = setTimeout(() => {
+      sock.destroy();
+      resolve(false);
+    }, 1000);
+    sock.on('connect', () => {
+      clearTimeout(timer);
+      sock.destroy();
+      resolve(true);
+    });
+    sock.on('error', () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
+}
+
 export function startDaemon(): void {
   const config = loadConfig();
 
@@ -335,36 +364,49 @@ export function startDaemon(): void {
   // Ensure parent directory exists
   fs.mkdirSync(path.dirname(DAEMON_SOCKET_PATH), { recursive: true });
 
-  // Clean up stale socket file — but only if no live daemon owns it
-  try {
-    if (fs.existsSync(DAEMON_SOCKET_PATH)) {
-      let stale = true;
-      if (fs.existsSync(DAEMON_PID_PATH)) {
-        const pid = parseInt(fs.readFileSync(DAEMON_PID_PATH, 'utf-8').trim(), 10);
-        try {
-          process.kill(pid, 0); // Check if process is alive
-          stale = false; // PID is alive — another daemon is running
-        } catch {
-          // Process doesn't exist — socket is stale
-        }
-      }
-      if (!stale) {
-        console.error('Another daemon is still running. Stop it first.');
-        process.exit(1);
-      }
-      fs.unlinkSync(DAEMON_SOCKET_PATH);
+  // Async IIFE so we can await the socket liveness check.
+  (async () => {
+    // --- Liveness check: connect to the existing socket if any ---
+    // This is the authoritative check. process.kill(pid, 0) is NOT used because:
+    // 1. It cannot distinguish a live daemon from a recycled PID.
+    // 2. It does not verify the socket is actually accepting connections.
+    const live = await isSocketLive(DAEMON_SOCKET_PATH);
+    if (live) {
+      console.error('Another daemon is already running. Stop it first (pomo stop).');
+      process.exit(1);
     }
-  } catch { /* ignore */ }
 
-  server.listen(DAEMON_SOCKET_PATH, () => {
-    // Write PID file and restrict socket permissions
-    fs.writeFileSync(DAEMON_PID_PATH, String(process.pid));
-    try { fs.chmodSync(DAEMON_SOCKET_PATH, 0o600); } catch { /* ignore */ }
-    console.log(`Daemon listening on ${DAEMON_SOCKET_PATH} (PID: ${process.pid})`);
-  });
+    // No live daemon. Remove any leftover socket file before binding.
+    try {
+      fs.unlinkSync(DAEMON_SOCKET_PATH);
+    } catch {
+      // ENOENT is expected when no socket file exists.
+    }
 
-  server.on('error', (err) => {
-    console.error('Daemon server error:', err);
+    // Write PID file BEFORE listening to close the window where concurrent
+    // startups could both pass the liveness check and race to bind.
+    try {
+      fs.writeFileSync(DAEMON_PID_PATH, String(process.pid), { mode: 0o600 });
+    } catch (err) {
+      console.error('Failed to write PID file:', err);
+      process.exit(1);
+    }
+
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      // Clean up our PID file if we failed to bind
+      try { fs.unlinkSync(DAEMON_PID_PATH); } catch { /* ignore */ }
+      console.error('Daemon server error:', err.message);
+      process.exit(1);
+    });
+
+    server.listen(DAEMON_SOCKET_PATH, () => {
+      // Overwrite PID file now that we have definitively won the bind.
+      fs.writeFileSync(DAEMON_PID_PATH, String(process.pid), { mode: 0o600 });
+      try { fs.chmodSync(DAEMON_SOCKET_PATH, 0o600); } catch { /* ignore */ }
+      console.log(`Daemon listening on ${DAEMON_SOCKET_PATH} (PID: ${process.pid})`);
+    });
+  })().catch((err: unknown) => {
+    console.error('Daemon startup failed:', err);
     process.exit(1);
   });
 

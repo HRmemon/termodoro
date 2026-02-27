@@ -81,7 +81,7 @@ if (cli.flags.strict) config.strictMode = true;
 
 // Auto-start daemon in background if not running. Returns when daemon is ready.
 async function ensureDaemon(): Promise<void> {
-  if (isDaemonRunning()) return;
+  if (await isDaemonRunning()) return;
 
   // Resolve absolute path to the script
   const thisScript = path.resolve(process.argv[1]!);
@@ -152,7 +152,7 @@ if (command === 'daemon') {
   const subcommand = cli.input[1] ?? 'start';
 
   if (subcommand === 'start') {
-    if (isDaemonRunning()) {
+    if (await isDaemonRunning()) {
       console.log('Daemon is already running.');
       process.exit(0);
     }
@@ -160,7 +160,7 @@ if (command === 'daemon') {
     startDaemon();
     await new Promise(() => {});
   } else if (subcommand === 'stop') {
-    if (!isDaemonRunning()) {
+    if (!(await isDaemonRunning())) {
       console.log('Daemon is not running.');
       process.exit(0);
     }
@@ -172,7 +172,7 @@ if (command === 'daemon') {
     }
     process.exit(0);
   } else if (subcommand === 'status') {
-    if (isDaemonRunning()) {
+    if (await isDaemonRunning()) {
       const pid = fs.readFileSync(DAEMON_PID_PATH, 'utf-8').trim();
       console.log(`Daemon is running (PID: ${pid})`);
     } else {

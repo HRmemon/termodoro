@@ -1,19 +1,33 @@
 import * as net from 'node:net';
-import * as fs from 'node:fs';
 import type { DaemonCommand, DaemonResponse, DaemonEvent } from './protocol.js';
-import { DAEMON_SOCKET_PATH, DAEMON_PID_PATH } from './protocol.js';
+import { DAEMON_SOCKET_PATH } from './protocol.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 
-export function isDaemonRunning(): boolean {
-  try {
-    if (!fs.existsSync(DAEMON_PID_PATH)) return false;
-    const pid = parseInt(fs.readFileSync(DAEMON_PID_PATH, 'utf-8').trim(), 10);
-    // Check if process is alive
-    process.kill(pid, 0);
-    return fs.existsSync(DAEMON_SOCKET_PATH);
-  } catch {
-    return false;
-  }
+/**
+ * Returns true if a daemon is actively accepting connections on the socket.
+ *
+ * Uses a connect attempt rather than PID file inspection because:
+ * - PID recycling can make process.kill(pid, 0) return a false positive.
+ * - A socket file can exist without a listener (stale socket after crash).
+ * - A connect attempt is the only reliable end-to-end liveness test.
+ */
+export function isDaemonRunning(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = net.createConnection(DAEMON_SOCKET_PATH);
+    const timer = setTimeout(() => {
+      sock.destroy();
+      resolve(false);
+    }, 1000);
+    sock.on('connect', () => {
+      clearTimeout(timer);
+      sock.destroy();
+      resolve(true);
+    });
+    sock.on('error', () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
 }
 
 export function sendCommand(cmd: DaemonCommand): Promise<DaemonResponse> {
