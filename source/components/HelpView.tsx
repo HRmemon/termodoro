@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useInput } from 'ink';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
@@ -196,7 +196,9 @@ export function HelpView({ onClose, keymap, setIsTyping, sidebarWidth = 20 }: He
   }, [filtered]);
 
   // Reset scroll when search changes
-  useMemo(() => { setScrollOffset(0); }, [searchQuery]);
+  useEffect(() => {
+    setScrollOffset(0);
+  }, [searchQuery]);
 
   useInput((input, key) => {
     if (isSearching) {

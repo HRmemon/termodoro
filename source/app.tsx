@@ -58,7 +58,9 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   const [view, setView] = useState<View>(initialView ?? 'timer');
 
   // Initialize theme from config
-  useMemo(() => initTheme(config), [config]);
+  useEffect(() => {
+    initTheme(config);
+  }, [config]);
 
   // Runtime sidebar toggle state — starts from config layout setting
   const [sidebarOverride, setSidebarOverride] = useState<'visible' | 'hidden' | null>(null);
