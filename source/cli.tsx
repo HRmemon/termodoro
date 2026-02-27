@@ -332,8 +332,6 @@ if (command in timerCommands) {
 
 // --- Interactive TUI commands ---
 
-await ensureDaemon();
-
 // Map command to initial view
 const viewMap: Record<string, View> = {
   start: 'timer',
@@ -342,6 +340,15 @@ const viewMap: Record<string, View> = {
   clock: 'clock',
   web: 'web',
 };
-const initialView = viewMap[command] ?? 'timer';
+
+if (!(command in viewMap)) {
+  console.error(`Unknown command: ${command}`);
+  console.error('Run "pomodorocli --help" for a list of available commands.');
+  process.exit(1);
+}
+
+await ensureDaemon();
+
+const initialView = viewMap[command]!;
 
 render(<App config={config} initialView={initialView} initialProject={cli.flags.project} initialSequence={cli.flags.sequence} />);
