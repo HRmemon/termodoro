@@ -9,7 +9,7 @@ import { KeybindingsManager } from './config/KeybindingsManager.js';
 import { ThemeManager } from './config/ThemeManager.js';
 import { ConfigFieldList } from './config/ConfigFieldList.js';
 import type { Keymap } from '../lib/keymap.js';
-import { setConfigSubMode } from '../lib/nvim-edit.js';
+import { setConfigSubMode } from '../lib/nvim-edit/index.js';
 
 interface ConfigViewProps {
   config: Config;

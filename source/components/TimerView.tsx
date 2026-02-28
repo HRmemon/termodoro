@@ -6,6 +6,8 @@ import { BigTimer } from './BigTimer.js';
 import { getProjects } from '../lib/tasks.js';
 import { colors } from '../lib/theme.js';
 import type { Keymap } from '../lib/keymap.js';
+import { ModePickerOverlay } from './timer/ModePickerOverlay.js';
+import { SequencePickerOverlay } from './timer/SequencePickerOverlay.js';
 
 interface TimerViewProps {
   secondsLeft: number;
@@ -61,30 +63,24 @@ export function TimerView({
   const [projectInputKey, setProjectInputKey] = useState(0);
   const [suggestionIdx, setSuggestionIdx] = useState(0);
   const [showSeqPicker, setShowSeqPicker] = useState(false);
-  const [seqCursor, setSeqCursor] = useState(0);
   const [showModePicker, setShowModePicker] = useState(false);
-  const [modeCursor, setModeCursor] = useState(0);
 
   const allProjects = useMemo(() => getProjects(), [showProjectInput]);
 
-  // Compute filtered project menu based on current input
   const projectMenu = useMemo(() => {
     if (!showProjectInput) return null;
     const partial = projectInput.toLowerCase();
     if (!partial) return allProjects.length > 0 ? { matches: allProjects } : null;
     const matches = allProjects.filter(p => p.toLowerCase().includes(partial));
     if (matches.length === 0) return null;
-    // Don't show menu if exact match is the only result
     if (matches.length === 1 && matches[0]!.toLowerCase() === partial) return null;
     return { matches };
   }, [showProjectInput, projectInput, allProjects]);
 
-  // Reset suggestion index when menu changes
   useEffect(() => {
     setSuggestionIdx(0);
   }, [projectMenu?.matches.length, projectInput]);
 
-  // Accept the currently highlighted suggestion
   const acceptSuggestion = useCallback(() => {
     if (!projectMenu) return;
     const chosen = projectMenu.matches[suggestionIdx];
@@ -106,7 +102,6 @@ export function TimerView({
   const projectHandledRef = useRef(false);
 
   const handleProjectSubmit = useCallback((value: string) => {
-    // Skip if useInput already handled this Enter via the menu
     if (projectHandledRef.current) {
       projectHandledRef.current = false;
       return;
@@ -121,7 +116,6 @@ export function TimerView({
   useInput((_input, key) => {
     const input = _input;
 
-    // Project input: arrow keys navigate menu, Tab accepts, Enter selects & submits
     if (showProjectInput) {
       if (key.escape) {
         setShowProjectInput(false);
@@ -142,7 +136,6 @@ export function TimerView({
           return;
         }
         if (key.return) {
-          // Select the highlighted suggestion and submit immediately
           const chosen = projectMenu.matches[suggestionIdx];
           if (chosen) {
             onSetProject(chosen);
@@ -154,10 +147,9 @@ export function TimerView({
           return;
         }
       }
-      return; // TextInput handles the rest (including Enter when no menu/empty input)
+      return;
     }
 
-    // Escape guard for duration input
     if (isSettingDuration && key.escape) {
       setIsSettingDuration(false);
       setIsTyping(false);
@@ -165,55 +157,8 @@ export function TimerView({
     }
     if (isSettingDuration) return;
 
-    // Mode picker input handling
-    if (showModePicker) {
-      if (key.escape) { setShowModePicker(false); setIsTyping(false); return; }
-      if (input === 'j' || key.downArrow) { setModeCursor(c => Math.min(c + 1, 1)); return; }
-      if (input === 'k' || key.upArrow) { setModeCursor(c => Math.max(c - 1, 0)); return; }
-      if (key.return) {
-        const selected = modeCursor === 0 ? 'countdown' : 'stopwatch';
-        if (selected === 'stopwatch' && timerMode !== 'stopwatch') onSwitchToStopwatch();
-        else if (selected === 'countdown' && timerMode === 'stopwatch') onStopStopwatch();
-        setShowModePicker(false);
-        setIsTyping(false);
-        return;
-      }
-      return;
-    }
-
-    // Sequence picker input handling
-    if (showSeqPicker) {
-      if (key.escape || input === 'q') {
-        setShowSeqPicker(false);
-        return;
-      }
-      if ((keymap ? keymap.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
-        setSeqCursor(prev => Math.min(prev + 1, sequences.length - 1));
-        return;
-      }
-      if ((keymap ? keymap.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
-        setSeqCursor(prev => Math.max(prev - 1, 0));
-        return;
-      }
-      if (input === 'E') {
-        setShowSeqPicker(false);
-        onEditSequences();
-        return;
-      }
-      if (key.return && sequences.length > 0) {
-        const selected = sequences[seqCursor];
-        if (selected) {
-          if (activeSequence && activeSequence.name === selected.name) {
-            onClearSequence();
-          } else {
-            onActivateSequence(selected);
-          }
-        }
-        setShowSeqPicker(false);
-        return;
-      }
-      return;
-    }
+    // Don't handle input while overlays are open (they handle their own)
+    if (showModePicker || showSeqPicker) return;
 
     const km = keymap;
 
@@ -239,73 +184,38 @@ export function TimerView({
 
     if (km ? km.matches('timer.sequences', input, key) : input === 'S') {
       setShowSeqPicker(true);
-      setSeqCursor(0);
       return;
     }
 
     if (input === 'm') {
       setShowModePicker(true);
-      setModeCursor(timerMode === 'stopwatch' ? 1 : 0);
       setIsTyping(true);
       return;
     }
   });
 
-  // Mode picker overlay
   if (showModePicker) {
-    const isStopwatch = timerMode === 'stopwatch';
-    const options = ['Timer', 'Stopwatch'];
     return (
-      <Box flexDirection="column" flexGrow={1}>
-        <Box borderStyle="round" borderColor={colors.highlight} flexDirection="column" paddingX={1}>
-          <Box marginBottom={1}>
-            <Text bold color={colors.highlight}>Timer Mode</Text>
-            <Text dimColor>  (j/k navigate, Enter select, Esc cancel)</Text>
-          </Box>
-          {options.map((opt, i) => {
-            const isCursor = i === modeCursor;
-            const isCurrent = (i === 0 && !isStopwatch) || (i === 1 && isStopwatch);
-            return (
-              <Box key={opt}>
-                <Text color={isCursor ? colors.highlight : colors.text} bold={isCursor}>
-                  {isCursor ? '> ' : '  '}{opt}
-                </Text>
-                {isCurrent && <Text color={colors.focus}>  ← current</Text>}
-                {i === 0 && isStopwatch && <Text dimColor>  (logs & resets)</Text>}
-              </Box>
-            );
-          })}
-        </Box>
-      </Box>
+      <ModePickerOverlay
+        timerMode={timerMode}
+        onSwitchToStopwatch={onSwitchToStopwatch}
+        onStopStopwatch={onStopStopwatch}
+        onClose={() => { setShowModePicker(false); setIsTyping(false); }}
+      />
     );
   }
 
-  // Sequence picker overlay
   if (showSeqPicker) {
     return (
-      <Box flexDirection="column" flexGrow={1}>
-        <Box borderStyle="round" borderColor={colors.highlight} flexDirection="column" paddingX={1}>
-          <Box marginBottom={1}>
-            <Text bold color={colors.highlight}>Select Sequence</Text>
-            <Text dimColor>  (j/k navigate, Enter select, E:edit, Esc close)</Text>
-          </Box>
-          {sequences.map((seq, i) => {
-            const isCursor = i === seqCursor;
-            const isActive = activeSequence?.name === seq.name;
-            const summary = seq.blocks.map(b => `${b.durationMinutes}${b.type === 'work' ? 'w' : 'b'}`).join(' ');
-            return (
-              <Box key={seq.name}>
-                <Text color={isCursor ? colors.highlight : colors.text} bold={isCursor}>
-                  {isCursor ? '> ' : '  '}{seq.name}
-                </Text>
-                <Text dimColor>  {summary}</Text>
-                {isActive && <Text color={colors.focus} bold>  [ACTIVE]</Text>}
-              </Box>
-            );
-          })}
-          {sequences.length === 0 && <Text dimColor>No sequences available.</Text>}
-        </Box>
-      </Box>
+      <SequencePickerOverlay
+        sequences={sequences}
+        activeSequence={activeSequence}
+        onSelect={onActivateSequence}
+        onClear={onClearSequence}
+        onEditSequences={onEditSequences}
+        onClose={() => setShowSeqPicker(false)}
+        keymap={keymap}
+      />
     );
   }
 

@@ -1,27 +1,22 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, useInput, useStdout } from 'ink';
 import type { CalendarEvent, Config } from '../types.js';
-import { loadEvents, addEvent, updateEvent, deleteEvent, expandRecurring } from '../lib/events.js';
-import { loadIcsEvents } from '../lib/ics.js';
-import { loadSessions } from '../lib/store.js';
-import { loadTasks } from '../lib/tasks.js';
-import { loadReminders } from '../lib/reminders.js';
+import { addEvent, updateEvent, deleteEvent } from '../lib/events.js';
 import { MonthGrid } from './MonthGrid.js';
 import { DayAgenda } from './DayAgenda.js';
 import { DayPanel, getDayItemCount } from './TasksPanel.js';
 import { EventForm } from './EventForm.js';
 import type { Keymap } from '../lib/keymap.js';
-import { getTodayStr, parseDateParts, formatDateStr, getMonthDays, addDays } from '../lib/date-utils.js';
+import { getTodayStr, parseDateParts, addDays } from '../lib/date-utils.js';
 import { saveConfig, loadConfig } from '../lib/config.js';
-import { setCalendarSelectedDate } from '../lib/nvim-edit.js';
+import { setCalendarSelectedDate } from '../lib/nvim-edit/index.js';
+import { useCalendarData } from '../hooks/useCalendarData.js';
 
 type ViewMode = 'monthly' | 'daily' | 'add' | 'edit';
 
 type PaneId = 'calendar' | 'today';
 const PANES: PaneId[] = ['calendar', 'today'];
 
-// Layout overhead from Layout.tsx: top border(1) + view header+margin(2) + mid divider(1)
-// + status row(1) + simpleDivider(1) + keysBar content+border(3) + safeRows -1 adjustment(1) = 10
 const LAYOUT_OVERHEAD_ROWS = 10;
 const TASKS_PANEL_RATIO = 0.28;
 
@@ -63,103 +58,20 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
     setCalendarSelectedDate(selectedDate);
   }, [selectedDate]);
 
-  // Load user events
-  const allUserEvents = useMemo(() => loadEvents(), [eventVersion]);
-
-  // Load ICS events
+  // ICS version for reloading
   const [icsVersion, setIcsVersion] = useState(0);
-  const icsEvents = useMemo(() => {
-    const paths = calendarConfig?.icsFiles ?? [];
-    if (paths.length === 0) return [];
-    return loadIcsEvents(paths);
-  }, [icsVersion, calendarConfig?.icsFiles]);
 
-  const allEvents = useMemo(() => [...allUserEvents, ...icsEvents], [allUserEvents, icsEvents]);
-
-  // Month data — include filler days from adjacent months
-  // Single expandRecurring call covering the full visible range (filler + month + filler)
-  const eventsByDate = useMemo(() => {
-    const mondayStart = (calendarConfig?.weekStartsOn ?? 1) === 1;
-    const firstDow = (() => {
-      const d = new Date(year, month - 1, 1).getDay();
-      return mondayStart ? (d + 6) % 7 : d;
-    })();
-    const totalDays = getMonthDays(year, month);
-    const lastDow = (() => {
-      const d = new Date(year, month - 1, totalDays).getDay();
-      return mondayStart ? (d + 6) % 7 : d;
-    })();
-    const trailingDays = lastDow < 6 ? 6 - lastDow : 0;
-
-    // Compute the full visible range including filler days
-    const visibleStart = firstDow > 0
-      ? addDays(formatDateStr(year, month, 1), -firstDow)
-      : formatDateStr(year, month, 1);
-    const visibleEnd = trailingDays > 0
-      ? addDays(formatDateStr(year, month, totalDays), trailingDays)
-      : formatDateStr(year, month, totalDays);
-
-    const expanded = expandRecurring(allEvents, visibleStart, visibleEnd);
-    const map = new Map<string, CalendarEvent[]>();
-
-    // Initialize all days in the current month
-    for (let d = 1; d <= totalDays; d++) {
-      map.set(formatDateStr(year, month, d), []);
-    }
-
-    // Distribute events across their date ranges
-    for (const event of expanded) {
-      const start = event.date;
-      const end = event.endDate ?? event.date;
-      let cur = start;
-      while (cur <= end && cur <= visibleEnd) {
-        if (cur >= visibleStart) {
-          if (!map.has(cur)) map.set(cur, []);
-          map.get(cur)!.push(event);
-        }
-        cur = addDays(cur, 1);
-      }
-    }
-
-    return map;
-  }, [allEvents, year, month, calendarConfig?.weekStartsOn]);
-
-  // Session heatmap
-  const sessionMinutesByDate = useMemo(() => {
-    if (calendarConfig?.showSessionHeatmap === false) return new Map<string, number>();
-    const sessions = loadSessions();
-    const map = new Map<string, number>();
-    const prefix = `${year}-${String(month).padStart(2, '0')}`;
-    for (const s of sessions) {
-      if (s.type !== 'work' || s.status !== 'completed') continue;
-      if (!s.startedAt.startsWith(prefix)) continue;
-      const dateKey = s.startedAt.slice(0, 10);
-      map.set(dateKey, (map.get(dateKey) ?? 0) + Math.round(s.durationActual / 60));
-    }
-    return map;
-  }, [year, month, calendarConfig?.showSessionHeatmap]);
-
-  // Daily agenda data — reuse eventsByDate which already includes filler days
-  const dayEvents = useMemo(() => {
-    return eventsByDate.get(selectedDate) ?? [];
-  }, [eventsByDate, selectedDate]);
-
-  const dayTasks = useMemo(() => {
-    if (calendarConfig?.showTaskDeadlines === false) return [];
-    return loadTasks().filter((t: { deadline?: string }) => t.deadline === selectedDate);
-  }, [selectedDate, eventVersion, calendarConfig?.showTaskDeadlines]);
-
-  const dayReminders = useMemo(() => {
-    if (calendarConfig?.showReminders === false) return [];
-    const reminders = loadReminders();
-    return reminders.filter((r: { enabled: boolean; recurring: boolean }) => r.enabled && (r.recurring || selectedDate === today));
-  }, [selectedDate, eventVersion, today, calendarConfig?.showReminders]);
-
-  const daySessions = useMemo(() => {
-    return loadSessions().filter(
-      (s: { startedAt: string; type: string; status: string }) => s.startedAt.startsWith(selectedDate) && s.type === 'work' && s.status === 'completed'
-    );
-  }, [selectedDate, eventVersion]);
+  // All data loading consolidated into one hook
+  const {
+    eventsByDate,
+    sessionMinutesByDate,
+    dayEvents,
+    dayTasks,
+    dayReminders,
+    daySessions,
+  } = useCalendarData({
+    selectedDate, year, month, eventVersion, icsVersion, today, calendarConfig,
+  });
 
   // Reset cursor and day-panel scroll when selected date changes
   useEffect(() => { setDailySelectedIdx(0); setTodayScrollOffset(0); }, [selectedDate]);
@@ -215,13 +127,11 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
   useInput((input, key) => {
     if (viewMode === 'add' || viewMode === 'edit') return;
 
-    // Tab / Shift-Tab to switch panes
     if (key.tab) {
       cyclePane(key.shift ? -1 : 1);
       return;
     }
 
-    // Global: privacy toggle, ICS reload
     if (keymap.matches('calendar.toggle_global_privacy', input, key)) {
       setIsGlobalPrivacy(prev => !prev);
       return;
@@ -232,7 +142,6 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
       return;
     }
 
-    // Go to today (works in any pane)
     if (keymap.matches('calendar.goto_today', input, key)) {
       setSelectedDate(getTodayStr());
       return;
@@ -240,7 +149,6 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
     if (keymap.matches('calendar.toggle_heatmap', input, key)) {
       setShowHeatmap(prev => {
         const next = !prev;
-        // Persist to config
         const cfg = loadConfig();
         if (!cfg.calendar) cfg.calendar = {};
         cfg.calendar.showSessionHeatmap = next;
@@ -250,13 +158,11 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
       return;
     }
 
-    // Toggle collapse on focused right-side pane with Enter
     if (focusedPane === 'today' && key.return) {
       setTodayCollapsed(prev => !prev);
       return;
     }
 
-    // Calendar pane focused
     if (focusedPane === 'calendar') {
       if (viewMode === 'monthly') {
         if (keymap.matches('nav.left', input, key)) { navigateDay(-1); return; }
@@ -311,7 +217,6 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
           return;
         }
 
-        // x = toggle done
         if (keymap.matches('calendar.toggle_done', input, key)) {
           applyToSelected(event => {
             updateEvent(event.id, { status: event.status === 'done' ? 'normal' : 'done' });
@@ -319,7 +224,6 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
           return;
         }
 
-        // d = delete
         if (keymap.matches('calendar.delete', input, key)) {
           if (dailySelectedIdx < dayEvents.length) {
             const event = dayEvents[dailySelectedIdx];
@@ -350,7 +254,6 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
       }
     }
 
-    // Today/Tasks panes: j/k to scroll
     if (focusedPane === 'today') {
       const totalItems = getDayItemCount(dayEvents, dayTasks);
       if (keymap.matches('nav.down', input, key)) {

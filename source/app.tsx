@@ -1,13 +1,11 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useInput, useApp, Box, Text } from 'ink';
-import { nanoid } from 'nanoid';
 import type { Config, View } from './types.js';
 import { loadSessions } from './lib/store.js';
-import { loadTasks, addTask } from './lib/tasks.js';
-import { loadReminders, updateReminder, addReminder } from './lib/reminders.js';
-import { notifyReminder } from './lib/notify.js';
 import { parseSequenceString, loadSequences } from './lib/sequences.js';
 import { useDaemonConnection } from './hooks/useDaemonConnection.js';
+import { useReminderChecker } from './hooks/useReminderChecker.js';
+import { useCommandDispatch } from './hooks/useCommandDispatch.js';
 import { Layout } from './components/Layout.js';
 import { StatusLine } from './components/StatusLine.js';
 import { KeysBar } from './components/KeysBar.js';
@@ -30,7 +28,7 @@ import { TrackerView } from './components/TrackerView.js';
 import { GraphsView } from './components/GraphsView.js';
 import { CalendarView } from './components/CalendarView.js';
 import { getStreaks } from './lib/stats.js';
-import { openInNvim } from './lib/nvim-edit.js';
+import { openInNvim } from './lib/nvim-edit/index.js';
 import { loadConfig } from './lib/config.js';
 import { initTheme } from './lib/theme.js';
 import { getShortcutMap } from './lib/views.js';
@@ -82,8 +80,8 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   // Connect to daemon
   const { timer, engine, sequence, actions, connectionStatus } = useDaemonConnection();
 
-  // Track which reminder times have already fired
-  const firedRemindersRef = useRef<Set<string>>(new Set());
+  // Reminder checker — runs every 30s
+  useReminderChecker(config);
 
   // Apply CLI initial flags on mount
   const appliedInitRef = useRef(false);
@@ -123,39 +121,6 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     };
   }, [timer.isComplete, engine.sessionNumber]);
 
-  // Reminder checker — runs every 30s
-  useEffect(() => {
-    const checkReminders = () => {
-      if (!config.notifications) return;
-      const now = new Date();
-      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const today = now.toISOString().slice(0, 10);
-      const firedKey = `${today}:${currentTime}`;
-
-      const reminders = loadReminders();
-      for (const r of reminders) {
-        if (!r.enabled) continue;
-        if (r.time === currentTime && !firedRemindersRef.current.has(firedKey + r.id)) {
-          firedRemindersRef.current.add(firedKey + r.id);
-          let message = r.title;
-          if (r.taskId) {
-            const tasks = loadTasks();
-            const task = tasks.find(t => t.id === r.taskId);
-            if (task) message = `${r.title}\nTask: ${task.text}`;
-          }
-          notifyReminder(r.title, message, config.sound, config.notificationDuration, config.sounds);
-          if (!r.recurring) {
-            updateReminder(r.id, { enabled: false });
-          }
-        }
-      }
-    };
-
-    checkReminders();
-    const interval = setInterval(checkReminders, 30_000);
-    return () => clearInterval(interval);
-  }, [config.notifications, config.notificationDuration]);
-
   const handleActivateSequence = useCallback((seq: import('./types.js').SessionSequence) => {
     actions.activateSequence(seq.name);
     setView('timer');
@@ -176,112 +141,20 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     setShowResetModal(false);
   }, [actions]);
 
-  const handleCommand = useCallback((cmd: string, args: string) => {
-    setShowCommandPalette(false);
-    switch (cmd) {
-      case 'stats':
-        setView('stats');
-        break;
-      case 'reminders':
-        setView('reminders');
-        break;
-      case 'tasks':
-        setView('tasks');
-        break;
-      case 'search':
-        setSearchQuery(args);
-        setShowSearch(true);
-        break;
-      case 'insights':
-        setShowInsights(true);
-        break;
-      case 'session': {
-        const named = loadSequences().find(s => s.name === args.trim());
-        if (named) {
-          actions.activateSequence(args.trim());
-        } else {
-          const seq = parseSequenceString(args);
-          if (seq) actions.activateSequenceInline(args);
-        }
-        setView('timer');
-        break;
-      }
-      case 'task': {
-        if (args.trim()) {
-          let text = args.trim();
-          let project: string | undefined;
-          let expectedPomodoros = 1;
+  const commandCallbacks = useMemo(() => ({
+    setShowCommandPalette,
+    setSearchQuery,
+    setShowSearch,
+    setShowInsights,
+    setView,
+  }), []);
 
-          const pomMatch = text.match(/^(.+?)\s*\/(\d+)\s*$/);
-          if (pomMatch) {
-            text = pomMatch[1]!.trim();
-            expectedPomodoros = parseInt(pomMatch[2]!, 10);
-          }
-          const projMatch = text.match(/^(.+?)\s+#(\S+)\s*$/);
-          if (projMatch) {
-            text = projMatch[1]!.trim();
-            project = projMatch[2]!;
-          }
-          addTask(text, expectedPomodoros, project);
-          setView('tasks');
-        }
-        break;
-      }
-      case 'reminder': {
-        const reminderMatch = args.trim().match(/^(\d{1,2}:\d{2})\s+(.+)$/);
-        if (reminderMatch) {
-          const time = reminderMatch[1]!;
-          const title = reminderMatch[2]!;
-          addReminder({
-            id: nanoid(),
-            time,
-            title,
-            enabled: true,
-            recurring: false,
-          });
-          setView('reminders');
-        }
-        break;
-      }
-      case 'remind': {
-        const remindMatch = args.trim().match(/^(\d+)\s*(s|m|h)(?:\s+(.+))?$/i);
-        if (remindMatch) {
-          const amount = parseInt(remindMatch[1]!, 10);
-          const unit = remindMatch[2]!.toLowerCase();
-          let ms = 0;
-          if (unit === 's') ms = amount * 1000;
-          else if (unit === 'm') ms = amount * 60 * 1000;
-          else if (unit === 'h') ms = amount * 60 * 60 * 1000;
-
-          const label = remindMatch[3]?.trim() || `${amount}${unit} timer`;
-          const fireAt = new Date(Date.now() + ms);
-          const fireTime = `${String(fireAt.getHours()).padStart(2, '0')}:${String(fireAt.getMinutes()).padStart(2, '0')}`;
-          const reminderId = nanoid();
-          addReminder({
-            id: reminderId,
-            time: fireTime,
-            title: label,
-            enabled: true,
-            recurring: false,
-          });
-
-          setTimeout(() => {
-            notifyReminder(label, `Timer: ${label}`, config.sound, config.notificationDuration, config.sounds);
-            updateReminder(reminderId, { enabled: false });
-          }, ms);
-
-          setView('reminders');
-        }
-        break;
-      }
-      case 'quit':
-        actions.abandon();
-        exit();
-        break;
-      default:
-        break;
-    }
-  }, [actions, exit, config]);
+  const handleCommand = useCommandDispatch(
+    actions,
+    commandCallbacks,
+    config,
+    exit,
+  );
 
   const handleGlobalSearchNavigate = useCallback((targetView: View, focusId: string, type: 'task' | 'sequence' | 'reminder') => {
     setShowGlobalSearch(false);

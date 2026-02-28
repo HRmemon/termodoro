@@ -10,8 +10,10 @@ import {
 } from '../lib/tracker.js';
 import { getSlotDomainBreakdown } from '../lib/browser-stats.js';
 import { formatHours } from '../lib/format.js';
-
-const COL_WIDTH = 5; // characters per day column
+import { COL_WIDTH } from './tracker/SlotCell.js';
+import { TrackerGridView } from './tracker/TrackerGridView.js';
+import { TrackerPickerOverlay } from './tracker/TrackerPickerOverlay.js';
+import { DaySummaryPanel, WeekSummaryPanel } from './tracker/TrackerSummaryPanel.js';
 
 function getTodayStr() {
   return dateToString(new Date());
@@ -21,36 +23,6 @@ function getTodayColIndex(weekDates: string[]): number {
   const today = getTodayStr();
   const idx = weekDates.indexOf(today);
   return idx >= 0 ? idx : -1;
-}
-
-
-function SlotCell({
-  code, isActive, isCursor, pending
-}: { code: string | undefined; isActive: boolean; isCursor: boolean; pending?: PendingSuggestion }) {
-  // Show pending suggestion if no confirmed code
-  // Always produce exactly COL_WIDTH (5) visual chars
-  if (!code && pending) {
-    // pending display: space + up to 3 chars + space = 5 chars total
-    const raw = pending.suggested === 'hD' ? '?½D' : `?${pending.suggested}`;
-    const capped = raw.slice(0, 3).padEnd(3);
-    if (isCursor) {
-      return <Text backgroundColor="white" color="black">{` ${capped} `}</Text>;
-    }
-    return <Text dimColor color="yellow">{` ${capped} `}</Text>;
-  }
-
-  const cat = code ? getCategoryByCode(code) : undefined;
-  // Filled: space + 2-char code + space + space = 5 chars
-  const display = code ? (code === 'hD' ? '\u00bdD' : code.slice(0, 2).padEnd(2)) : ' \u00b7';
-  const color = cat?.color as any ?? 'gray';
-
-  if (isCursor) {
-    return <Text backgroundColor={isActive ? color : 'white'} color="black">{` ${display.trim().padEnd(2)} `}</Text>;
-  }
-  if (code) {
-    return <Text color={color}>{` ${display.trim().padEnd(2)} `}</Text>;
-  }
-  return <Text dimColor>{`  \u00b7  `}</Text>;
 }
 
 type Mode = 'grid' | 'pick' | 'day' | 'week' | 'browse' | 'review';
@@ -172,7 +144,6 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
 
       if (input === 'y' || input === 'Y') {
         setWeek(prev => prev ? acceptPending(prev, ps.date, ps.time) : prev);
-        // Move to next or exit if done
         if (reviewIdx >= pendingSlots.length - 1) setMode('grid');
       } else if (input === 'n' || input === 'N') {
         setWeek(prev => prev ? rejectPending(prev, ps.date, ps.time) : prev);
@@ -183,10 +154,8 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
       } else if (key.tab) {
         setReviewIdx(i => Math.min(i + 1, pendingSlots.length - 1));
       } else {
-        // Category key: change suggestion category & accept
         const cat = categories.find(c => c.key && c.key === input);
         if (cat && week) {
-          // Change the suggestion's code before accepting
           const updated = { ...week, pending: { ...week.pending } };
           if (updated.pending[ps.date]) {
             updated.pending[ps.date] = { ...updated.pending[ps.date] };
@@ -205,7 +174,6 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
       else if (key.return) handleSetSlot(categories[pickerCursor]!.code);
       else if (key.escape) {
         setMode('grid');
-        // Ensure cursor is visible after closing picker
         setScrollOffset(prev => {
           if (cursorRow < prev) return cursorRow;
           if (cursorRow >= prev + VISIBLE_ROWS) return cursorRow - VISIBLE_ROWS + 1;
@@ -214,7 +182,6 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
       }
       else if (input === '.') handleSetSlot(null);
       else {
-        // Quick type by shortcut key
         const cat = categories.find(c => c.key && c.key === input);
         if (cat) { handleSetSlot(cat.code); }
       }
@@ -249,7 +216,6 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
     } else if (km ? km.matches('tracker.clear', input, key) : input === '.') {
       handleSetSlot(null);
     }
-    // Dynamic quick-set by shortcut key
     else {
       const cat = categories.find(c => c.key && c.key === input);
       if (cat) handleSetSlot(cat.code);
@@ -333,32 +299,13 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   // Visible rows
   const visibleSlots = ALL_SLOTS.slice(scrollOffset, scrollOffset + VISIBLE_ROWS);
 
-  // When picker is open, show only rows up to cursor then picker below (no rowsBelow shift)
+  // When picker is open, show only rows up to cursor then picker below
   if (mode === 'pick') {
     const pickerHeight = categories.length + 3;
     const maxGridRows = Math.max(3, VISIBLE_ROWS - pickerHeight);
     const pickScrollEnd = Math.min(cursorRow + 1, ALL_SLOTS.length);
     const pickScrollStart = Math.max(0, pickScrollEnd - maxGridRows);
     const pickVisibleSlots = ALL_SLOTS.slice(pickScrollStart, pickScrollEnd);
-
-    const renderGridRow = (time: string, visIdx: number, baseOffset: number) => {
-      const rowIdx = baseOffset + visIdx;
-      return (
-        <Box key={time}>
-          <Text dimColor>{time}  </Text>
-          {weekDates.map((date, colIdx) => {
-            const slotCode = week.slots[date]?.[time];
-            const isCursor = rowIdx === cursorRow && colIdx === cursorCol;
-            const pend = week.pending[date]?.[time];
-            return (
-              <Box key={date} width={COL_WIDTH}>
-                <SlotCell code={slotCode} isActive={!!slotCode} isCursor={isCursor} pending={pend} />
-              </Box>
-            );
-          })}
-        </Box>
-      );
-    };
 
     return (
       <Box flexDirection="column" flexGrow={1}>
@@ -386,33 +333,22 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
         </Box>
 
         {/* Grid rows up to and including cursor row */}
-        <Box flexDirection="column">
-          {pickVisibleSlots.map((time, vi) => renderGridRow(time, vi, pickScrollStart))}
-        </Box>
+        <TrackerGridView
+          week={week}
+          weekDates={weekDates}
+          visibleSlots={pickVisibleSlots}
+          scrollOffset={pickScrollStart}
+          cursorRow={cursorRow}
+          cursorCol={cursorCol}
+        />
 
-        {/* Inline picker with [key] indicators */}
-        <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
-          <Text bold color="cyan">Set slot: {currentDate} {currentTime}</Text>
-          {categories.map((cat, i) => (
-            <Box key={cat.code}>
-              <Text color={i === pickerCursor ? 'cyan' : undefined} bold={i === pickerCursor}>
-                {i === pickerCursor ? '> ' : '  '}
-              </Text>
-              <Text dimColor>[</Text>
-              <Text color={cat.key ? 'white' : 'gray'} bold={!!cat.key}>
-                {cat.key ?? ' '}
-              </Text>
-              <Text dimColor>] </Text>
-              <Text color={cat.color as any} bold={i === pickerCursor}>
-                {cat.code.padEnd(4)}
-              </Text>
-              <Text color={i === pickerCursor ? 'cyan' : undefined}>
-                {cat.label}
-              </Text>
-            </Box>
-          ))}
-          <Text dimColor>Enter:set  j/k:nav  [.]:clear  Esc:cancel</Text>
-        </Box>
+        {/* Inline picker */}
+        <TrackerPickerOverlay
+          categories={categories}
+          pickerCursor={pickerCursor}
+          currentDate={currentDate}
+          currentTime={currentTime}
+        />
       </Box>
     );
   }
@@ -426,84 +362,29 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
         <Text dimColor>{'  '}Day {dayNum}/7</Text>
       </Box>
 
-      {/* Column headers + divider */}
-      <Text>{' '}</Text>
-      <Text dimColor>{'Time  ' + DAY_NAMES.map(n => n.padEnd(COL_WIDTH)).join('')}</Text>
-      <Text dimColor>{'      ' + DAY_NAMES.map(() => '\u2500'.repeat(COL_WIDTH)).join('')}</Text>
-
-      {/* Grid rows */}
-      <Box flexDirection="column">
-        {visibleSlots.map((time, visIdx) => {
-          const rowIdx = scrollOffset + visIdx;
-          return (
-            <Box key={time}>
-              <Text dimColor>{time}  </Text>
-              {weekDates.map((date, colIdx) => {
-                const slotCode = week.slots[date]?.[time];
-                const isCursor = rowIdx === cursorRow && colIdx === cursorCol;
-                const pend = week.pending[date]?.[time];
-                return (
-                  <Box key={date} width={COL_WIDTH}>
-                    <SlotCell code={slotCode} isActive={!!slotCode} isCursor={isCursor} pending={pend} />
-                  </Box>
-                );
-              })}
-            </Box>
-          );
-        })}
-      </Box>
+      {/* Grid */}
+      <TrackerGridView
+        week={week}
+        weekDates={weekDates}
+        visibleSlots={visibleSlots}
+        scrollOffset={scrollOffset}
+        cursorRow={cursorRow}
+        cursorCol={cursorCol}
+      />
 
       {/* Day summary panel */}
       {mode === 'day' && currentDate && (
-        <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1} marginTop={1}>
-          <Text bold color="yellow">{DAY_NAMES[cursorCol]} {currentDate}</Text>
-          {Object.entries(dayStats).length === 0 && <Text dimColor>No slots filled yet.</Text>}
-          {Object.entries(dayStats).map(([code, hours]) => {
-            const cat = getCategoryByCode(code);
-            return (
-              <Box key={code}>
-                <Box width={6}><Text color={cat?.color as any}>{code}</Text></Box>
-                <Text>{formatHours(hours)}</Text>
-              </Box>
-            );
-          })}
-          <Box marginTop={1}>
-            <Text dimColor>Total tracked: {formatHours(dayTotal)}</Text>
-          </Box>
-          <Text dimColor>Esc or d to close</Text>
-        </Box>
+        <DaySummaryPanel
+          currentDate={currentDate}
+          cursorCol={cursorCol}
+          dayStats={dayStats}
+          dayTotal={dayTotal}
+        />
       )}
 
       {/* Week summary panel */}
       {mode === 'week' && (
-        <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1} marginTop={1}>
-          <Text bold color="yellow">Week of {week.start}</Text>
-          <Box>
-            <Box width={6}><Text dimColor> </Text></Box>
-            {DAY_NAMES.map(d => <Box key={d} width={6}><Text dimColor>{d}</Text></Box>)}
-            <Box width={7}><Text dimColor>Total</Text></Box>
-          </Box>
-          {categories.map(cat => {
-            const perDay = weekDates.map(date => (week.slots[date] ?? {}));
-            const dayCounts = perDay.map(daySlots =>
-              Object.values(daySlots).filter(c => c === cat.code).length * 0.5
-            );
-            const total = dayCounts.reduce((s, h) => s + h, 0);
-            if (total === 0) return null;
-            return (
-              <Box key={cat.code}>
-                <Box width={6}><Text color={cat.color as any}>{cat.code}</Text></Box>
-                {dayCounts.map((h, i) => (
-                  <Box key={i} width={6}>
-                    <Text color={cat.color as any}>{h > 0 ? formatHours(h) : '\u00b7'}</Text>
-                  </Box>
-                ))}
-                <Box width={7}><Text bold>{formatHours(total)}</Text></Box>
-              </Box>
-            );
-          })}
-          <Text dimColor>Esc or w to close</Text>
-        </Box>
+        <WeekSummaryPanel week={week} weekDates={weekDates} />
       )}
 
       {/* Pending banner */}

@@ -6,6 +6,7 @@ import { saveConfig } from '../../lib/config.js';
 import { ALL_SOUND_CHOICES, SOUND_LABELS, previewSound } from '../../lib/sounds.js';
 import type { SoundEvent, SoundChoice } from '../../lib/sounds.js';
 import { SoundPicker } from './SoundPicker.js';
+import { ConfigNavEntry } from './ConfigNavEntry.js';
 import type { Keymap } from '../../lib/keymap.js';
 
 type FieldType = 'number' | 'boolean' | 'cycle' | 'sound-event' | 'sound-duration' | 'sound-volume';
@@ -334,69 +335,11 @@ export function ConfigFieldList({
         );
       })}
 
-      {/* Tracker Categories entry */}
-      <Box>
-        <Text color={selectedIdx === FIELDS.length ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length}>
-          {selectedIdx === FIELDS.length ? '> ' : '  '}
-        </Text>
-        <Box width={22}>
-          <Text color={selectedIdx === FIELDS.length ? 'white' : 'gray'}>Tracker Categories</Text>
-        </Box>
-        <Text color="cyan" bold={selectedIdx === FIELDS.length}>{catCount} categories</Text>
-        {selectedIdx === FIELDS.length && <Text dimColor>  Enter to manage</Text>}
-      </Box>
-
-      {/* Domain Rules entry */}
-      <Box>
-        <Text color={selectedIdx === FIELDS.length + 1 ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length + 1}>
-          {selectedIdx === FIELDS.length + 1 ? '> ' : '  '}
-        </Text>
-        <Box width={22}>
-          <Text color={selectedIdx === FIELDS.length + 1 ? 'white' : 'gray'}>Domain Rules</Text>
-        </Box>
-        <Text color="cyan" bold={selectedIdx === FIELDS.length + 1}>{ruleCount} rules</Text>
-        {selectedIdx === FIELDS.length + 1 && <Text dimColor>  Enter to manage</Text>}
-      </Box>
-
-      {/* Sequences entry */}
-      <Box>
-        <Text color={selectedIdx === FIELDS.length + 2 ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length + 2}>
-          {selectedIdx === FIELDS.length + 2 ? '> ' : '  '}
-        </Text>
-        <Box width={22}>
-          <Text color={selectedIdx === FIELDS.length + 2 ? 'white' : 'gray'}>Sequences</Text>
-        </Box>
-        <Text color="cyan" bold={selectedIdx === FIELDS.length + 2}>{seqCount} sequences</Text>
-        {selectedIdx === FIELDS.length + 2 && <Text dimColor>  Enter to manage</Text>}
-      </Box>
-
-      {/* Keybindings entry */}
-      <Box>
-        <Text color={selectedIdx === FIELDS.length + 3 ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length + 3}>
-          {selectedIdx === FIELDS.length + 3 ? '> ' : '  '}
-        </Text>
-        <Box width={22}>
-          <Text color={selectedIdx === FIELDS.length + 3 ? 'white' : 'gray'}>Keybindings</Text>
-        </Box>
-        <Text color="cyan" bold={selectedIdx === FIELDS.length + 3}>
-          {keybindingCount > 0 ? `${keybindingCount} custom` : 'defaults'}
-        </Text>
-        {selectedIdx === FIELDS.length + 3 && <Text dimColor>  Enter to manage</Text>}
-      </Box>
-
-      {/* Themes entry */}
-      <Box>
-        <Text color={selectedIdx === FIELDS.length + 4 ? 'yellow' : 'gray'} bold={selectedIdx === FIELDS.length + 4}>
-          {selectedIdx === FIELDS.length + 4 ? '> ' : '  '}
-        </Text>
-        <Box width={22}>
-          <Text color={selectedIdx === FIELDS.length + 4 ? 'white' : 'gray'}>Themes</Text>
-        </Box>
-        <Text color="cyan" bold={selectedIdx === FIELDS.length + 4}>
-          {themeCount > 0 ? `${themeCount} custom` : 'built-in only'}
-        </Text>
-        {selectedIdx === FIELDS.length + 4 && <Text dimColor>  Enter to manage</Text>}
-      </Box>
+      <ConfigNavEntry label="Tracker Categories" detail={`${catCount} categories`} isSelected={selectedIdx === FIELDS.length} hint="Enter to manage" />
+      <ConfigNavEntry label="Domain Rules" detail={`${ruleCount} rules`} isSelected={selectedIdx === FIELDS.length + 1} hint="Enter to manage" />
+      <ConfigNavEntry label="Sequences" detail={`${seqCount} sequences`} isSelected={selectedIdx === FIELDS.length + 2} hint="Enter to manage" />
+      <ConfigNavEntry label="Keybindings" detail={keybindingCount > 0 ? `${keybindingCount} custom` : 'defaults'} isSelected={selectedIdx === FIELDS.length + 3} hint="Enter to manage" />
+      <ConfigNavEntry label="Themes" detail={themeCount > 0 ? `${themeCount} custom` : 'built-in only'} isSelected={selectedIdx === FIELDS.length + 4} hint="Enter to manage" />
 
       {saved && (
         <Box marginTop={1}>

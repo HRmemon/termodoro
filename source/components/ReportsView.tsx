@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import type { Keymap } from '../lib/keymap.js';
-import { openSessionsInNvim } from '../lib/nvim-edit.js';
+import { openSessionsInNvim } from '../lib/nvim-edit/index.js';
 import { Heatmap } from './Heatmap.js';
 import { Sparkline } from './Sparkline.js';
 import { colors } from '../lib/theme.js';
