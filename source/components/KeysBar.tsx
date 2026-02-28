@@ -24,7 +24,7 @@ interface KeyHint {
   label: string;
 }
 
-export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence, hasActiveProject, timerMode, config, keymap }: KeysBarProps) {
+export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence, hasActiveProject, timerMode, config, keymap }: KeysBarProps) {
   // Zen mode: minimal
   if (isZen) {
     const hint = isRunning && !isPaused ? 'Pause' : isPaused ? 'Resume' : 'Start';
@@ -173,9 +173,9 @@ export function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiv
       <HintRow hints={globalHints} dim />
     </Box>
   );
-}
+});
 
-function HintRow({ hints, dim }: { hints: KeyHint[]; dim?: boolean }) {
+const HintRow = React.memo(function HintRow({ hints, dim }: { hints: KeyHint[]; dim?: boolean }) {
   return (
     <Box>
       {hints.map((h, i) => (
@@ -186,4 +186,4 @@ function HintRow({ hints, dim }: { hints: KeyHint[]; dim?: boolean }) {
       ))}
     </Box>
   );
-}
+});

@@ -22,7 +22,7 @@ const MODE_LABELS: Record<SessionType, string> = {
   'long-break': 'Long Break',
 };
 
-export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning, timerFormat, timerMode, stopwatchElapsed }: ZenModeProps) {
+export const ZenMode = React.memo(function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning, timerFormat, timerMode, stopwatchElapsed }: ZenModeProps) {
   const { columns, rows } = useFullScreen();
   const isStopwatch = timerMode === 'stopwatch';
   const displaySeconds = isStopwatch ? stopwatchElapsed : secondsLeft;
@@ -63,4 +63,4 @@ export function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRu
       </Box>
     </Box>
   );
-}
+});

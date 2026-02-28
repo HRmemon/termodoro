@@ -19,7 +19,7 @@ function getSeconds(): string {
   return String(new Date().getSeconds()).padStart(2, '0');
 }
 
-export function ZenClock() {
+export const ZenClock = React.memo(function ZenClock() {
   const { columns, rows } = useFullScreen();
   const [time, setTime] = useState(getTimeString);
   const [secs, setSecs] = useState(getSeconds);
@@ -53,4 +53,4 @@ export function ZenClock() {
       </Box>
     </Box>
   );
-}
+});

@@ -25,7 +25,7 @@ function formatDate(dateStr: string): string {
   return d ?? '';
 }
 
-export function Heatmap({ days }: HeatmapProps) {
+export const Heatmap = React.memo(function Heatmap({ days }: HeatmapProps) {
   // Pad to 7 days if fewer provided
   const paddedDays: (HeatmapDay | null)[] = [...days];
   while (paddedDays.length < 7) paddedDays.push(null);
@@ -77,4 +77,4 @@ export function Heatmap({ days }: HeatmapProps) {
       </Box>
     </Box>
   );
-}
+});

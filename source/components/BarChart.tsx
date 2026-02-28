@@ -29,7 +29,7 @@ function formatValue(value: number, unit: string): string {
   return `${Math.round(value)}${unit ? ' ' + unit : ''}`;
 }
 
-export function BarChart({ items, maxBarWidth = 30, unit = '', color = 'cyan' }: BarChartProps) {
+export const BarChart = React.memo(function BarChart({ items, maxBarWidth = 30, unit = '', color = 'cyan' }: BarChartProps) {
   if (items.length === 0) {
     return (
       <Box>
@@ -62,4 +62,4 @@ export function BarChart({ items, maxBarWidth = 30, unit = '', color = 'cyan' }:
       })}
     </Box>
   );
-}
+});

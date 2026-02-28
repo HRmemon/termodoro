@@ -45,7 +45,7 @@ function getTrendArrow(values: number[]): { arrow: string; color: string } {
   return { arrow: '→', color: 'yellow' };
 }
 
-export function Sparkline({ values, color = 'cyan', showTrend = false }: SparklineProps) {
+export const Sparkline = React.memo(function Sparkline({ values, color = 'cyan', showTrend = false }: SparklineProps) {
   const spark = renderSparkline(values);
   const { arrow, color: arrowColor } = getTrendArrow(values);
 
@@ -55,4 +55,4 @@ export function Sparkline({ values, color = 'cyan', showTrend = false }: Sparkli
       {showTrend && <Text color={arrowColor}>{arrow}</Text>}
     </>
   );
-}
+});

@@ -28,7 +28,7 @@ function formatDuration(minutes: number): string {
   return `${minutes}m`;
 }
 
-export function StatusLine({ sessionType, isRunning, isPaused, timerMode, streak, todaySessions, todayFocusMinutes }: StatusLineProps) {
+export const StatusLine = React.memo(function StatusLine({ sessionType, isRunning, isPaused, timerMode, streak, todaySessions, todayFocusMinutes }: StatusLineProps) {
   const isStopwatch = timerMode === 'stopwatch';
   const status = isStopwatch && !isPaused ? 'STOPWATCH' : isPaused ? 'PAUSED' : isRunning ? 'RUNNING' : 'READY';
   const statusIcon = isStopwatch && !isPaused ? '⏱ ' : isPaused ? '⏸ ' : isRunning ? '▶ ' : '⏹ ';
@@ -57,4 +57,4 @@ export function StatusLine({ sessionType, isRunning, isPaused, timerMode, streak
       )}
     </Box>
   );
-}
+});

@@ -9,7 +9,7 @@ interface SidebarProps {
   config?: Config;
 }
 
-export function Sidebar({ activeView, config }: SidebarProps) {
+export const Sidebar = React.memo(function Sidebar({ activeView, config }: SidebarProps) {
   const views = config ? getVisibleViews(config) : DEFAULT_VIEWS;
 
   return (
@@ -29,4 +29,4 @@ export function Sidebar({ activeView, config }: SidebarProps) {
       })}
     </Box>
   );
-}
+});

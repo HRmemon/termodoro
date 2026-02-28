@@ -162,8 +162,8 @@ export function useDaemonConnection(): {
     updateConfig: () => send({ cmd: 'update-config' }),
   }), [send]);
 
-  // Provide sliced views for backward compatibility
-  const timer: DaemonTimerState = {
+  // Memoized sliced views — stable references when fields are unchanged
+  const timer = useMemo<DaemonTimerState>(() => ({
     secondsLeft: state.secondsLeft,
     totalSeconds: state.totalSeconds,
     isRunning: state.isRunning,
@@ -172,9 +172,18 @@ export function useDaemonConnection(): {
     elapsed: state.elapsed,
     timerMode: state.timerMode,
     stopwatchElapsed: state.stopwatchElapsed,
-  };
+  }), [
+    state.secondsLeft,
+    state.totalSeconds,
+    state.isRunning,
+    state.isPaused,
+    state.isComplete,
+    state.elapsed,
+    state.timerMode,
+    state.stopwatchElapsed,
+  ]);
 
-  const engine: DaemonEngineState = {
+  const engine = useMemo<DaemonEngineState>(() => ({
     sessionType: state.sessionType,
     sessionNumber: state.sessionNumber,
     totalWorkSessions: state.totalWorkSessions,
@@ -182,15 +191,29 @@ export function useDaemonConnection(): {
     currentLabel: state.currentLabel,
     currentProject: state.currentProject,
     durationSeconds: state.durationSeconds,
-  };
+  }), [
+    state.sessionType,
+    state.sessionNumber,
+    state.totalWorkSessions,
+    state.isStrictMode,
+    state.currentLabel,
+    state.currentProject,
+    state.durationSeconds,
+  ]);
 
-  const sequence: DaemonSequenceState = {
+  const sequence = useMemo<DaemonSequenceState>(() => ({
     sequenceName: state.sequenceName,
     sequenceBlocks: state.sequenceBlocks,
     sequenceBlockIndex: state.sequenceBlockIndex,
     sequenceIsActive: state.sequenceIsActive,
     sequenceIsComplete: state.sequenceIsComplete,
-  };
+  }), [
+    state.sequenceName,
+    state.sequenceBlocks,
+    state.sequenceBlockIndex,
+    state.sequenceIsActive,
+    state.sequenceIsComplete,
+  ]);
 
   return { state, timer, engine, sequence, actions, connectionStatus };
 }
