@@ -2,7 +2,7 @@
 import React from 'react';
 import { render } from 'ink';
 import meow from 'meow';
-import { loadConfig } from './lib/config.js';
+import { loadConfig, validateConfig } from './lib/config.js';
 import { App } from './app.js';
 import type { View } from './types.js';
 import { isDaemonRunning, sendCommand } from './daemon/client.js';
@@ -71,13 +71,16 @@ const cli = meow(`
 });
 
 const command = cli.input[0] ?? 'start';
-const config = loadConfig();
+let config = loadConfig();
 
 // Apply CLI flag overrides
 if (cli.flags.work) config.workDuration = cli.flags.work;
 if (cli.flags.shortBreak) config.shortBreakDuration = cli.flags.shortBreak;
 if (cli.flags.longBreak) config.longBreakDuration = cli.flags.longBreak;
 if (cli.flags.strict) config.strictMode = true;
+
+// Re-validate after CLI overrides (e.g. --work -5 would be clamped to 1)
+config = validateConfig(config);
 
 // Auto-start daemon in background if not running. Returns when daemon is ready.
 async function ensureDaemon(): Promise<void> {
