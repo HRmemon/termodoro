@@ -1,16 +1,20 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
-import TextInput from 'ink-text-input';
 import type { Keymap } from '../lib/keymap.js';
 import { nanoid } from 'nanoid';
 import {
   loadGoals, addGoal, removeGoal, updateGoal, toggleCompletion,
-  isGoalComplete, computeStreak, getTodayStr, getRecentWeeks,
+  getTodayStr, getRecentWeeks,
   getAllProjects, GOAL_COLORS, GoalsData, TrackedGoal,
   setRating, getRating, setNote, getNote,
 } from '../lib/goals.js';
+import { GoalSection } from './graphs/GoalSection.js';
+import { GoalFormView } from './graphs/GoalFormView.js';
+import { TabBar } from './graphs/TabBar.js';
+import { DeleteConfirmView } from './graphs/DeleteConfirmView.js';
+import { RatePicker } from './graphs/RatePicker.js';
+import { NoteEditor } from './graphs/NoteEditor.js';
 
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKS_TO_SHOW = 8;
 
 type ViewMode = 'main' | 'add' | 'edit' | 'delete-confirm' | 'rate-picker' | 'note-editor';
@@ -374,93 +378,26 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
   // ─── Add / Edit Goal Flow ────────────────────────────────────────────────────
 
   if (viewMode === 'add' || viewMode === 'edit') {
-    const isEdit = viewMode === 'edit';
     return (
-      <Box flexDirection="column" flexGrow={1}>
-        <Text bold color="cyan">{isEdit ? 'Edit Goal' : 'Add New Goal'}</Text>
-        <Text dimColor>Esc to cancel</Text>
-        <Box marginTop={1} flexDirection="column">
-          {addStep === 'name' && (
-            <Box>
-              <Text>Name: </Text>
-              <TextInput
-                value={newName}
-                onChange={setNewName}
-                onSubmit={() => {
-                  if (newName.trim()) { setAddStep('type'); setIsTyping(false); }
-                }}
-              />
-            </Box>
-          )}
-          {addStep === 'type' && (
-            <Box flexDirection="column">
-              <Text>Name: <Text bold>{newName}</Text></Text>
-              <Box marginTop={1}>
-                <Text>Type: </Text>
-                <Text color={newType === 'manual' ? 'cyan' : 'gray'} bold={newType === 'manual'}>[m] manual</Text>
-                <Text>  </Text>
-                <Text color={newType === 'auto' ? 'cyan' : 'gray'} bold={newType === 'auto'}>[a] auto</Text>
-                <Text>  </Text>
-                <Text color={newType === 'rate' ? 'cyan' : 'gray'} bold={newType === 'rate'}>[r] rate</Text>
-                <Text>  </Text>
-                <Text color={newType === 'note' ? 'cyan' : 'gray'} bold={newType === 'note'}>[n] note</Text>
-              </Box>
-              <Text dimColor>Tab to toggle, Enter to confirm</Text>
-            </Box>
-          )}
-          {addStep === 'rateMax' && (
-            <Box flexDirection="column">
-              <Text>Name: <Text bold>{newName}</Text>  Type: <Text bold>rate</Text></Text>
-              <Box marginTop={1}>
-                <Text>Max rating (1-9, default 5): </Text>
-                <TextInput
-                  value={newRateMax}
-                  onChange={setNewRateMax}
-                  onSubmit={() => { setAddStep('color'); setIsTyping(false); }}
-                />
-              </Box>
-            </Box>
-          )}
-          {addStep === 'project' && (
-            <Box flexDirection="column">
-              <Text>Name: <Text bold>{newName}</Text>  Type: <Text bold>auto</Text></Text>
-              <Box marginTop={1}>
-                <Text>#project: </Text>
-                <TextInput
-                  value={newProject}
-                  onChange={setNewProject}
-                  onSubmit={() => { setAddStep('color'); setIsTyping(false); }}
-                />
-              </Box>
-              {/* Project suggestions */}
-              {projSuggestions.length > 0 && (
-                <Box flexDirection="column" marginTop={1}>
-                  {projSuggestions.map((p, i) => (
-                    <Text key={p} color={i === projSuggIdx ? 'cyan' : 'gray'} bold={i === projSuggIdx}>
-                      {i === projSuggIdx ? '> ' : '  '}{p}
-                    </Text>
-                  ))}
-                  <Text dimColor>Up/Down to navigate, Tab to accept</Text>
-                </Box>
-              )}
-            </Box>
-          )}
-          {addStep === 'color' && (
-            <Box flexDirection="column">
-              <Text>Name: <Text bold>{newName}</Text>  Type: <Text bold>{newType}</Text></Text>
-              <Box marginTop={1}>
-                <Text>Color: </Text>
-                {GOAL_COLORS.map((c, i) => (
-                  <Text key={c} color={c as any} bold={i === newColorIdx}>
-                    {i === newColorIdx ? '[' : ' '}{'\u2588'}{i === newColorIdx ? ']' : ' '}
-                  </Text>
-                ))}
-              </Box>
-              <Text dimColor>h/l to select, Enter to save</Text>
-            </Box>
-          )}
-        </Box>
-      </Box>
+      <GoalFormView
+        isEdit={viewMode === 'edit'}
+        addStep={addStep}
+        newName={newName}
+        setNewName={setNewName}
+        newType={newType}
+        newProject={newProject}
+        setNewProject={setNewProject}
+        newRateMax={newRateMax}
+        setNewRateMax={setNewRateMax}
+        newColorIdx={newColorIdx}
+        projSuggestions={projSuggestions}
+        projSuggIdx={projSuggIdx}
+        onNameSubmit={() => {
+          if (newName.trim()) { setAddStep('type'); setIsTyping(false); }
+        }}
+        onRateMaxSubmit={() => { setAddStep('color'); setIsTyping(false); }}
+        onProjectSubmit={() => { setAddStep('color'); setIsTyping(false); }}
+      />
     );
   }
 
@@ -468,15 +405,7 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
 
   if (viewMode === 'delete-confirm' && deleteTarget) {
     const goal = data.goals.find(g => g.id === deleteTarget);
-    return (
-      <Box flexDirection="column" flexGrow={1}>
-        <Text bold color="red">Delete Goal</Text>
-        <Box marginTop={1}>
-          <Text>Delete <Text bold color={goal?.color as any}>{goal?.name}</Text> and all its data? </Text>
-          <Text color="yellow">[y/n]</Text>
-        </Box>
-      </Box>
-    );
+    return <DeleteConfirmView goal={goal} />;
   }
 
   // ─── Main View ──────────────────────────────────────────────────────────────
@@ -500,71 +429,25 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
   // Selected date display
   const selDateLabel = selectedDate === today ? 'Today' : selectedDate.slice(5).replace('-', '/');
 
-  // Tab bar
-  const tabBar = (
-    <Box marginBottom={1}>
-      {tabs.map((label, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <Text dimColor>  </Text>}
-          <Text
-            bold={i === activeTab}
-            color={i === activeTab ? 'yellow' : 'gray'}
-            underline={i === activeTab}
-          >
-            {label}
-          </Text>
-        </React.Fragment>
-      ))}
-      <Text dimColor>{'  |\u2190\u2192'}</Text>
-      <Text bold color="cyan">{' '}{selDateLabel}</Text>
-    </Box>
-  );
+  const tabBar = <TabBar tabs={tabs} activeTab={activeTab} selDateLabel={selDateLabel} />;
 
-  // Inline rate picker
-  const ratePicker = viewMode === 'rate-picker' && activeGoal?.type === 'rate' ? (() => {
-    const max = activeGoal.rateMax ?? 5;
-    const shades = Array.from({ length: max }, (_, i) => ratingToShade(i + 1, max));
-    return (
-      <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginTop={1}>
-        <Text bold color="cyan">{activeGoal.name} — {selDateLabel}</Text>
-        <Box marginTop={1}>
-          {shades.map((sh, i) => (
-            <Text key={i} color={i + 1 <= pickerValue ? activeGoal.color as any : 'gray'} bold={i + 1 === pickerValue}>
-              {' '}{sh}{' '}
-            </Text>
-          ))}
-        </Box>
-        <Box>
-          {Array.from({ length: max }, (_, i) => (
-            <Text key={i} color={i + 1 <= pickerValue ? 'cyan' : 'gray'} bold={i + 1 === pickerValue}>
-              {' '}{i + 1}{' '}
-            </Text>
-          ))}
-        </Box>
-        <Text dimColor>↑↓:adjust  Enter:confirm  1-{max}:set  0:clear  Esc:cancel</Text>
-      </Box>
-    );
-  })() : null;
+  const ratePicker = viewMode === 'rate-picker' && activeGoal?.type === 'rate'
+    ? <RatePicker goal={activeGoal} selDateLabel={selDateLabel} pickerValue={pickerValue} />
+    : null;
 
-  // Inline note editor
   const noteEditor = viewMode === 'note-editor' && activeGoal?.type === 'note' ? (
-    <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginTop={1}>
-      <Text bold color="cyan">{activeGoal.name} — {selDateLabel}</Text>
-      <Box marginTop={1}>
-        <Text>Note: </Text>
-        <TextInput
-          value={noteValue}
-          onChange={setNoteValue}
-          onSubmit={() => {
-            const updated = setNote(activeGoal.id, selectedDate, noteValue, { ...data });
-            setData(updated);
-            setViewMode('main');
-            setIsTyping(false);
-          }}
-        />
-      </Box>
-      <Text dimColor>Enter:save  Esc:save+close</Text>
-    </Box>
+    <NoteEditor
+      goal={activeGoal}
+      selDateLabel={selDateLabel}
+      noteValue={noteValue}
+      onChange={setNoteValue}
+      onSubmit={(v: string) => {
+        const updated = setNote(activeGoal.id, selectedDate, v, { ...data });
+        setData(updated);
+        setViewMode('main');
+        setIsTyping(false);
+      }}
+    />
   ) : null;
 
   if (isAllTab) {
@@ -595,127 +478,3 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
   );
 }
 
-// ─── Goal Section Component ──────────────────────────────────────────────────
-
-const SHADE_CHARS = ['·', '░', '▒', '▓', '█'];
-
-function ratingToShade(rating: number, max: number): string {
-  if (rating <= 0) return SHADE_CHARS[0]!;
-  const ratio = Math.min(rating / max, 1);
-  const idx = Math.min(Math.round(ratio * (SHADE_CHARS.length - 1)), SHADE_CHARS.length - 1);
-  return SHADE_CHARS[idx]!;
-}
-
-function GoalSection({
-  goal, data, weeks, today, selectedDate, compact
-}: {
-  goal: TrackedGoal;
-  data: GoalsData;
-  weeks: string[][];
-  today: string;
-  selectedDate: string;
-  compact?: boolean;
-}) {
-  const isRate = goal.type === 'rate';
-  const rateMax = goal.rateMax ?? 5;
-  const streak = useMemo(() => computeStreak(goal.id, data), [goal.id, data]);
-
-  const totalDays = useMemo(() => {
-    let count = 0;
-    for (const week of weeks) {
-      for (const date of week) {
-        if (isGoalComplete(goal, date, data)) count++;
-      }
-    }
-    return count;
-  }, [goal, data, weeks]);
-
-  const avgRating = useMemo(() => {
-    if (!isRate) return 0;
-    const ratings = data.ratings[goal.id] ?? {};
-    const values = Object.values(ratings).filter(v => v > 0);
-    if (values.length === 0) return 0;
-    return values.reduce((s, v) => s + v, 0) / values.length;
-  }, [goal, data, isRate]);
-
-  const thisWeek = weeks[weeks.length - 1] ?? [];
-  const thisWeekDone = thisWeek.filter(d => isGoalComplete(goal, d, data)).length;
-
-  return (
-    <Box flexDirection="column" marginBottom={compact ? 1 : 0}>
-      <Box>
-        <Text bold color={goal.color as any}>{'── '}{goal.name}</Text>
-        <Text dimColor> ({goal.type}{isRate ? ` 0-${rateMax}` : ''}){compact ? `  ${totalDays}d  streak:${streak.current}d  best:${streak.best}d${isRate ? `  avg:${avgRating.toFixed(1)}` : ''}` : ''}</Text>
-      </Box>
-
-      {/* Heatmap grid */}
-      <Box flexDirection="column" marginTop={compact ? 0 : 1}>
-        {/* Week number headers */}
-        <Box>
-          <Box width={5}><Text> </Text></Box>
-          {weeks.map((_, wi) => (
-            <Text key={wi} dimColor>{`W${wi + 1} `}</Text>
-          ))}
-        </Box>
-
-        {/* Day rows */}
-        {DAY_NAMES.map((dayName, dayIdx) => (
-          <Box key={dayName}>
-            <Box width={5}><Text dimColor>{dayName}</Text></Box>
-            {weeks.map((weekDates, wi) => {
-              const date = weekDates[dayIdx]!;
-              const isFuture = date > today;
-              const isToday = date === today;
-              const isSelected = date === selectedDate;
-              const suffix = isSelected ? '◄ ' : isToday ? '* ' : '  ';
-
-              if (isFuture) {
-                return <Text key={wi} dimColor>{isSelected ? ' ◄ ' : '   '}</Text>;
-              }
-
-              if (isRate) {
-                const rating = getRating(goal, date, data);
-                const shade = ratingToShade(rating, rateMax);
-                const hasRating = rating > 0;
-                return (
-                  <Text key={wi} color={hasRating ? goal.color as any : undefined} dimColor={!hasRating} bold={isSelected}>
-                    {shade}{suffix}
-                  </Text>
-                );
-              }
-
-              const done = isGoalComplete(goal, date, data);
-              if (done) {
-                return <Text key={wi} color={goal.color as any} bold={isSelected}>{'█'}{suffix}</Text>;
-              }
-              return <Text key={wi} color={isSelected ? 'white' : undefined} dimColor={!isSelected} bold={isSelected}>{'·'}{suffix}</Text>;
-            })}
-          </Box>
-        ))}
-      </Box>
-
-      {!compact && (
-        <Box flexDirection="column" marginTop={1}>
-          {isRate ? (
-            <Text dimColor>{'·'} = none  {'░▒▓█'} = rating intensity  * = today  {'◄'} = selected</Text>
-          ) : (
-            <Text dimColor>{'·'} = not done  {'█'} = done  * = today  {'◄'} = selected</Text>
-          )}
-          <Box marginTop={1}>
-            <Text>Total: <Text bold>{totalDays}d</Text></Text>
-            <Text>{'  '}Streak: <Text bold color={streak.current > 0 ? 'green' : undefined}>{streak.current}d</Text></Text>
-            <Text>{'  '}Best: <Text bold>{streak.best}d</Text></Text>
-            {isRate && <Text>{'  '}Avg: <Text bold color="yellow">{avgRating.toFixed(1)}/{rateMax}</Text></Text>}
-          </Box>
-          <Text>This week: <Text bold>{thisWeekDone}/7</Text></Text>
-          {isRate && selectedDate && (
-            <Text dimColor>Selected: {getRating(goal, selectedDate, data)}/{rateMax}  (Enter to rate)</Text>
-          )}
-          {goal.type === 'note' && selectedDate && (
-            <Text dimColor>Note: {getNote(goal, selectedDate, data) || '(empty)'}  (Enter to edit)</Text>
-          )}
-        </Box>
-      )}
-    </Box>
-  );
-}

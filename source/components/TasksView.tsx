@@ -3,10 +3,15 @@ import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Task } from '../types.js';
 import { loadTasks, saveTasks, addTask, completeTask, deleteTask, updateTask, getProjects, addProject, renameProject, removeProjectTag, deleteProjectTasks } from '../lib/tasks.js';
-import { colors } from '../lib/theme.js';
 import { fuzzyMatchAny } from '../lib/fuzzy.js';
-import { FilterInput } from './FilterInput.js';
 import type { Keymap } from '../lib/keymap.js';
+import { TaskDetailOverlay } from './tasks/TaskDetailOverlay.js';
+import { ConfirmProjectPrompt } from './tasks/ConfirmProjectPrompt.js';
+import { IncompleteTaskList } from './tasks/IncompleteTaskList.js';
+import { CompletedTaskList } from './tasks/CompletedTaskList.js';
+import { FilterBar } from './tasks/FilterBar.js';
+import { ProjectOverlay } from './tasks/ProjectOverlay.js';
+import { TaskInputBar } from './tasks/TaskInputBar.js';
 
 interface TasksViewProps {
   setIsTyping: (v: boolean) => void;
@@ -608,158 +613,44 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
     setIsTyping(false);
   }, [projectList, projectCursor, refresh, setIsTyping]);
 
-  const renderInput = (label: string, onSubmit: (v: string) => void, placeholder?: string) => (
-    <Box flexDirection="column" marginTop={1}>
-      <Box>
-        <Text color="yellow">{label}</Text>
-        <TextInput key={inputKey} value={inputValue} onChange={setInputValue} onSubmit={onSubmit} placeholder={placeholder} />
-      </Box>
-      {projectMenu && (
-        <Box flexDirection="column" marginLeft={2} marginTop={0}>
-          {projectMenu.matches.map((p, i) => (
-            <Box key={p}>
-              <Text color={i === suggestionIdx ? colors.highlight : colors.dim}>
-                {i === suggestionIdx ? '> ' : '  '}
-              </Text>
-              <Text color={i === suggestionIdx ? 'cyan' : colors.dim} bold={i === suggestionIdx}>
-                #{p}
-              </Text>
-            </Box>
-          ))}
-          <Text color={colors.dim}>  {'↑↓:navigate  Tab:select'}</Text>
-        </Box>
-      )}
-    </Box>
-  );
 
-  // ─── Task detail overlay ────────────────────────────────────────────
   if (viewingTask) {
-    const pomLabel = `[${viewingTask.completedPomodoros}/${viewingTask.expectedPomodoros}]`;
-    return (
-      <Box flexDirection="column" flexGrow={1} padding={1}>
-        <Box borderStyle="round" flexDirection="column" paddingX={2} paddingY={1}>
-          <Text bold color="white">Task: {viewingTask.text}</Text>
-          <Box>
-            {viewingTask.project && <Text color="cyan">#{viewingTask.project}</Text>}
-            {viewingTask.project && <Text dimColor>{'   '}</Text>}
-            <Text dimColor>Pom: {pomLabel}</Text>
-          </Box>
-          <Box marginTop={1}>
-            {viewingTask.description
-              ? <Text>{viewingTask.description}</Text>
-              : <Text dimColor italic>No description</Text>
-            }
-          </Box>
-          <Box marginTop={1}>
-            <Text dimColor>Enter/Esc:close  e:edit</Text>
-          </Box>
-        </Box>
-      </Box>
-    );
+    return <TaskDetailOverlay task={viewingTask} />;
   }
 
-  // ─── Project overlay ────────────────────────────────────────────────
   if (projectMode) {
     return (
-      <Box flexDirection="column" flexGrow={1} padding={1}>
-        <Box borderStyle="round" flexDirection="column" paddingX={2} paddingY={1}>
-          <Text bold color="white">Projects</Text>
-          <Box marginTop={1} flexDirection="column">
-            {projectList.length === 0 && (
-              <Text dimColor>No projects yet. Press 'a' to add one.</Text>
-            )}
-            {projectList.map((proj, i) => {
-              const isSelected = i === projectCursor;
-              const counts = projectCounts.get(proj) || { open: 0, done: 0 };
-              return (
-                <Box key={proj}>
-                  <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>
-                    {isSelected ? '> ' : '  '}
-                  </Text>
-                  <Box width={20}>
-                    <Text color={isSelected ? 'white' : 'gray'} bold={isSelected}>{proj}</Text>
-                  </Box>
-                  <Text dimColor>{counts.open} open | {counts.done} done</Text>
-                </Box>
-              );
-            })}
-          </Box>
-
-          {/* Delete confirmation */}
-          {deleteConfirm === 'prompt' && (
-            <Box marginTop={1}>
-              <Text color="red" bold>Delete "{projectList[projectCursor]}"? </Text>
-              <Text dimColor>u:untag tasks  d:delete tasks  Esc:cancel</Text>
-            </Box>
-          )}
-
-          {/* Add/Rename input */}
-          {projectEditing === 'add' && (
-            <Box marginTop={1}>
-              <FilterInput
-                label="New project: "
-                value={projectInput}
-                onChange={setProjectInput}
-                onSubmit={handleProjectAddSubmit}
-                placeholder="Project name"
-              />
-            </Box>
-          )}
-          {projectEditing === 'rename' && (
-            <Box marginTop={1}>
-              <FilterInput
-                label="Rename: "
-                value={projectInput}
-                onChange={setProjectInput}
-                onSubmit={handleProjectRenameSubmit}
-                placeholder="New name"
-              />
-            </Box>
-          )}
-
-          {!projectEditing && !deleteConfirm && (
-            <Box marginTop={1}>
-              <Text dimColor>a:add  e:rename  d:delete  Enter:filter  Esc:close</Text>
-            </Box>
-          )}
-        </Box>
-      </Box>
+      <ProjectOverlay
+        projectList={projectList}
+        projectCursor={projectCursor}
+        projectCounts={projectCounts}
+        deleteConfirm={deleteConfirm}
+        projectEditing={projectEditing}
+        projectInput={projectInput}
+        setProjectInput={setProjectInput}
+        onProjectAddSubmit={handleProjectAddSubmit}
+        onProjectRenameSubmit={handleProjectRenameSubmit}
+      />
     );
   }
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {/* Filter input bar */}
-      {inputMode === 'filter' && (
-        <Box marginBottom={1}>
-          <Text color="yellow">{'/ '}</Text>
-          <TextInput
-            value={filterQuery}
-            onChange={(v) => { setFilterQuery(v); setSelectedIdx(0); }}
-            onSubmit={() => {
-              if (filterQuery.trim()) {
-                setInputMode('filtered');
-              } else {
-                setInputMode('none');
-                setFilterQuery('');
-              }
-              setIsTyping(false);
-              setSelectedIdx(0);
-            }}
-            placeholder="Filter tasks..."
-          />
-          <Text dimColor>  Enter: apply  Esc: cancel</Text>
-        </Box>
-      )}
-
-      {/* Locked filter indicator */}
-      {inputMode === 'filtered' && (
-        <Box marginBottom={1}>
-          <Text color="yellow" bold>{'/ '}</Text>
-          <Text color="white">{filterQuery}</Text>
-          <Text dimColor>  Esc: clear  /: refine</Text>
-        </Box>
-      )}
+      <FilterBar
+        inputMode={inputMode}
+        filterQuery={filterQuery}
+        onChange={(v) => { setFilterQuery(v); setSelectedIdx(0); }}
+        onSubmit={() => {
+          if (filterQuery.trim()) {
+            setInputMode('filtered');
+          } else {
+            setInputMode('none');
+            setFilterQuery('');
+          }
+          setIsTyping(false);
+          setSelectedIdx(0);
+        }}
+      />
 
       {allNavItems.length === 0 && !isFiltering && inputMode === 'none' && (
         <Text dimColor>No tasks. Press 'a' to add one.</Text>
@@ -769,36 +660,15 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
         <Text dimColor>No matches for "{filterQuery}"</Text>
       )}
 
-      {/* Incomplete tasks */}
-      {incompleteTasks.map((task, i) => {
-        const isSelected = i === selectedIdx;
-        return (
-          <Box key={task.id} flexDirection="column">
-            <Box>
-              <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>{isSelected ? '> ' : '  '}</Text>
-              <Text color={isSelected ? 'white' : 'gray'} bold={isSelected}>{task.text}</Text>
-              <Text dimColor>{'  '}[{task.completedPomodoros}/{task.expectedPomodoros}]</Text>
-              {task.project && <Text color="cyan"> #{task.project}</Text>}
-            </Box>
-            {task.description && (
-              <Box>
-                <Text dimColor>{'    '}{task.description.split('\n')[0]!.length > 50 ? task.description.split('\n')[0]!.slice(0, 50) + '...' : task.description.split('\n')[0]}</Text>
-              </Box>
-            )}
-          </Box>
-        );
-      })}
+      <IncompleteTaskList tasks={incompleteTasks} selectedIdx={selectedIdx} />
 
       {inputMode === 'confirm-project' && (
-        <Box flexDirection="column" marginTop={1}>
-          <Text color="yellow">#{confirmProjectName}</Text>
-          <Text dimColor> is not an existing project.</Text>
-          <Box marginTop={0}>
-            <Text dimColor>a:add as new project  u:untag  Esc:cancel</Text>
-          </Box>
-        </Box>
+        <ConfirmProjectPrompt projectName={confirmProjectName} />
       )}
-      {inputMode === 'add' && renderInput('> ', handleAddSubmit, 'Task name #project /N')}
+      {inputMode === 'add' && (
+        <TaskInputBar label="> " inputKey={inputKey} inputValue={inputValue} setInputValue={setInputValue}
+          onSubmit={handleAddSubmit} placeholder="Task name #project /N" projectMenu={projectMenu} suggestionIdx={suggestionIdx} />
+      )}
       {inputMode === 'add-desc' && (
         <Box flexDirection="column" marginTop={1}>
           <Box>
@@ -807,7 +677,10 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
           </Box>
         </Box>
       )}
-      {inputMode === 'edit' && renderInput('Edit: ', handleEditSubmit)}
+      {inputMode === 'edit' && (
+        <TaskInputBar label="Edit: " inputKey={inputKey} inputValue={inputValue} setInputValue={setInputValue}
+          onSubmit={handleEditSubmit} projectMenu={projectMenu} suggestionIdx={suggestionIdx} />
+      )}
       {inputMode === 'edit-desc' && (
         <Box flexDirection="column" marginTop={1}>
           <Box>
@@ -817,24 +690,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
         </Box>
       )}
 
-      {/* Divider */}
-      {completedTasks.length > 0 && (
-        <Box marginTop={1} marginBottom={0}>
-          <Text dimColor>{'── Completed ('}{completedTasks.length}{') ──  x: undo'}</Text>
-        </Box>
-      )}
-
-      {/* Completed tasks — navigable */}
-      {completedTasks.map((task, i) => {
-        const absIdx = incompleteTasks.length + i;
-        const isSelected = absIdx === selectedIdx;
-        return (
-          <Box key={task.id}>
-            <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>{isSelected ? '> ' : '  '}</Text>
-            <Text color="gray" strikethrough dimColor={!isSelected}>[x] {task.text}</Text>
-          </Box>
-        );
-      })}
+      <CompletedTaskList tasks={completedTasks} selectedIdx={selectedIdx} offset={incompleteTasks.length} />
     </Box>
   );
 }
