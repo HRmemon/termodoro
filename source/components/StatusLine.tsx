@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { SessionType } from '../types.js';
 import { SESSION_COLORS, colors } from '../lib/theme.js';
+import { formatMinutes } from '../lib/format.js';
 
 interface StatusLineProps {
   sessionType: SessionType;
@@ -18,15 +19,6 @@ const MODE_LABELS: Record<SessionType, string> = {
   'short-break': 'Short Break',
   'long-break': 'Long Break',
 };
-
-function formatDuration(minutes: number): string {
-  if (minutes >= 60) {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  }
-  return `${minutes}m`;
-}
 
 export const StatusLine = React.memo(function StatusLine({ sessionType, isRunning, isPaused, timerMode, streak, todaySessions, todayFocusMinutes }: StatusLineProps) {
   const isStopwatch = timerMode === 'stopwatch';
@@ -45,7 +37,7 @@ export const StatusLine = React.memo(function StatusLine({ sessionType, isRunnin
         <Text color={SESSION_COLORS[sessionType]}>{MODE_LABELS[sessionType]}</Text>
       </Box>
       <Box>
-        <Text color={colors.text}>{formatDuration(todayFocusMinutes)}</Text>
+        <Text color={colors.text}>{formatMinutes(todayFocusMinutes)}</Text>
       </Box>
       <Box>
         <Text color={colors.text}>{todaySessions} Sessions</Text>

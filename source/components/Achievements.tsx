@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { getAchievementProgress } from '../lib/achievements.js';
+import { formatMinutes } from '../lib/format.js';
 
 interface AchievementsProps {
   showAll?: boolean;
@@ -13,14 +14,6 @@ function formatProgressBar(current: number, target: number, width: number = 20):
   return '█'.repeat(filled) + '░'.repeat(empty);
 }
 
-function formatMinutes(minutes: number): string {
-  if (minutes >= 60) {
-    const h = Math.floor(minutes / 60);
-    const m = Math.round(minutes % 60);
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  }
-  return `${Math.round(minutes)}m`;
-}
 
 function formatProgress(current: number, target: number, id: string): string {
   // Format based on achievement type

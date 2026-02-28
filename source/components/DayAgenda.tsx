@@ -2,6 +2,7 @@ import { Box, Text } from 'ink';
 import type { CalendarEvent, CalendarConfig, Task, ScheduledNotification, Session } from '../types.js';
 import { colors } from '../lib/theme.js';
 import { getEventIcon, getPrivacyDisplay } from '../lib/event-icons.js';
+import { formatMinutes } from '../lib/format.js';
 
 interface DayAgendaProps {
   date: string;               // YYYY-MM-DD
@@ -185,7 +186,7 @@ export function DayAgenda({
             <Text color={colors.dim}>
               {'░'.repeat(Math.max(0, 16 - Math.round(totalFocusMin / 15)))}
             </Text>
-            <Text color={colors.text}>  {formatTime(totalFocusMin)}</Text>
+            <Text color={colors.text}>  {formatMinutes(totalFocusMin)}</Text>
             <Text dimColor>  ({workSessions.length} sessions)</Text>
           </Box>
           {projectMinutes.size > 0 && (
@@ -195,7 +196,7 @@ export function DayAgenda({
                 <Text key={proj}>
                   {i > 0 && <Text>  </Text>}
                   <Text color={colors.highlight}>#{proj}</Text>
-                  <Text dimColor> {formatTime(mins)}</Text>
+                  <Text dimColor> {formatMinutes(mins)}</Text>
                 </Text>
               ))}
             </Box>
@@ -213,9 +214,3 @@ export function DayAgenda({
   );
 }
 
-function formatTime(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}

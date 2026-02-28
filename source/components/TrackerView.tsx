@@ -9,6 +9,7 @@ import {
   PendingSuggestion, loadTrackerConfigFull, addPendingSuggestions, generateWebSuggestions,
 } from '../lib/tracker.js';
 import { getSlotDomainBreakdown } from '../lib/browser-stats.js';
+import { formatHours } from '../lib/format.js';
 
 const COL_WIDTH = 5; // characters per day column
 
@@ -22,13 +23,6 @@ function getTodayColIndex(weekDates: string[]): number {
   return idx >= 0 ? idx : -1;
 }
 
-function formatHours(h: number): string {
-  if (h === 0) return '0h';
-  if (h < 1) return `${h * 60 | 0}m`;
-  const whole = Math.floor(h);
-  const mins = Math.round((h - whole) * 60);
-  return mins > 0 ? `${whole}h${mins}m` : `${whole}h`;
-}
 
 function SlotCell({
   code, isActive, isCursor, pending

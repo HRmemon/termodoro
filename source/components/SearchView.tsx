@@ -4,6 +4,7 @@ import TextInput from 'ink-text-input';
 import { loadSessions } from '../lib/store.js';
 import { searchSessions, parseSearchString } from '../lib/search.js';
 import type { Session } from '../types.js';
+import { formatSeconds } from '../lib/format.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -11,14 +12,6 @@ import type { Session } from '../types.js';
 
 function formatDate(iso: string): string {
   return iso.slice(0, 16).replace('T', ' ');
-}
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
 }
 
 const TYPE_COLORS: Record<Session['type'], string> = {
@@ -189,7 +182,7 @@ export function SearchView({ onBack, initialQuery = '' }: SearchViewProps) {
                   {session.status.padEnd(11)}
                 </Text>
                 <Text color={isSelected ? 'cyan' : 'white'}>
-                  {formatDuration(session.durationActual).padEnd(6)}
+                  {formatSeconds(session.durationActual).padEnd(6)}
                 </Text>
                 <Text dimColor={!isSelected} color={isSelected ? 'white' : undefined}>
                   {meta.join('  ') || '—'}
