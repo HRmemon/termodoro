@@ -3,6 +3,7 @@ import type { CalendarEvent, CalendarConfig, Task, ScheduledNotification, Sessio
 import { colors } from '../lib/theme.js';
 import { getEventIcon, getPrivacyDisplay } from '../lib/event-icons.js';
 import { formatMinutes } from '../lib/format.js';
+import { MONTH_NAMES_FULL } from '../lib/date-utils.js';
 
 interface DayAgendaProps {
   date: string;               // YYYY-MM-DD
@@ -16,15 +17,11 @@ interface DayAgendaProps {
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
 
 function formatDateHeader(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   const dayName = DAY_NAMES[d.getDay()]!;
-  const monthName = MONTH_NAMES[d.getMonth()]!;
+  const monthName = MONTH_NAMES_FULL[d.getMonth()]!;
   return `${dayName}, ${monthName} ${d.getDate()} ${d.getFullYear()}`;
 }
 

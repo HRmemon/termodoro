@@ -14,7 +14,6 @@ function formatProgressBar(current: number, target: number, width: number = 20):
   return '█'.repeat(filled) + '░'.repeat(empty);
 }
 
-
 function formatProgress(current: number, target: number, id: string): string {
   // Format based on achievement type
   if (id.startsWith('focus_')) {

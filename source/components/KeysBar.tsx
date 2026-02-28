@@ -11,7 +11,7 @@ interface KeysBarProps {
   isRunning: boolean;
   isPaused: boolean;
   strictMode: boolean;
-  isZen: boolean;
+
   hasActiveSequence: boolean;
   hasActiveProject: boolean;
   timerMode: 'countdown' | 'stopwatch';
@@ -24,18 +24,7 @@ interface KeyHint {
   label: string;
 }
 
-export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, strictMode, isZen, hasActiveSequence, hasActiveProject, timerMode, config, keymap }: KeysBarProps) {
-  // Zen mode: minimal
-  if (isZen) {
-    const hint = isRunning && !isPaused ? 'Pause' : isPaused ? 'Resume' : 'Start';
-    const toggleLabel = keymap ? keymap.label('timer.toggle') : 'Space';
-    return (
-      <Box paddingX={1}>
-        <Text color={colors.highlight}>{toggleLabel}</Text><Text color={colors.dim}>: {hint}</Text>
-      </Box>
-    );
-  }
-
+export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, strictMode, hasActiveSequence, hasActiveProject, timerMode, config, keymap }: KeysBarProps) {
   const km = keymap;
 
   // Build action hints (top row)

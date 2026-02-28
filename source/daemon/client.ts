@@ -1,33 +1,11 @@
 import * as net from 'node:net';
 import type { DaemonCommand, DaemonResponse } from './protocol.js';
-import { DAEMON_SOCKET_PATH, isDaemonResponse, isDaemonEvent } from './protocol.js';
+import { DAEMON_SOCKET_PATH, isDaemonResponse, isDaemonEvent, isSocketAlive } from './protocol.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 
-/**
- * Returns true if a daemon is actively accepting connections on the socket.
- *
- * Uses a connect attempt rather than PID file inspection because:
- * - PID recycling can make process.kill(pid, 0) return a false positive.
- * - A socket file can exist without a listener (stale socket after crash).
- * - A connect attempt is the only reliable end-to-end liveness test.
- */
+/** Returns true if a daemon is actively accepting connections on the socket. */
 export function isDaemonRunning(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const sock = net.createConnection(DAEMON_SOCKET_PATH);
-    const timer = setTimeout(() => {
-      sock.destroy();
-      resolve(false);
-    }, 1000);
-    sock.on('connect', () => {
-      clearTimeout(timer);
-      sock.destroy();
-      resolve(true);
-    });
-    sock.on('error', () => {
-      clearTimeout(timer);
-      resolve(false);
-    });
-  });
+  return isSocketAlive(DAEMON_SOCKET_PATH);
 }
 
 export function sendCommand(cmd: DaemonCommand): Promise<DaemonResponse> {
@@ -90,7 +68,7 @@ export class DaemonSubscription {
   private static readonly BASE_DELAY_MS = 500;
   private static readonly MAX_DELAY_MS = 30_000;
   private static readonly MAX_PENDING = 16;
-  private static readonly MAX_BUFFER_BYTES = 1 * 1024 * 1024; // 1 MB
+  private static readonly MAX_BUFFER_CHARS = 1 * 1024 * 1024; // 1 M chars
 
   constructor(callbacks: SubscriptionCallbacks) {
     this.callbacks = callbacks;
@@ -124,7 +102,7 @@ export class DaemonSubscription {
       this.buffer += data.toString();
 
       // H5: Prevent unbounded buffer growth from misbehaving daemon
-      if (this.buffer.length > DaemonSubscription.MAX_BUFFER_BYTES) {
+      if (this.buffer.length > DaemonSubscription.MAX_BUFFER_CHARS) {
         this.buffer = '';
         this.socket?.destroy();
         return;

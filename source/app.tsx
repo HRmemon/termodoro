@@ -357,7 +357,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       isRunning={timer.isRunning}
       isPaused={timer.isPaused}
       strictMode={engine.isStrictMode}
-      isZen={false}
+
       hasActiveSequence={sequence.sequenceIsActive}
       hasActiveProject={!!engine.currentProject}
       timerMode={timer.timerMode}

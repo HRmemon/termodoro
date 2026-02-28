@@ -789,7 +789,7 @@ export class PomodoroEngine extends EventEmitter {
         timerMode: this.timerMode !== 'countdown' ? this.timerMode : undefined,
         stopwatchElapsed: this.timerMode === 'stopwatch' ? this.stopwatchElapsed : undefined,
         accumulatedElapsed: this.isRunning && !this.isPaused
-          ? this.accumulatedElapsed + Math.floor((Date.now() - this.anchorTimestamp) / 1000)
+          ? this.accumulatedElapsed + Math.max(0, Math.floor((Date.now() - this.anchorTimestamp) / 1000))
           : this.accumulatedElapsed,
         sequenceName: this.sequence?.name,
         sequenceBlocks: this.sequence?.blocks,

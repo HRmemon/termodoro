@@ -392,17 +392,27 @@ export function saveTrackerConfigFull(config: TrackerConfigFull): void {
 
 // Convert a glob pattern to a regex, preventing ReDoS by collapsing consecutive
 // wildcards and using [^.]* (single-segment) instead of .* (greedy cross-segment).
+const _regexCache = new Map<string, RegExp>();
+
 function globToRegex(pattern: string): RegExp {
+  let cached = _regexCache.get('d:' + pattern);
+  if (cached) return cached;
   const normalized = pattern.replace(/\*+/g, '*');
   const escaped = normalized.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^.]*');
-  return new RegExp(`^${escaped}$`, 'i');
+  cached = new RegExp(`^${escaped}$`, 'i');
+  _regexCache.set('d:' + pattern, cached);
+  return cached;
 }
 
 // Like globToRegex but for URL paths where * should match any character except /
 function pathGlobToRegex(pattern: string): RegExp {
+  let cached = _regexCache.get('p:' + pattern);
+  if (cached) return cached;
   const normalized = pattern.replace(/\*+/g, '*');
   const escaped = normalized.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*');
-  return new RegExp(`^${escaped}`, 'i'); // prefix match on path
+  cached = new RegExp(`^${escaped}`, 'i'); // prefix match on path
+  _regexCache.set('p:' + pattern, cached);
+  return cached;
 }
 
 export function matchDomain(domain: string, rules: DomainRule[]): string | null {

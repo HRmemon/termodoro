@@ -148,8 +148,8 @@ export function parseCalendarEvents(text: string): void {
             repeatCount = Number.isFinite(parsed) && parsed > 0 ? clampInt(parsed, 1, 1000) : undefined;
             break;
           }
-          case 'icon': icon = val; break;
-          case 'color': color = val; break;
+          case 'icon': icon = clampStr(val, 8); break;
+          case 'color': color = clampStr(val, 32); break;
         }
       }
     }

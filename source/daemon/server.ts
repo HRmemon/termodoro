@@ -7,7 +7,7 @@ import { loadConfig } from '../lib/config.js';
 import { loadTimerState, clearTimerState, loadStickyProject } from '../lib/store.js';
 import { loadSequences, parseSequenceString } from '../lib/sequences.js';
 import type { DaemonCommand, DaemonResponse, DaemonEvent, DaemonEventType } from './protocol.js';
-import { DAEMON_SOCKET_PATH, DAEMON_PID_PATH } from './protocol.js';
+import { DAEMON_SOCKET_PATH, DAEMON_PID_PATH, isSocketAlive } from './protocol.js';
 import { validateCommand } from './validate-command.js';
 import { writeStatusFile, clearStatusFile, invalidateTodayStats, initStatusFile } from './status-writer.js';
 import { executeHook } from './hooks.js';
@@ -48,34 +48,7 @@ function resolveSequence(name: string) {
   return loadSequences().find(s => s.name === name) ?? null;
 }
 
-/**
- * Attempt to connect to the daemon socket.
- * Returns true if a process is actively accepting connections on the socket.
- * Returns false for any error: ENOENT (no socket), ECONNREFUSED (socket exists but
- * no listener), EACCES (permission denied), or timeout.
- *
- * This is more reliable than process.kill(pid, 0) because:
- * - It cannot be fooled by PID recycling.
- * - It directly verifies a listener is present, not just that a PID exists.
- */
-function isSocketLive(socketPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const sock = net.createConnection(socketPath);
-    const timer = setTimeout(() => {
-      sock.destroy();
-      resolve(false);
-    }, 1000);
-    sock.on('connect', () => {
-      clearTimeout(timer);
-      sock.destroy();
-      resolve(true);
-    });
-    sock.on('error', () => {
-      clearTimeout(timer);
-      resolve(false);
-    });
-  });
-}
+// isSocketAlive is imported from protocol.ts (shared with client.ts)
 
 export function startDaemon(): void {
   const config = loadConfig();
@@ -389,7 +362,7 @@ export function startDaemon(): void {
     // This is the authoritative check. process.kill(pid, 0) is NOT used because:
     // 1. It cannot distinguish a live daemon from a recycled PID.
     // 2. It does not verify the socket is actually accepting connections.
-    const live = await isSocketLive(DAEMON_SOCKET_PATH);
+    const live = await isSocketAlive(DAEMON_SOCKET_PATH);
     if (live) {
       console.error('Another daemon is already running. Stop it first (pomo stop).');
       process.exit(1);

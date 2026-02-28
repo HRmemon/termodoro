@@ -1,6 +1,7 @@
 // IPC Protocol types for daemon <-> client communication
 // Transport: Unix socket, newline-delimited JSON
 
+import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { EngineFullState } from '../engine/timer-engine.js';
@@ -70,15 +71,44 @@ export interface DaemonEvent {
 /** Narrow an unknown JSON value to DaemonResponse. */
 export function isDaemonResponse(v: unknown): v is DaemonResponse {
   if (typeof v !== 'object' || v === null) return false;
-  return 'ok' in v;
+  const obj = v as Record<string, unknown>;
+  return typeof obj.ok === 'boolean';
 }
 
 /** Narrow an unknown JSON value to DaemonEvent. */
 export function isDaemonEvent(v: unknown): v is DaemonEvent {
   if (typeof v !== 'object' || v === null) return false;
-  return 'event' in v;
+  const obj = v as Record<string, unknown>;
+  return typeof obj.event === 'string';
 }
 
 // Socket and PID paths
 export const DAEMON_SOCKET_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'daemon.sock');
 export const DAEMON_PID_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'daemon.pid');
+
+/**
+ * Returns true if a daemon is actively accepting connections on the given socket.
+ *
+ * Uses a connect attempt rather than PID file inspection because:
+ * - PID recycling can make process.kill(pid, 0) return a false positive.
+ * - A socket file can exist without a listener (stale socket after crash).
+ * - A connect attempt is the only reliable end-to-end liveness test.
+ */
+export function isSocketAlive(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = net.createConnection(socketPath);
+    const timer = setTimeout(() => {
+      sock.destroy();
+      resolve(false);
+    }, 1000);
+    sock.on('connect', () => {
+      clearTimeout(timer);
+      sock.destroy();
+      resolve(true);
+    });
+    sock.on('error', () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
+}
