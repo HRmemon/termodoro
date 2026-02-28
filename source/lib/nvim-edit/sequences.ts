@@ -3,6 +3,7 @@ import { spawnSync } from 'child_process';
 import type { SessionSequence, SequenceBlock } from '../../types.js';
 import { loadSequences, saveSequences } from '../sequences.js';
 import { tmpFile } from './utils.js';
+import { clampStr, clampInt, LIMITS } from '../sanitize.js';
 
 function formatSequences(): string {
   const sequences = loadSequences();
@@ -35,7 +36,7 @@ function parseSequences(text: string): void {
     const colonIdx = trimmed.indexOf(':');
     if (colonIdx < 0) continue;
 
-    const name = trimmed.slice(0, colonIdx).trim();
+    const name = clampStr(trimmed.slice(0, colonIdx).trim(), LIMITS.SEQUENCE_NAME);
     const blockStr = trimmed.slice(colonIdx + 1).trim();
     if (!name || !blockStr) continue;
 
@@ -45,7 +46,7 @@ function parseSequences(text: string): void {
     for (const token of blockTokens) {
       const match = token.match(/^(\d+)(w|b)$/);
       if (!match) continue;
-      const mins = parseInt(match[1]!, 10);
+      const mins = clampInt(parseInt(match[1]!, 10), 1, LIMITS.DURATION_MINUTES);
       if (match[2] === 'w') {
         blocks.push({ type: 'work', durationMinutes: mins });
       } else {
@@ -72,7 +73,7 @@ export function openSequencesInNvim(): void {
 
   const edited = fs.readFileSync(tmpPath, 'utf8');
   try {
-    if (edited !== content) {
+    if (edited !== content && edited.length <= LIMITS.MAX_FILE_SIZE) {
       parseSequences(edited);
     }
   } finally {

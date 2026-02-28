@@ -4,6 +4,7 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import type { View } from '../../types.js';
 import { tmpFile } from './utils.js';
+import { LIMITS } from '../sanitize.js';
 import { formatTasks, parseTasks } from './tasks.js';
 import { formatReminders, parseReminders } from './reminders.js';
 import { formatTracker, parseTracker } from './tracker.js';
@@ -105,6 +106,9 @@ function formatView(view: View): { content: string; tmpPath: string; cursorLine?
 // ─── Parse & Save Router ────────────────────────────────────────────────────
 
 function parseAndSave(view: View, text: string): void {
+  // Reject excessively large input to prevent data corruption / OOM
+  if (text.length > LIMITS.MAX_FILE_SIZE) return;
+
   switch (view) {
     case 'tasks': parseTasks(text); break;
     case 'reminders': parseReminders(text); break;

@@ -2,6 +2,7 @@ import {
   ALL_SLOTS, DAY_NAMES, getWeekDates, getISOWeekStr, getMondayOfWeek,
   loadWeek, saveWeek, createWeek, getCategories,
 } from '../tracker.js';
+import { clampStr, LIMITS } from '../sanitize.js';
 
 export function formatTracker(): string {
   const now = new Date();
@@ -83,7 +84,7 @@ export function parseTracker(text: string): void {
     if (inNotes) {
       const noteMatch = line.match(/^(\d{4}-\d{2}-\d{2}):\s*(.+)/);
       if (noteMatch) {
-        notes[noteMatch[1]!] = noteMatch[2]!.trim();
+        notes[noteMatch[1]!] = clampStr(noteMatch[2]!.trim(), LIMITS.LONG_TEXT);
       }
       continue;
     }

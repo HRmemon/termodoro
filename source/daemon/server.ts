@@ -9,7 +9,7 @@ import { loadSequences, parseSequenceString } from '../lib/sequences.js';
 import type { DaemonCommand, DaemonResponse, DaemonEvent, DaemonEventType } from './protocol.js';
 import { DAEMON_SOCKET_PATH, DAEMON_PID_PATH } from './protocol.js';
 import { validateCommand } from './validate-command.js';
-import { writeStatusFile, clearStatusFile, invalidateTodayStats } from './status-writer.js';
+import { writeStatusFile, clearStatusFile, invalidateTodayStats, initStatusFile } from './status-writer.js';
 import { executeHook } from './hooks.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 
@@ -202,6 +202,9 @@ export function startDaemon(): void {
   engine.on('timer:resume', () => {
     executeHook('on-resume', {});
   });
+
+  // Harden permissions on any pre-existing status file
+  initStatusFile();
 
   // Restore/reconcile timer state (handles expired timers)
   engine.restoreAndReconcile();

@@ -390,13 +390,25 @@ export function saveTrackerConfigFull(config: TrackerConfigFull): void {
   atomicWriteJSON(TRACKER_CONFIG_PATH, config);
 }
 
+// Convert a glob pattern to a regex, preventing ReDoS by collapsing consecutive
+// wildcards and using [^.]* (single-segment) instead of .* (greedy cross-segment).
+function globToRegex(pattern: string): RegExp {
+  const normalized = pattern.replace(/\*+/g, '*');
+  const escaped = normalized.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^.]*');
+  return new RegExp(`^${escaped}$`, 'i');
+}
+
+// Like globToRegex but for URL paths where * should match any character except /
+function pathGlobToRegex(pattern: string): RegExp {
+  const normalized = pattern.replace(/\*+/g, '*');
+  const escaped = normalized.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*');
+  return new RegExp(`^${escaped}`, 'i'); // prefix match on path
+}
+
 export function matchDomain(domain: string, rules: DomainRule[]): string | null {
   for (const rule of rules) {
     if (rule.pattern.includes('/')) continue; // skip path rules for domain-only matching
-    // Convert glob pattern to regex
-    const escaped = rule.pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-    const regex = new RegExp(`^${escaped}$`, 'i');
-    if (regex.test(domain)) return rule.category;
+    if (globToRegex(rule.pattern).test(domain)) return rule.category;
   }
   return null;
 }
@@ -408,15 +420,11 @@ export function matchUrl(domain: string, urlPath: string, rules: DomainRule[]): 
       const slashIdx = rule.pattern.indexOf('/');
       const domainPattern = rule.pattern.slice(0, slashIdx);
       const pathPattern = rule.pattern.slice(slashIdx);
-      const domainEscaped = domainPattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-      const pathEscaped = pathPattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-      const domainRegex = new RegExp(`^${domainEscaped}$`, 'i');
-      const pathRegex = new RegExp(`^${pathEscaped}`, 'i'); // prefix match on path
-      if (domainRegex.test(domain) && pathRegex.test(urlPath)) return rule.category;
+      if (globToRegex(domainPattern).test(domain) && pathGlobToRegex(pathPattern).test(urlPath)) {
+        return rule.category;
+      }
     } else {
-      const escaped = rule.pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-      const regex = new RegExp(`^${escaped}$`, 'i');
-      if (regex.test(domain)) return rule.category;
+      if (globToRegex(rule.pattern).test(domain)) return rule.category;
     }
   }
   return null;

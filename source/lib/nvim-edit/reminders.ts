@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import type { ScheduledNotification } from '../../types.js';
 import { loadReminders, saveReminders } from '../reminders.js';
+import { clampStr, isValidId, LIMITS } from '../sanitize.js';
 
 export function formatReminders(): string {
   const reminders = loadReminders();
@@ -21,7 +22,7 @@ export function parseReminders(text: string): void {
 
   for (const line of lines) {
     const idMatch = line.match(/%id:(\S+)/);
-    const id = idMatch ? idMatch[1]! : nanoid();
+    const id = idMatch && isValidId(idMatch[1]!) ? idMatch[1]! : nanoid();
 
     const checkMatch = line.match(/^\[([x ])\]/);
     const enabled = checkMatch?.[1] === 'x';
@@ -43,7 +44,7 @@ export function parseReminders(text: string): void {
     result.push({
       id,
       time,
-      title,
+      title: clampStr(title, LIMITS.SHORT_TEXT),
       enabled,
       recurring,
       taskId: old?.taskId,

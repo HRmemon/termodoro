@@ -33,6 +33,33 @@ function flattenData(data: Record<string, unknown>, prefix = 'POMODORO'): Record
   return env;
 }
 
+// Only forward env vars that hooks legitimately need (notifications, audio, display).
+// Excludes credentials like SSH_AUTH_SOCK, AWS_*, GITHUB_TOKEN, npm_*, etc.
+const SAFE_ENV_KEYS: ReadonlyArray<string> = [
+  'PATH',
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'LANG',
+  'LC_ALL',
+  'TERM',
+  'DISPLAY',
+  'WAYLAND_DISPLAY',
+  'XDG_RUNTIME_DIR',
+  'DBUS_SESSION_BUS_ADDRESS',
+  'XDG_DATA_DIRS',
+  'XDG_CONFIG_HOME',
+];
+
+function buildHookEnv(data: Record<string, unknown>): Record<string, string> {
+  const safe: Record<string, string> = {};
+  for (const key of SAFE_ENV_KEYS) {
+    const val = process.env[key];
+    if (val !== undefined) safe[key] = val;
+  }
+  return { ...safe, ...flattenData(data) };
+}
+
 export function executeHook(hookName: string, data: Record<string, unknown>): void {
   // Validate hookName to prevent path traversal
   if (!/^[a-z0-9-]+$/.test(hookName)) return;
@@ -47,10 +74,7 @@ export function executeHook(hookName: string, data: Record<string, unknown>): vo
     return;
   }
 
-  const env = {
-    ...process.env,
-    ...flattenData(data),
-  };
+  const env = buildHookEnv(data);
 
   appendLog(`Executing hook: ${hookName}`);
 

@@ -133,13 +133,21 @@ export function writeStatusFile(state: EngineFullState): void {
     };
 
     const tmp = STATUS_PATH + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(statusData, null, 2) + '\n');
+    fs.writeFileSync(tmp, JSON.stringify(statusData, null, 2) + '\n', { mode: 0o600 });
     fs.renameSync(tmp, STATUS_PATH);
 
     signalWaybar();
   } catch {
     // Don't crash if status write fails
   }
+}
+
+export function initStatusFile(): void {
+  try {
+    if (fs.existsSync(STATUS_PATH)) {
+      fs.chmodSync(STATUS_PATH, 0o600);
+    }
+  } catch { /* ignore */ }
 }
 
 export function clearStatusFile(): void {

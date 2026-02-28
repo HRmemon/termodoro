@@ -3,6 +3,9 @@ import type { CalendarEvent } from '../../types.js';
 import { loadEvents, saveEvents } from '../events.js';
 import { loadIcsEvents } from '../ics.js';
 import { loadConfig } from '../config.js';
+import { clampStr, clampInt, isValidId, LIMITS } from '../sanitize.js';
+
+const VALID_FREQUENCIES: CalendarEvent['frequency'][] = ['once', 'daily', 'weekly', 'monthly', 'yearly'];
 
 export function formatCalendarEvents(calendarSelectedDate: string | undefined): { content: string; cursorLine?: number } {
   const userEvents = loadEvents();
@@ -113,7 +116,7 @@ export function parseCalendarEvents(text: string): void {
 
     // Parse %id
     const idMatch = rest.match(/%id:(\S+)/);
-    const id = idMatch ? idMatch[1]! : nanoid();
+    const id = idMatch && isValidId(idMatch[1]!) ? idMatch[1]! : nanoid();
     rest = rest.replace(/%id:\S+/, '').trim();
 
     // Parse key:value pairs from the end
@@ -138,8 +141,13 @@ export function parseCalendarEvents(text: string): void {
           case 'time': time = val; break;
           case 'end': endTime = val; break;
           case 'endDate': endDate = val; break;
-          case 'freq': frequency = val as CalendarEvent['frequency']; break;
-          case 'repeat': repeatCount = parseInt(val, 10) || undefined; break;
+          case 'freq': frequency = VALID_FREQUENCIES.includes(val as CalendarEvent['frequency'])
+            ? (val as CalendarEvent['frequency']) : 'once'; break;
+          case 'repeat': {
+            const parsed = parseInt(val, 10);
+            repeatCount = Number.isFinite(parsed) && parsed > 0 ? clampInt(parsed, 1, 1000) : undefined;
+            break;
+          }
           case 'icon': icon = val; break;
           case 'color': color = val; break;
         }
@@ -150,7 +158,7 @@ export function parseCalendarEvents(text: string): void {
       rest = rest.replace(/\bprivate\b/, '').trim();
     }
 
-    const title = rest.trim();
+    const title = clampStr(rest.trim(), LIMITS.SHORT_TEXT);
     if (!title) continue;
 
     seenIds.add(id);

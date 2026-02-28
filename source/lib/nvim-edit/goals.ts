@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import { loadGoals, saveGoals } from '../goals.js';
 import type { TrackedGoal } from '../goals.js';
+import { clampStr, clampInt, isValidId, LIMITS } from '../sanitize.js';
 
 export function formatGoals(): string {
   const data = loadGoals();
@@ -85,7 +86,7 @@ export function parseGoals(text: string): void {
 
     if (section === 'goals') {
       const idMatch = trimmed.match(/%id:(\S+)/);
-      const id = idMatch ? idMatch[1]! : nanoid();
+      const id = idMatch && isValidId(idMatch[1]!) ? idMatch[1]! : nanoid();
       seenIds.add(id);
 
       let rest = trimmed.replace(/%id:\S+/, '').trim();
@@ -114,8 +115,12 @@ export function parseGoals(text: string): void {
         rest = rest.replace(/\([^)]+\)\s*$/, '').trim();
       }
 
-      const name = rest;
-      newGoals.push({ id, name, color, type, autoProject, rateMax });
+      const name = clampStr(rest, LIMITS.SHORT_TEXT);
+      newGoals.push({
+        id, name, color, type,
+        autoProject: clampStr(autoProject, LIMITS.PROJECT),
+        rateMax: rateMax !== undefined ? clampInt(rateMax, 1, LIMITS.RATING) : undefined,
+      });
       goalIdByName.set(name, id);
 
       // Preserve existing data
@@ -144,7 +149,7 @@ export function parseGoals(text: string): void {
           newRatings[id] = {};
           for (const e of entries) {
             const [date, val] = e.split('=');
-            if (date && val) newRatings[id]![date.trim()] = parseInt(val.trim(), 10);
+            if (date && val) newRatings[id]![date.trim()] = clampInt(parseInt(val.trim(), 10), 0, LIMITS.RATING);
           }
         }
       }
@@ -160,7 +165,7 @@ export function parseGoals(text: string): void {
         const id = goalIdByName.get(name);
         if (id) {
           if (!newNotes[id]) newNotes[id] = {};
-          newNotes[id]![date] = noteText;
+          newNotes[id]![date] = clampStr(noteText, LIMITS.LONG_TEXT);
         }
       }
     }

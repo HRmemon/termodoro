@@ -5,6 +5,7 @@ import { loadSessions } from '../store.js';
 import { updateSession } from '../session-db.js';
 import { getSessionsForDateRange } from '../stats.js';
 import { tmpFile } from './utils.js';
+import { clampStr, clampInt, isValidId, LIMITS } from '../sanitize.js';
 
 function formatSessions(): string {
   const today = new Date();
@@ -48,6 +49,7 @@ function parseSessions(text: string): void {
     const idMatch = blockText.match(/^%id:(\S+)/m);
     if (!idMatch) continue;
     const id = idMatch[1]!;
+    if (!isValidId(id)) continue;
 
     const existing = allMap.get(id);
     if (!existing) continue;
@@ -61,14 +63,14 @@ function parseSessions(text: string): void {
 
     const updated: Session = {
       ...existing,
-      label: labelMatch ? labelMatch[1]!.trim() : undefined,
-      project: projectMatch ? projectMatch[1]!.trim() : undefined,
-      tag: tagMatch ? tagMatch[1]!.trim() : undefined,
+      label: labelMatch ? clampStr(labelMatch[1]!.trim(), LIMITS.LONG_TEXT) : undefined,
+      project: projectMatch ? clampStr(projectMatch[1]!.trim(), LIMITS.PROJECT) : undefined,
+      tag: tagMatch ? clampStr(tagMatch[1]!.trim(), LIMITS.TAG) : undefined,
       energyLevel: energyMatch && ['high', 'medium', 'low'].includes(energyMatch[1]!.trim())
         ? (energyMatch[1]!.trim() as Session['energyLevel'])
         : existing.energyLevel,
       distractionScore: distractionMatch
-        ? parseFloat(distractionMatch[1]!)
+        ? clampInt(parseFloat(distractionMatch[1]!), 0, LIMITS.DISTRACTION)
         : undefined,
     };
 
@@ -86,7 +88,7 @@ export function openSessionsInNvim(): void {
 
   const edited = fs.readFileSync(tmpPath, 'utf8');
   try {
-    if (edited !== content) {
+    if (edited !== content && edited.length <= LIMITS.MAX_FILE_SIZE) {
       parseSessions(edited);
     }
   } finally {

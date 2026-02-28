@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import type { Task } from '../../types.js';
 import { loadTasks, saveTasks } from '../tasks.js';
+import { clampStr, clampInt, isValidId, LIMITS } from '../sanitize.js';
 
 export function formatTasks(): string {
   const tasks = loadTasks();
@@ -24,7 +25,7 @@ export function parseTasks(text: string): void {
 
   for (const line of lines) {
     const idMatch = line.match(/%id:(\S+)/);
-    const id = idMatch ? idMatch[1]! : nanoid();
+    const id = idMatch && isValidId(idMatch[1]!) ? idMatch[1]! : nanoid();
     seenIds.add(id);
 
     const checkMatch = line.match(/^\[([x ])\]/);
@@ -59,12 +60,12 @@ export function parseTasks(text: string): void {
     const old = existingMap.get(id);
     result.push({
       id,
-      text: rest,
+      text: clampStr(rest, LIMITS.SHORT_TEXT),
       completed,
       description: old?.description,
-      project,
-      expectedPomodoros,
-      completedPomodoros: completedPomodoros || (old?.completedPomodoros ?? 0),
+      project: clampStr(project, LIMITS.PROJECT),
+      expectedPomodoros: clampInt(expectedPomodoros, 1, LIMITS.POMODOROS),
+      completedPomodoros: clampInt(completedPomodoros || (old?.completedPomodoros ?? 0), 0, LIMITS.POMODOROS),
       createdAt: old?.createdAt ?? new Date().toISOString(),
       completedAt: completed ? (old?.completedAt ?? new Date().toISOString()) : undefined,
     });
