@@ -78,6 +78,14 @@ export class DaemonSubscription {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private callbacks: SubscriptionCallbacks;
   private disposed = false;
+  private reconnectAttempt = 0;
+  private pendingCommands: DaemonCommand[] = [];
+
+  private static readonly MAX_RECONNECT_ATTEMPTS = 10;
+  private static readonly BASE_DELAY_MS = 500;
+  private static readonly MAX_DELAY_MS = 30_000;
+  private static readonly MAX_PENDING = 16;
+  private static readonly MAX_BUFFER_BYTES = 1 * 1024 * 1024; // 1 MB
 
   constructor(callbacks: SubscriptionCallbacks) {
     this.callbacks = callbacks;
@@ -86,16 +94,37 @@ export class DaemonSubscription {
   connect(): void {
     if (this.disposed) return;
 
+    // H6: Destroy any lingering socket before creating a new one
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.destroy();
+      this.socket = null;
+    }
+
     this.socket = net.createConnection(DAEMON_SOCKET_PATH);
 
     this.socket.on('connect', () => {
+      this.reconnectAttempt = 0;
       this.buffer = '';
       // Subscribe to events
       this.socket!.write(JSON.stringify({ cmd: 'subscribe' }) + '\n');
+      // Flush any commands that arrived while disconnected
+      for (const queued of this.pendingCommands) {
+        this.socket!.write(JSON.stringify(queued) + '\n');
+      }
+      this.pendingCommands = [];
     });
 
     this.socket.on('data', (data) => {
       this.buffer += data.toString();
+
+      // H5: Prevent unbounded buffer growth from misbehaving daemon
+      if (this.buffer.length > DaemonSubscription.MAX_BUFFER_BYTES) {
+        this.buffer = '';
+        this.socket?.destroy();
+        return;
+      }
+
       let newlineIdx: number;
       while ((newlineIdx = this.buffer.indexOf('\n')) !== -1) {
         const line = this.buffer.slice(0, newlineIdx).trim();
@@ -143,15 +172,30 @@ export class DaemonSubscription {
   sendCommand(cmd: DaemonCommand): void {
     if (this.socket && !this.socket.destroyed) {
       this.socket.write(JSON.stringify(cmd) + '\n');
+    } else if (this.pendingCommands.length < DaemonSubscription.MAX_PENDING) {
+      this.pendingCommands.push(cmd);
     }
   }
 
   private scheduleReconnect(): void {
     if (this.disposed || this.reconnectTimer) return;
+
+    if (this.reconnectAttempt >= DaemonSubscription.MAX_RECONNECT_ATTEMPTS) {
+      this.pendingCommands = [];
+      this.callbacks.onError(new Error('Daemon unreachable: max reconnect attempts exceeded'));
+      return;
+    }
+
+    const delay = Math.min(
+      DaemonSubscription.BASE_DELAY_MS * 2 ** this.reconnectAttempt,
+      DaemonSubscription.MAX_DELAY_MS,
+    );
+    this.reconnectAttempt++;
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
-    }, 2000);
+    }, delay);
   }
 
   dispose(): void {

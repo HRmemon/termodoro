@@ -15,8 +15,20 @@ import type { EngineFullState } from '../engine/timer-engine.js';
 
 // Set of subscribed client sockets
 const subscribers = new Set<net.Socket>();
+const MAX_SUBSCRIBERS = 64;
+const SOCKET_HIGHWATER_BYTES = 256 * 1024; // 256 KB
 
 function send(socket: net.Socket, msg: DaemonResponse | DaemonEvent): void {
+  if (socket.destroyed) {
+    subscribers.delete(socket);
+    return;
+  }
+  // H3: Drop slow subscribers that aren't draining
+  if (socket.writableLength > SOCKET_HIGHWATER_BYTES) {
+    subscribers.delete(socket);
+    socket.destroy();
+    return;
+  }
   try {
     socket.write(JSON.stringify(msg) + '\n');
   } catch {
@@ -331,6 +343,11 @@ export function startDaemon(): void {
 
           // Subscribe is special — add to subscribers set
           if (cmd.cmd === 'subscribe') {
+            if (subscribers.size >= MAX_SUBSCRIBERS) {
+              send(socket, { ok: false, error: 'Subscriber limit reached' });
+              socket.destroy();
+              continue;
+            }
             subscribers.add(socket);
             send(socket, { ok: true, state: engine.getState() });
             continue;
