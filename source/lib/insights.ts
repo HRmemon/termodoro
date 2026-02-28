@@ -113,44 +113,9 @@ export function detectBurnout(sessions: Session[]): { warning: boolean; message:
     return { warning: false, message: '' };
   }
 
-  // Check most recent window of consecutive dates
-  let consecutiveOver = 0;
   const THRESHOLD_MINUTES = 6 * 60; // 360 minutes
   const CONSECUTIVE_REQUIRED = 5;
 
-  // Walk dates from most recent backwards
-  for (let i = dates.length - 1; i >= 0; i--) {
-    const date = dates[i]!;
-    const prevDate = i > 0 ? dates[i - 1]! : null;
-
-    const dayMinutes = focusMinutes(byDate.get(date)!);
-
-    if (dayMinutes >= THRESHOLD_MINUTES) {
-      // Check that this date is consecutive with the previous one we counted
-      if (consecutiveOver === 0 || prevDate === null) {
-        consecutiveOver++;
-      } else {
-        const curr = new Date(date).getTime();
-        const prev = new Date(dates[i + 1 - consecutiveOver]!).getTime();
-        // Verify the whole run is consecutive
-        const dayDiff = Math.round((new Date(date).getTime() - new Date(dates[i - consecutiveOver + 1 < 0 ? 0 : i - consecutiveOver + 1]!).getTime()) / 86400000);
-        void dayDiff; // suppress unused warning — we'll use a simpler approach below
-        consecutiveOver++;
-      }
-    } else {
-      consecutiveOver = 0;
-    }
-
-    if (consecutiveOver >= CONSECUTIVE_REQUIRED) {
-      return {
-        warning: true,
-        message: `You have logged more than 6 hours of focus per day for ${consecutiveOver} consecutive days. Consider taking a rest day to avoid burnout.`,
-      };
-    }
-  }
-
-  // Second pass: proper consecutive-day check
-  // Reset and do it right with actual date arithmetic
   let runLength = 0;
   for (let i = 0; i < dates.length; i++) {
     const date = dates[i]!;

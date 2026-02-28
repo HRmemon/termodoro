@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import type { SessionSequence } from '../types.js';
+import type { SequenceBlock, SessionSequence } from '../types.js';
 import { atomicWriteJSON } from './fs-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
@@ -71,6 +71,29 @@ export function saveSequence(seq: SessionSequence): void {
 
 export function deleteSequence(name: string): void {
   saveSequences(loadSequences().filter(s => s.name !== name));
+}
+
+export function parseSequenceString(input: string): SessionSequence | null {
+  // Format: "45w 15b 45w 15b 30b" or "session 45w 15b 45w"
+  const cleaned = input.replace(/^session\s+/i, '').trim();
+  if (!cleaned) return null;
+
+  const parts = cleaned.split(/\s+/);
+  const blocks: SequenceBlock[] = [];
+
+  for (const part of parts) {
+    const match = part.match(/^(\d+)(w|b)$/i);
+    if (!match) return null;
+    const minutes = parseInt(match[1]!, 10);
+    const typeChar = match[2]!.toLowerCase();
+    blocks.push({
+      type: typeChar === 'w' ? 'work' : minutes >= 20 ? 'long-break' : 'short-break',
+      durationMinutes: minutes,
+    });
+  }
+
+  if (blocks.length === 0) return null;
+  return { name: 'custom', blocks };
 }
 
 export function importDefaultSequences(): void {

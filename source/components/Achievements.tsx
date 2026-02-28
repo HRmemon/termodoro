@@ -1,7 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { getAchievementProgress } from '../lib/achievements.js';
-import { loadUnlockedAchievements } from '../lib/store.js';
 
 interface AchievementsProps {
   showAll?: boolean;
@@ -42,7 +41,6 @@ function formatProgress(current: number, target: number, id: string): string {
 
 export function Achievements({ showAll = false }: AchievementsProps) {
   const progress = getAchievementProgress();
-  const unlocked = loadUnlockedAchievements();
 
   const unlockedItems = progress.filter(p => p.unlocked);
   const lockedItems = progress.filter(p => !p.unlocked);

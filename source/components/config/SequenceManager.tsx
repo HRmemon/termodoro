@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { SessionSequence } from '../../types.js';
-import { loadSequences, saveSequence, deleteSequence as deleteSeq, importDefaultSequences } from '../../lib/sequences.js';
-import { parseSequenceString } from '../../hooks/useSequence.js';
+import { loadSequences, saveSequence, deleteSequence as deleteSeq, importDefaultSequences, parseSequenceString } from '../../lib/sequences.js';
 import { FilterInput } from '../FilterInput.js';
 import { openSequencesInNvim } from '../../lib/nvim-edit.js';
 
