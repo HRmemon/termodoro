@@ -22,7 +22,7 @@ export function SlotCell({
   const cat = code ? getCategoryByCode(code) : undefined;
   // Filled: space + 2-char code + space + space = 5 chars
   const display = code ? (code === 'hD' ? '\u00bdD' : code.slice(0, 2).padEnd(2)) : ' \u00b7';
-  const color = cat?.color as any ?? 'gray';
+  const color = cat?.color ?? 'gray';
 
   if (isCursor) {
     return <Text backgroundColor={isActive ? color : 'white'} color="black">{` ${display.trim().padEnd(2)} `}</Text>;

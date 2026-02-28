@@ -20,22 +20,18 @@ const MESSAGES: Record<SessionType, { title: string; message: string }> = {
 
 export function sendNotification(type: SessionType, durationSeconds = 5): void {
   const msg = MESSAGES[type];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (notifier as any).notify({
+  notifier.notify({
     title: msg.title,
     message: msg.message,
-    sound: false,
-    expire: durationSeconds * 1000,
+    timeout: durationSeconds,
   });
 }
 
 export function sendReminderNotification(title: string, message: string, durationSeconds = 5): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (notifier as any).notify({
+  notifier.notify({
     title,
     message,
-    sound: false,
-    expire: durationSeconds * 1000,
+    timeout: durationSeconds,
   });
 }
 

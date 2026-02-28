@@ -30,18 +30,18 @@ const DEFAULT_CONFIG: Config = {
   layout: { sidebar: 'visible', showKeysBar: true, compact: false },
 };
 
-function deepMerge<T extends Record<string, any>>(base: T, override: Partial<T>): T {
-  const result = { ...base } as any;
+function deepMerge<T extends object>(base: T, override: Partial<T>): T {
+  const result = { ...base } as Record<string, unknown>;
   for (const key of Object.keys(override)) {
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
-    const val = (override as any)[key];
-    if (val && typeof val === 'object' && !Array.isArray(val) && typeof (base as any)[key] === 'object') {
-      result[key] = deepMerge((base as any)[key], val);
+    const val = (override as Record<string, unknown>)[key];
+    if (val && typeof val === 'object' && !Array.isArray(val) && typeof (base as Record<string, unknown>)[key] === 'object') {
+      result[key] = deepMerge((base as Record<string, unknown>)[key] as Record<string, unknown>, val as Partial<Record<string, unknown>>);
     } else if (val !== undefined) {
       result[key] = val;
     }
   }
-  return result;
+  return result as T;
 }
 
 const TIMER_FORMAT_VALUES = ['mm:ss', 'hh:mm:ss', 'minutes'] as const;

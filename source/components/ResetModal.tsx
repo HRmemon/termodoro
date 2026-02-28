@@ -1,6 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { useInput } from 'ink';
-import { Box, Text } from 'ink';
+import { useState, useCallback } from 'react';
+import { Box, Text, useInput, type Key } from 'ink';
 import type { SessionType } from '../types.js';
 import { useFullScreen } from '../hooks/useFullScreen.js';
 import { colors } from '../lib/theme.js';
@@ -34,7 +33,7 @@ export function ResetModal({ elapsed, sessionType, onConfirm, onCancel }: ResetM
     if (choice === 'Unproductive') { onConfirm(false); return; }
   }, [options, selectedOpt, onCancel, onConfirm]);
 
-  useInput(useCallback((input: string, key: any) => {
+  useInput(useCallback((input: string, key: Key) => {
     if (key.escape) { onCancel(); return; }
     if (input === 'j' || key.downArrow) { setSelectedOpt(i => Math.min(i + 1, options.length - 1)); return; }
     if (input === 'k' || key.upArrow) { setSelectedOpt(i => Math.max(i - 1, 0)); return; }

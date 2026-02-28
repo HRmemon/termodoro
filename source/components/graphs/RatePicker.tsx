@@ -17,7 +17,7 @@ export function RatePicker({ goal, selDateLabel, pickerValue }: RatePickerProps)
       <Text bold color="cyan">{goal.name} — {selDateLabel}</Text>
       <Box marginTop={1}>
         {shades.map((sh, i) => (
-          <Text key={i} color={i + 1 <= pickerValue ? goal.color as any : 'gray'} bold={i + 1 === pickerValue}>
+          <Text key={i} color={i + 1 <= pickerValue ? goal.color : 'gray'} bold={i + 1 === pickerValue}>
             {' '}{sh}{' '}
           </Text>
         ))}

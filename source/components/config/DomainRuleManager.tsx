@@ -175,7 +175,7 @@ export function DomainRuleManager({ setIsTyping, onBack }: DomainRuleManagerProp
             </Text>
             <Box width={25}><Text>{rule.pattern}</Text></Box>
             <Text color="cyan">{' → '}</Text>
-            <Text color={getCategoryByCode(rule.category)?.color as any ?? 'white'}>{rule.category}</Text>
+            <Text color={getCategoryByCode(rule.category)?.color ?? 'white'}>{rule.category}</Text>
           </Box>
         ))}
         {ruleList.length === 0 && <Text dimColor>No domain rules. Press a to add one.</Text>}

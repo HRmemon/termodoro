@@ -137,7 +137,7 @@ export function CategoryManager({ setIsTyping, onBack }: CategoryManagerProps) {
               <Box marginTop={1}>
                 <Text>Color: </Text>
                 {CAT_COLORS.map((c) => (
-                  <Text key={c} color={c as any} bold={c === catEditColor}>
+                  <Text key={c} color={c } bold={c === catEditColor}>
                     {c === catEditColor ? '[' : ' '}{'\u2588'}{c === catEditColor ? ']' : ' '}
                   </Text>
                 ))}
@@ -147,7 +147,7 @@ export function CategoryManager({ setIsTyping, onBack }: CategoryManagerProps) {
           )}
           {catEditStep === 'key' && (
             <Box flexDirection="column">
-              <Text>Code: <Text bold>{catEditCode}</Text>  Label: <Text bold>{catEditLabel}</Text>  Color: <Text color={catEditColor as any}>{'\u2588'}</Text></Text>
+              <Text>Code: <Text bold>{catEditCode}</Text>  Label: <Text bold>{catEditLabel}</Text>  Color: <Text color={catEditColor }>{'\u2588'}</Text></Text>
               <Box>
                 <Text>Shortcut key (empty for none): </Text>
                 <TextInput
@@ -179,9 +179,9 @@ export function CategoryManager({ setIsTyping, onBack }: CategoryManagerProps) {
               {cat.key ?? ' '}
             </Text>
             <Text dimColor>] </Text>
-            <Box width={5}><Text color={cat.color as any}>{cat.code}</Text></Box>
+            <Box width={5}><Text color={cat.color }>{cat.code}</Text></Box>
             <Box width={16}><Text>{cat.label}</Text></Box>
-            <Text color={cat.color as any}>{'\u2588\u2588'}</Text>
+            <Text color={cat.color }>{'\u2588\u2588'}</Text>
           </Box>
         ))}
         {catList.length === 0 && <Text dimColor>No categories. Press a to add one.</Text>}

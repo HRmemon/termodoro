@@ -105,7 +105,7 @@ export function GoalFormView({
             <Box marginTop={1}>
               <Text>Color: </Text>
               {GOAL_COLORS.map((c, i) => (
-                <Text key={c} color={c as any} bold={i === newColorIdx}>
+                <Text key={c} color={c} bold={i === newColorIdx}>
                   {i === newColorIdx ? '[' : ' '}{'\u2588'}{i === newColorIdx ? ']' : ' '}
                 </Text>
               ))}

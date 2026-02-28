@@ -22,7 +22,7 @@ export function TrackerPickerOverlay({ categories, pickerCursor, currentDate, cu
             {cat.key ?? ' '}
           </Text>
           <Text dimColor>] </Text>
-          <Text color={cat.color as any} bold={i === pickerCursor}>
+          <Text color={cat.color} bold={i === pickerCursor}>
             {cat.code.padEnd(4)}
           </Text>
           <Text color={i === pickerCursor ? 'cyan' : undefined}>

@@ -53,7 +53,7 @@ export function GoalSection({
   return (
     <Box flexDirection="column" marginBottom={compact ? 1 : 0}>
       <Box>
-        <Text bold color={goal.color as any}>{'── '}{goal.name}</Text>
+        <Text bold color={goal.color}>{'── '}{goal.name}</Text>
         <Text dimColor> ({goal.type}{isRate ? ` 0-${rateMax}` : ''}){compact ? `  ${totalDays}d  streak:${streak.current}d  best:${streak.best}d${isRate ? `  avg:${avgRating.toFixed(1)}` : ''}` : ''}</Text>
       </Box>
 
@@ -87,7 +87,7 @@ export function GoalSection({
                 const shade = ratingToShade(rating, rateMax);
                 const hasRating = rating > 0;
                 return (
-                  <Text key={wi} color={hasRating ? goal.color as any : undefined} dimColor={!hasRating} bold={isSelected}>
+                  <Text key={wi} color={hasRating ? goal.color : undefined} dimColor={!hasRating} bold={isSelected}>
                     {shade}{suffix}
                   </Text>
                 );
@@ -95,7 +95,7 @@ export function GoalSection({
 
               const done = isGoalComplete(goal, date, data);
               if (done) {
-                return <Text key={wi} color={goal.color as any} bold={isSelected}>{'█'}{suffix}</Text>;
+                return <Text key={wi} color={goal.color} bold={isSelected}>{'█'}{suffix}</Text>;
               }
               return <Text key={wi} color={isSelected ? 'white' : undefined} dimColor={!isSelected} bold={isSelected}>{'·'}{suffix}</Text>;
             })}

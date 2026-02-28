@@ -415,7 +415,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
             const cat = getCategoryByCode(code);
             return (
               <Box key={code} marginRight={2}>
-                <Text color={cat?.color as any}>{code}</Text>
+                <Text color={cat?.color}>{code}</Text>
                 <Text dimColor>:{formatHours(hours)}  </Text>
               </Box>
             );

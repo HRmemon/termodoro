@@ -19,7 +19,7 @@ export function DaySummaryPanel({ currentDate, cursorCol, dayStats, dayTotal }: 
         const cat = getCategoryByCode(code);
         return (
           <Box key={code}>
-            <Box width={6}><Text color={cat?.color as any}>{code}</Text></Box>
+            <Box width={6}><Text color={cat?.color}>{code}</Text></Box>
             <Text>{formatHours(hours)}</Text>
           </Box>
         );
@@ -56,10 +56,10 @@ export function WeekSummaryPanel({ week, weekDates }: WeekSummaryProps) {
         if (total === 0) return null;
         return (
           <Box key={cat.code}>
-            <Box width={6}><Text color={cat.color as any}>{cat.code}</Text></Box>
+            <Box width={6}><Text color={cat.color}>{cat.code}</Text></Box>
             {dayCounts.map((h, i) => (
               <Box key={i} width={6}>
-                <Text color={cat.color as any}>{h > 0 ? formatHours(h) : '\u00b7'}</Text>
+                <Text color={cat.color}>{h > 0 ? formatHours(h) : '\u00b7'}</Text>
               </Box>
             ))}
             <Box width={7}><Text bold>{formatHours(total)}</Text></Box>

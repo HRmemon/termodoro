@@ -69,21 +69,21 @@ interface ConfigFieldListProps {
   keymap?: Keymap;
 }
 
-function getNestedValue(obj: Record<string, any>, path: string): any {
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   const parts = path.split('.');
-  let cur = obj;
+  let cur: unknown = obj;
   for (const p of parts) {
-    if (cur == null) return undefined;
-    cur = cur[p];
+    if (cur == null || typeof cur !== 'object') return undefined;
+    cur = (cur as Record<string, unknown>)[p];
   }
   return cur;
 }
 
-function setNestedValue(obj: Record<string, any>, path: string, value: any): Record<string, any> {
+function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
   const parts = path.split('.');
   if (parts.length === 1) return { ...obj, [parts[0]!]: value };
   const [head, ...rest] = parts;
-  return { ...obj, [head!]: setNestedValue(obj[head!] ?? {}, rest.join('.'), value) };
+  return { ...obj, [head!]: setNestedValue((obj[head!] ?? {}) as Record<string, unknown>, rest.join('.'), value) };
 }
 
 export function ConfigFieldList({
@@ -102,6 +102,8 @@ export function ConfigFieldList({
   themeCount,
   keymap,
 }: ConfigFieldListProps) {
+  // Cast config once for dynamic key access via getNestedValue/setNestedValue
+  const cfg = config as unknown as Record<string, unknown>;
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -123,7 +125,7 @@ export function ConfigFieldList({
     if (field.type === 'sound-volume') {
       return `${config.sounds.volume}%`;
     }
-    return String(getNestedValue(config as any, field.key));
+    return String(getNestedValue(cfg, field.key));
   };
 
   const cycleSoundChoice = useCallback((field: ConfigField, direction: 1 | -1 = 1) => {
@@ -162,7 +164,7 @@ export function ConfigFieldList({
         let clamped = num;
         if (field.key === 'sidebarWidth') clamped = Math.min(Math.max(num, 8), 30);
         else if (field.key === 'webDomainLimit') clamped = Math.min(Math.max(num, 10), 500);
-        const newConfig = setNestedValue(config as any, field.key, clamped) as Config;
+        const newConfig = setNestedValue(cfg, field.key, clamped) as unknown as Config;
         onConfigChange(newConfig);
         saveConfig(newConfig);
       }
@@ -205,14 +207,14 @@ export function ConfigFieldList({
 
       const field = FIELDS[selectedIdx]!;
       if (field.type === 'boolean') {
-        const current = getNestedValue(config as any, field.key);
-        const newConfig = setNestedValue(config as any, field.key, !current) as Config;
+        const current = getNestedValue(cfg, field.key);
+        const newConfig = setNestedValue(cfg, field.key, !current) as unknown as Config;
         onConfigChange(newConfig);
         saveConfig(newConfig);
       } else if (field.type === 'cycle' && field.values) {
-        const currentIdx = field.values.indexOf(String(getNestedValue(config as any, field.key)));
+        const currentIdx = field.values.indexOf(String(getNestedValue(cfg, field.key)));
         const nextIdx = (currentIdx + 1) % field.values.length;
-        const newConfig = setNestedValue(config as any, field.key, field.values[nextIdx]) as Config;
+        const newConfig = setNestedValue(cfg, field.key, field.values[nextIdx]) as unknown as Config;
         onConfigChange(newConfig);
         saveConfig(newConfig);
       } else if (field.type === 'sound-event') {
@@ -230,7 +232,7 @@ export function ConfigFieldList({
         setIsEditing(true);
         setIsTyping(true);
       } else {
-        setEditValue(String(getNestedValue(config as any, field.key)));
+        setEditValue(String(getNestedValue(cfg, field.key)));
         setIsEditing(true);
         setIsTyping(true);
       }
@@ -293,11 +295,11 @@ export function ConfigFieldList({
         let displayValue: string;
         let valueColor: string;
         if (field.type === 'boolean') {
-          const val = getNestedValue(config as any, field.key);
+          const val = getNestedValue(cfg, field.key);
           displayValue = val ? 'ON' : 'OFF';
           valueColor = val ? 'green' : 'red';
         } else if (field.type === 'cycle') {
-          displayValue = String(getNestedValue(config as any, field.key));
+          displayValue = String(getNestedValue(cfg, field.key));
           valueColor = 'cyan';
         } else if (field.type === 'sound-event') {
           displayValue = getFieldValue(field);
@@ -306,7 +308,7 @@ export function ConfigFieldList({
           displayValue = getFieldValue(field);
           valueColor = 'cyan';
         } else {
-          const val = getNestedValue(config as any, field.key);
+          const val = getNestedValue(cfg, field.key);
           displayValue = `${val}${field.unit ? ` ${field.unit}` : ''}`;
           valueColor = 'white';
         }
