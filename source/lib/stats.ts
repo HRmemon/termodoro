@@ -1,5 +1,6 @@
 import { loadSessions } from './store.js';
 import type { Session } from '../types.js';
+import { localDateStr } from './date-utils.js';
 
 export interface DailyStats {
   date: string;
@@ -48,14 +49,6 @@ export interface StreakInfo {
   deepWorkHoursThisWeek: number;
 }
 
-// ISO date string helpers: YYYY-MM-DD
-function toDateString(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 function parseDate(dateStr: string): Date {
   // Parse YYYY-MM-DD as local date, not UTC
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -77,7 +70,7 @@ export function getSessionsForDateRange(start: string, end: string, sessions?: S
 }
 
 export function getTodaySessions(sessions?: Session[]): Session[] {
-  const today = toDateString(new Date());
+  const today = localDateStr(new Date());
   return getSessionsForDateRange(today, today, sessions);
 }
 
@@ -124,7 +117,7 @@ export function getWeeklyStats(weekStartDate: string, allSessions?: Session[]): 
   for (let i = 0; i < 7; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    const dateStr = toDateString(d);
+    const dateStr = localDateStr(d);
     const sessions = getSessionsForDateRange(dateStr, dateStr, loaded);
 
     const focusMinutes = sessions
@@ -173,8 +166,8 @@ export function getDeepWorkRatio(sessions: Session[]): DeepWorkRatio {
     const startDate = new Date(endDate);
     startDate.setDate(endDate.getDate() - span + 1);
 
-    const rangeStart = toDateString(startDate);
-    const rangeEnd = toDateString(endDate);
+    const rangeStart = localDateStr(startDate);
+    const rangeEnd = localDateStr(endDate);
     const rangeSessions = sessions.filter(s => {
       const t = new Date(s.startedAt).getTime();
       const sMs = parseDate(rangeStart).getTime();
@@ -240,7 +233,7 @@ export function getStreaks(preloaded?: Session[]): StreakInfo {
   const activeDates = new Set<string>();
   for (const s of allSessions) {
     if (s.type === 'work' && s.status === 'completed') {
-      activeDates.add(toDateString(new Date(s.startedAt)));
+      activeDates.add(localDateStr(new Date(s.startedAt)));
     }
   }
 
@@ -248,14 +241,14 @@ export function getStreaks(preloaded?: Session[]): StreakInfo {
   function computeStreak(fromDate: Date): number {
     let streak = 0;
     const cursor = new Date(fromDate);
-    while (activeDates.has(toDateString(cursor))) {
+    while (activeDates.has(localDateStr(cursor))) {
       streak++;
       cursor.setDate(cursor.getDate() - 1);
     }
     return streak;
   }
 
-  const todayStr = toDateString(today);
+  const todayStr = localDateStr(today);
   const yesterdayDate = new Date(today);
   yesterdayDate.setDate(today.getDate() - 1);
 
@@ -276,7 +269,7 @@ export function getStreaks(preloaded?: Session[]): StreakInfo {
     const firstDate = parseDate(sortedDates[0]!);
     const cursor2 = new Date(firstDate);
     while (cursor2 <= today) {
-      if (activeDates.has(toDateString(cursor2))) {
+      if (activeDates.has(localDateStr(cursor2))) {
         runLength++;
         if (runLength > recordStreak) {
           recordStreak = runLength;
@@ -293,8 +286,8 @@ export function getStreaks(preloaded?: Session[]): StreakInfo {
   const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - daysFromMonday);
-  const weekStartStr = toDateString(weekStart);
-  const weekEndStr = toDateString(today);
+  const weekStartStr = localDateStr(weekStart);
+  const weekEndStr = localDateStr(today);
 
   const weekSessions = getSessionsForDateRange(weekStartStr, weekEndStr, allSessions);
   const deepWorkMinutes = weekSessions

@@ -1,12 +1,7 @@
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { colors } from '../../lib/theme.js';
-
-interface ProjectMenu {
-  hashIdx: number;
-  partial: string;
-  matches: string[];
-}
+import type { ProjectMenu } from '../../hooks/useProjectAutocomplete.js';
 
 interface TaskInputBarProps {
   label: string;

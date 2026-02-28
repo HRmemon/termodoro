@@ -1,11 +1,11 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { SessionType, SequenceBlock, SessionSequence } from '../types.js';
 import { BigTimer } from './BigTimer.js';
-import { getProjects } from '../lib/tasks.js';
+import { useProjectAutocomplete } from '../hooks/useProjectAutocomplete.js';
 import { colors } from '../lib/theme.js';
-import type { Keymap } from '../lib/keymap.js';
+import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { ModePickerOverlay } from './timer/ModePickerOverlay.js';
 import { SequencePickerOverlay } from './timer/SequencePickerOverlay.js';
 
@@ -61,33 +61,20 @@ export function TimerView({
   const [showProjectInput, setShowProjectInput] = useState(false);
   const [projectInput, setProjectInput] = useState('');
   const [projectInputKey, setProjectInputKey] = useState(0);
-  const [suggestionIdx, setSuggestionIdx] = useState(0);
   const [showSeqPicker, setShowSeqPicker] = useState(false);
   const [showModePicker, setShowModePicker] = useState(false);
 
-  const allProjects = useMemo(() => getProjects(), [showProjectInput]);
-
-  const projectMenu = useMemo(() => {
-    if (!showProjectInput) return null;
-    const partial = projectInput.toLowerCase();
-    if (!partial) return allProjects.length > 0 ? { matches: allProjects } : null;
-    const matches = allProjects.filter(p => p.toLowerCase().includes(partial));
-    if (matches.length === 0) return null;
-    if (matches.length === 1 && matches[0]!.toLowerCase() === partial) return null;
-    return { matches };
-  }, [showProjectInput, projectInput, allProjects]);
-
-  useEffect(() => {
-    setSuggestionIdx(0);
-  }, [projectMenu?.matches.length, projectInput]);
+  const { projectMenu, suggestionIdx, navigateUp, navigateDown, selectedProject } = useProjectAutocomplete({
+    input: projectInput,
+    enabled: showProjectInput,
+    refreshDeps: [showProjectInput],
+  });
 
   const acceptSuggestion = useCallback(() => {
-    if (!projectMenu) return;
-    const chosen = projectMenu.matches[suggestionIdx];
-    if (!chosen) return;
-    setProjectInput(chosen);
+    if (!selectedProject) return;
+    setProjectInput(selectedProject);
     setProjectInputKey(k => k + 1);
-  }, [projectMenu, suggestionIdx]);
+  }, [selectedProject]);
 
   const handleDurationSubmit = useCallback((value: string) => {
     const mins = parseInt(value, 10);
@@ -124,11 +111,11 @@ export function TimerView({
       }
       if (projectMenu && projectInput) {
         if (key.downArrow) {
-          setSuggestionIdx(i => Math.min(i + 1, projectMenu.matches.length - 1));
+          navigateDown();
           return;
         }
         if (key.upArrow) {
-          setSuggestionIdx(i => Math.max(0, i - 1));
+          navigateUp();
           return;
         }
         if (key.tab) {
@@ -136,9 +123,8 @@ export function TimerView({
           return;
         }
         if (key.return) {
-          const chosen = projectMenu.matches[suggestionIdx];
-          if (chosen) {
-            onSetProject(chosen);
+          if (selectedProject) {
+            onSetProject(selectedProject);
           }
           projectHandledRef.current = true;
           setShowProjectInput(false);
@@ -162,14 +148,14 @@ export function TimerView({
 
     const km = keymap;
 
-    if ((km ? km.matches('timer.set_duration', input, key) : input === 't') && timerMode !== 'stopwatch') {
+    if (kmMatches(km, 'timer.set_duration', input, key) && timerMode !== 'stopwatch') {
       setIsSettingDuration(true);
       setIsTyping(true);
       setDurationInput('');
       return;
     }
 
-    if (km ? km.matches('timer.set_project', input, key) : input === 'p') {
+    if (kmMatches(km, 'timer.set_project', input, key)) {
       setShowProjectInput(true);
       setIsTyping(true);
       setProjectInput(currentProject ?? '');
@@ -177,12 +163,12 @@ export function TimerView({
       return;
     }
 
-    if ((km ? km.matches('timer.clear_project', input, key) : input === 'P') && currentProject) {
+    if (kmMatches(km, 'timer.clear_project', input, key) && currentProject) {
       onSetProject('');
       return;
     }
 
-    if (km ? km.matches('timer.sequences', input, key) : input === 'S') {
+    if (kmMatches(km, 'timer.sequences', input, key)) {
       setShowSeqPicker(true);
       return;
     }

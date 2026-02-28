@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
-import type { Keymap } from '../lib/keymap.js';
+import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { openSessionsInNvim } from '../lib/nvim-edit/index.js';
 import { Heatmap } from './Heatmap.js';
 import { Sparkline } from './Sparkline.js';
@@ -109,16 +109,16 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
 
   useInput((input, key) => {
     const km = keymap;
-    if ((km ? km.matches('stats.next_tab', input, key) : input === 'l') || key.rightArrow) {
+    if ((kmMatches(km, 'stats.next_tab', input, key)) || key.rightArrow) {
       setSelectedSection(prev => Math.min(prev + 1, totalSections - 1));
     }
-    if ((km ? km.matches('stats.prev_tab', input, key) : input === 'h') || key.leftArrow) {
+    if ((kmMatches(km, 'stats.prev_tab', input, key)) || key.leftArrow) {
       setSelectedSection(prev => Math.max(0, prev - 1));
     }
-    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
+    if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) {
       setSelectedSection(prev => Math.min(prev + 1, totalSections - 1));
     }
-    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
+    if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) {
       setSelectedSection(prev => Math.max(0, prev - 1));
     }
     if (input === 'e') {

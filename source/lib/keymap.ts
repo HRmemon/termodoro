@@ -137,6 +137,17 @@ export class Keymap {
   }
 }
 
+export type KeyObject = Parameters<Keymap['matches']>[2];
+
+export function kmMatches(
+  km: Keymap | undefined,
+  action: KeyAction,
+  input: string,
+  key: KeyObject,
+): boolean {
+  return km ? km.matches(action, input, key) : input === DEFAULT_KEYBINDINGS[action];
+}
+
 export function createKeymap(config: Config): Keymap {
   return new Keymap(config.keybindings);
 }

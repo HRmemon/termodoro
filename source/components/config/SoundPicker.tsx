@@ -3,7 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { ALL_SOUND_CHOICES, SOUND_LABELS, previewSound } from '../../lib/sounds.js';
 import type { SoundEvent, SoundChoice } from '../../lib/sounds.js';
-import type { Keymap } from '../../lib/keymap.js';
+import { type Keymap, kmMatches } from '../../lib/keymap.js';
 
 interface SoundPickerProps {
   soundEvent: SoundEvent;
@@ -42,11 +42,11 @@ export function SoundPicker({ soundEvent, currentChoice, volume, customPath, onS
       return;
     }
 
-    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
+    if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) {
       setCursor(c => Math.max(0, c - 1));
       return;
     }
-    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
+    if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) {
       setCursor(c => Math.min(ALL_SOUND_CHOICES.length - 1, c + 1));
       return;
     }

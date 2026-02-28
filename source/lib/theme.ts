@@ -52,6 +52,12 @@ export let SESSION_COLORS: Record<SessionType, string> = {
   'long-break': colors.break,
 };
 
+export const MODE_LABELS: Record<SessionType, string> = {
+  'work': 'Focus',
+  'short-break': 'Short Break',
+  'long-break': 'Long Break',
+};
+
 // ─── initTheme ────────────────────────────────────────────────────────────────
 
 export function initTheme(config: Config): void {

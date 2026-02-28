@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
-import type { Keymap } from '../lib/keymap.js';
+import { type Keymap, kmMatches } from '../lib/keymap.js';
 import {
   ALL_SLOTS, DAY_NAMES, WeekData,
   getCategoryByCode, getCategories, getISOWeekStr, getMondayOfWeek, getWeekDates,
@@ -126,8 +126,8 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
     const km = keymap;
 
     if (mode === 'browse') {
-      if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) setBrowseCursor(p => Math.min(p + 1, browseList.length - 1));
-      else if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) setBrowseCursor(p => Math.max(0, p - 1));
+      if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) setBrowseCursor(p => Math.min(p + 1, browseList.length - 1));
+      else if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) setBrowseCursor(p => Math.max(0, p - 1));
       else if (key.return && browseList[browseCursor]) {
         const ws = browseList[browseCursor]!;
         const w = loadWeek(ws);
@@ -169,8 +169,8 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
     }
 
     if (mode === 'pick') {
-      if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) setPickerCursor(p => Math.min(p + 1, categories.length - 1));
-      else if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) setPickerCursor(p => Math.max(0, p - 1));
+      if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) setPickerCursor(p => Math.min(p + 1, categories.length - 1));
+      else if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) setPickerCursor(p => Math.max(0, p - 1));
       else if (key.return) handleSetSlot(categories[pickerCursor]!.code);
       else if (key.escape) {
         setMode('grid');
@@ -190,41 +190,41 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
 
     if (mode === 'day' || mode === 'week') {
       if (key.escape || input === 'q'
-        || (km ? km.matches('tracker.day_summary', input, key) : input === 'D')
-        || (km ? km.matches('tracker.week_summary', input, key) : input === 'w')
+        || kmMatches(km, 'tracker.day_summary', input, key)
+        || kmMatches(km, 'tracker.week_summary', input, key)
       ) setMode('grid');
       return;
     }
 
     // Grid mode
-    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
+    if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) {
       const next = Math.min(cursorRow + 1, ALL_SLOTS.length - 1);
       setCursorRow(next);
       if (next >= scrollOffset + VISIBLE_ROWS) setScrollOffset(next - VISIBLE_ROWS + 1);
-    } else if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
+    } else if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) {
       const next = Math.max(0, cursorRow - 1);
       setCursorRow(next);
       if (next < scrollOffset) setScrollOffset(next);
-    } else if ((km ? km.matches('nav.left', input, key) : input === 'h') || key.leftArrow) {
+    } else if ((kmMatches(km, 'nav.left', input, key)) || key.leftArrow) {
       setCursorCol(p => Math.max(0, p - 1));
-    } else if ((km ? km.matches('nav.right', input, key) : input === 'l') || key.rightArrow) {
+    } else if ((kmMatches(km, 'nav.right', input, key)) || key.rightArrow) {
       setCursorCol(p => Math.min(6, p + 1));
     } else if (key.tab) {
       setCursorCol(p => (p + 1) % 7);
-    } else if ((km ? km.matches('tracker.pick', input, key) : input === 'e') || key.return) {
+    } else if ((kmMatches(km, 'tracker.pick', input, key)) || key.return) {
       if (week) { setPickerCursor(0); setMode('pick'); }
-    } else if (km ? km.matches('tracker.clear', input, key) : input === '.') {
+    } else if (kmMatches(km, 'tracker.clear', input, key)) {
       handleSetSlot(null);
     }
     else {
       const cat = categories.find(c => c.key && c.key === input);
       if (cat) handleSetSlot(cat.code);
-      else if ((km ? km.matches('tracker.review', input, key) : input === 'r') && pendingCount > 0) {
+      else if (kmMatches(km, 'tracker.review', input, key) && pendingCount > 0) {
         setReviewIdx(0);
         setMode('review');
       } else if (input === 'A' && pendingCount > 0) {
         setWeek(prev => prev ? acceptAllPending(prev) : prev);
-      } else if (km ? km.matches('tracker.new_week', input, key) : input === 'n') {
+      } else if (kmMatches(km, 'tracker.new_week', input, key)) {
         const existing = loadWeek(currentWeekStr);
         if (existing) {
           setWeek(existing);
@@ -235,12 +235,12 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
           setWeekStr(w.week);
         }
         setMode('grid');
-      } else if (km ? km.matches('tracker.browse', input, key) : input === 'b') {
+      } else if (kmMatches(km, 'tracker.browse', input, key)) {
         setMode('browse');
         setBrowseCursor(0);
-      } else if (km ? km.matches('tracker.day_summary', input, key) : input === 'D') {
+      } else if (kmMatches(km, 'tracker.day_summary', input, key)) {
         setMode(m => m === 'day' ? 'grid' : 'day');
-      } else if (km ? km.matches('tracker.week_summary', input, key) : input === 'w') {
+      } else if (kmMatches(km, 'tracker.week_summary', input, key)) {
         setMode(m => m === 'week' ? 'grid' : 'week');
       }
     }

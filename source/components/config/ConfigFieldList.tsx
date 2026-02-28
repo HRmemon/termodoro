@@ -7,7 +7,7 @@ import { ALL_SOUND_CHOICES, SOUND_LABELS, previewSound } from '../../lib/sounds.
 import type { SoundEvent, SoundChoice } from '../../lib/sounds.js';
 import { SoundPicker } from './SoundPicker.js';
 import { ConfigNavEntry } from './ConfigNavEntry.js';
-import type { Keymap } from '../../lib/keymap.js';
+import { type Keymap, kmMatches } from '../../lib/keymap.js';
 
 type FieldType = 'number' | 'boolean' | 'cycle' | 'sound-event' | 'sound-duration' | 'sound-volume';
 
@@ -187,11 +187,11 @@ export function ConfigFieldList({
     }
 
     const km = keymap;
-    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
+    if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) {
       setSelectedIdx(i => Math.min(i + 1, totalItems - 1));
       return;
     }
-    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
+    if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) {
       setSelectedIdx(i => Math.max(i - 1, 0));
       return;
     }
@@ -247,7 +247,7 @@ export function ConfigFieldList({
       return;
     }
 
-    if (km ? km.matches('config.save', input, key) : input === 's') {
+    if (kmMatches(km, 'config.save', input, key)) {
       saveConfig(config);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);

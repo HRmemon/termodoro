@@ -1,6 +1,7 @@
 import { loadSessions } from './store.js';
 import { loadUnlockedAchievements, saveUnlockedAchievements } from './store.js';
 import type { Achievement, Session } from '../types.js';
+import { localDateStr } from './date-utils.js';
 
 export interface AchievementDefinition extends Achievement {
   check: (sessions: Session[], unlockedIds: Set<string>) => boolean;
@@ -22,29 +23,23 @@ function computeCurrentStreak(sessions: Session[]): number {
   const activeDates = new Set<string>();
   for (const s of sessions) {
     if (s.type === 'work' && s.status === 'completed') {
-      const d = new Date(s.startedAt);
-      const str = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      activeDates.add(str);
+      activeDates.add(localDateStr(new Date(s.startedAt)));
     }
   }
 
   const today = new Date();
 
-  function dateStr(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-
   function streakFrom(d: Date): number {
     let streak = 0;
     const cursor = new Date(d);
-    while (activeDates.has(dateStr(cursor))) {
+    while (activeDates.has(localDateStr(cursor))) {
       streak++;
       cursor.setDate(cursor.getDate() - 1);
     }
     return streak;
   }
 
-  const todayStr = dateStr(today);
+  const todayStr = localDateStr(today);
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
 
@@ -54,13 +49,11 @@ function computeCurrentStreak(sessions: Session[]): number {
   return streakFrom(yesterday);
 }
 
-function focusMinutesOnDate(sessions: Session[], dateStr: string): number {
+function focusMinutesOnDate(sessions: Session[], date: string): number {
   return sessions
     .filter(s => {
       if (s.type !== 'work' || s.status !== 'completed') return false;
-      const d = new Date(s.startedAt);
-      const str = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return str === dateStr;
+      return localDateStr(new Date(s.startedAt)) === date;
     })
     .reduce((sum, s) => sum + s.durationActual / 60, 0);
 }
@@ -69,8 +62,7 @@ function maxFocusInOneDay(sessions: Session[]): number {
   const byDate = new Map<string, number>();
   for (const s of sessions) {
     if (s.type !== 'work' || s.status !== 'completed') continue;
-    const d = new Date(s.startedAt);
-    const str = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const str = localDateStr(new Date(s.startedAt));
     byDate.set(str, (byDate.get(str) ?? 0) + s.durationActual / 60);
   }
   let max = 0;

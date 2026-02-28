@@ -4,7 +4,7 @@ import TextInput from 'ink-text-input';
 import type { Task } from '../types.js';
 import { loadTasks, saveTasks, addTask, completeTask, deleteTask, updateTask, getProjects, addProject, renameProject, removeProjectTag, deleteProjectTasks } from '../lib/tasks.js';
 import { fuzzyMatchAny } from '../lib/fuzzy.js';
-import type { Keymap } from '../lib/keymap.js';
+import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { TaskDetailOverlay } from './tasks/TaskDetailOverlay.js';
 import { ConfirmProjectPrompt } from './tasks/ConfirmProjectPrompt.js';
 import { IncompleteTaskList } from './tasks/IncompleteTaskList.js';
@@ -12,6 +12,7 @@ import { CompletedTaskList } from './tasks/CompletedTaskList.js';
 import { FilterBar } from './tasks/FilterBar.js';
 import { ProjectOverlay } from './tasks/ProjectOverlay.js';
 import { TaskInputBar } from './tasks/TaskInputBar.js';
+import { useProjectAutocomplete } from '../hooks/useProjectAutocomplete.js';
 
 interface TasksViewProps {
   setIsTyping: (v: boolean) => void;
@@ -58,7 +59,6 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
   const [inputMode, setInputMode] = useState<InputMode>('none');
   const [inputValue, setInputValue] = useState('');
   const [descInputValue, setDescInputValue] = useState('');
-  const [suggestionIdx, setSuggestionIdx] = useState(0);
   const [inputKey, setInputKey] = useState(0);
   const [filterQuery, setFilterQuery] = useState('');
 
@@ -94,36 +94,19 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
 
   const refresh = useCallback(() => setTasks(loadTasks()), []);
 
-  // Get all existing projects for autocomplete
-  const allProjects = useMemo(() => getProjects(), [tasks]);
+  // Project autocomplete (hash-anchor mode for #tag parsing)
+  const { projectMenu, suggestionIdx, navigateUp, navigateDown, selectedProject } = useProjectAutocomplete({
+    input: inputValue,
+    enabled: inputMode === 'add' || inputMode === 'edit',
+    hashAnchor: true,
+    refreshDeps: [tasks],
+  });
 
-  // Compute filtered project list based on partial after #
-  const projectMenu = useMemo(() => {
-    const hashIdx = inputValue.lastIndexOf('#');
-    if (hashIdx < 0) return null;
-    if (hashIdx > 0 && inputValue[hashIdx - 1] !== ' ') return null;
-    const afterHash = inputValue.slice(hashIdx + 1);
-    if (afterHash.includes(' ')) return null;
-    const partial = afterHash.toLowerCase();
-    const matches = allProjects.filter(p => p.toLowerCase().includes(partial));
-    if (matches.length === 0) return null;
-    if (matches.length === 1 && matches[0]!.toLowerCase() === partial) return null;
-    return { hashIdx, partial: afterHash, matches };
-  }, [inputValue, allProjects]);
-
-  // Reset suggestion index when menu changes
-  useEffect(() => {
-    setSuggestionIdx(0);
-  }, [projectMenu?.matches.length, projectMenu?.partial]);
-
-  // Accept the currently highlighted suggestion
   const acceptSuggestion = useCallback(() => {
-    if (!projectMenu) return;
-    const chosen = projectMenu.matches[suggestionIdx];
-    if (!chosen) return;
-    setInputValue(inputValue.slice(0, projectMenu.hashIdx + 1) + chosen + ' ');
+    if (!projectMenu || !selectedProject) return;
+    setInputValue(inputValue.slice(0, (projectMenu.hashIdx ?? 0) + 1) + selectedProject + ' ');
     setInputKey(k => k + 1);
-  }, [projectMenu, suggestionIdx, inputValue]);
+  }, [projectMenu, selectedProject, inputValue]);
 
   // Compute project task counts
   const projectCounts = useMemo(() => {
@@ -201,11 +184,11 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
         setProjectMode(false);
         return;
       }
-      if ((keymap ? keymap.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
+      if ((kmMatches(keymap, 'nav.down', input, key)) || key.downArrow) {
         setProjectCursor(i => Math.min(i + 1, projectList.length - 1));
         return;
       }
-      if ((keymap ? keymap.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
+      if ((kmMatches(keymap, 'nav.up', input, key)) || key.upArrow) {
         setProjectCursor(i => Math.max(i - 1, 0));
         return;
       }
@@ -389,11 +372,11 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       }
       if (projectMenu) {
         if (key.downArrow) {
-          setSuggestionIdx(i => Math.min(i + 1, projectMenu.matches.length - 1));
+          navigateDown();
           return;
         }
         if (key.upArrow) {
-          setSuggestionIdx(i => Math.max(i - 1, 0));
+          navigateUp();
           return;
         }
         if (key.tab || key.return) {
@@ -407,16 +390,16 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
     const km = keymap;
 
     // ─── Normal navigation ──────────────────────────────────────────────
-    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
+    if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) {
       setSelectedIdx(i => Math.min(i + 1, allNavItems.length - 1));
       return;
     }
-    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
+    if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) {
       setSelectedIdx(i => Math.max(i - 1, 0));
       return;
     }
 
-    if (km ? km.matches('list.filter', input, key) : input === '/') {
+    if (kmMatches(km, 'list.filter', input, key)) {
       setFilterQuery('');
       setInputMode('filter');
       setIsTyping(true);
@@ -434,14 +417,14 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       return;
     }
 
-    if ((km ? km.matches('list.add', input, key) : input === 'a') && inputMode !== 'filtered') {
+    if (kmMatches(km, 'list.add', input, key) && inputMode !== 'filtered') {
       setInputValue('');
       setInputMode('add');
       setIsTyping(true);
       return;
     }
 
-    if ((km ? km.matches('list.edit', input, key) : input === 'e') && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+    if (kmMatches(km, 'list.edit', input, key) && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
       const task = incompleteTasks[selectedIdx];
       if (task) {
         let editValue = task.text;
@@ -490,7 +473,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       return;
     }
 
-    if ((km ? km.matches('list.delete', input, key) : input === 'd') && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+    if (kmMatches(km, 'list.delete', input, key) && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
       const task = incompleteTasks[selectedIdx];
       if (task) {
         deleteTask(task.id);

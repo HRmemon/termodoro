@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import type { Keymap } from '../lib/keymap.js';
+import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { spawnSync, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -111,7 +111,7 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
       setScrollOffset(0);
       return;
     }
-    if (km ? km.matches('nav.left', input, key) : input === 'h') {
+    if (kmMatches(km, 'nav.left', input, key)) {
       setRange(prev => {
         const idx = RANGES.indexOf(prev);
         return RANGES[Math.max(0, idx - 1)]!;
@@ -119,7 +119,7 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
       setScrollOffset(0);
       return;
     }
-    if (km ? km.matches('nav.right', input, key) : input === 'l') {
+    if (kmMatches(km, 'nav.right', input, key)) {
       setRange(prev => {
         const idx = RANGES.indexOf(prev);
         return RANGES[Math.min(RANGES.length - 1, idx + 1)]!;
@@ -151,10 +151,10 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
       }
       return;
     }
-    if ((km ? km.matches('nav.down', input, key) : input === 'j') || key.downArrow) {
+    if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) {
       setScrollOffset(prev => prev + 1);
     }
-    if ((km ? km.matches('nav.up', input, key) : input === 'k') || key.upArrow) {
+    if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) {
       setScrollOffset(prev => Math.max(0, prev - 1));
     }
   });

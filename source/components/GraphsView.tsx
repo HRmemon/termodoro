@@ -1,13 +1,14 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
-import type { Keymap } from '../lib/keymap.js';
+import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { nanoid } from 'nanoid';
 import {
   loadGoals, addGoal, removeGoal, updateGoal, toggleCompletion,
-  getTodayStr, getRecentWeeks,
+  getRecentWeeks,
   getAllProjects, GOAL_COLORS, GoalsData, TrackedGoal,
   setRating, getRating, setNote, getNote,
 } from '../lib/goals.js';
+import { getTodayStr } from '../lib/date-utils.js';
 import { GoalSection } from './graphs/GoalSection.js';
 import { GoalFormView } from './graphs/GoalFormView.js';
 import { TabBar } from './graphs/TabBar.js';
@@ -282,13 +283,13 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
       });
     }
     // h/l tab switching
-    else if (km ? km.matches('nav.left', input, key) : input === 'h') {
+    else if (kmMatches(km, 'nav.left', input, key)) {
       setActiveTab(t => {
         const next = Math.max(0, t - 1);
         if (next !== tabs.length - 1) setAllTabOffset(0);
         return next;
       });
-    } else if (km ? km.matches('nav.right', input, key) : input === 'l') {
+    } else if (kmMatches(km, 'nav.right', input, key)) {
       setActiveTab(t => {
         const next = Math.min(tabs.length - 1, t + 1);
         if (next !== tabs.length - 1) setAllTabOffset(0);
@@ -333,13 +334,13 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
       }
     }
     // j/k: on All tab scroll goals, on individual tabs navigate dates
-    else if (km ? km.matches('nav.down', input, key) : input === 'j') {
+    else if (kmMatches(km, 'nav.down', input, key)) {
       if (isAllTab) {
         setAllTabOffset(o => Math.min(o + 1, Math.max(0, data.goals.length - visibleGoalCount)));
       } else {
         moveDateBy(1);
       }
-    } else if (km ? km.matches('nav.up', input, key) : input === 'k') {
+    } else if (kmMatches(km, 'nav.up', input, key)) {
       if (isAllTab) {
         setAllTabOffset(o => Math.max(0, o - 1));
       } else {
@@ -360,14 +361,14 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
       } else {
         handleToggleDate();
       }
-    } else if (km ? km.matches('list.add', input, key) : input === 'a') {
+    } else if (kmMatches(km, 'list.add', input, key)) {
       handleStartAdd();
     }
     // edit goal
-    else if (km ? km.matches('list.edit', input, key) : input === 'e') {
+    else if (kmMatches(km, 'list.edit', input, key)) {
       if (activeGoal) handleStartEdit();
     }
-    else if (km ? km.matches('list.delete', input, key) : input === 'd') {
+    else if (kmMatches(km, 'list.delete', input, key)) {
       if (activeGoal) {
         setDeleteTarget(activeGoal.id);
         setViewMode('delete-confirm');

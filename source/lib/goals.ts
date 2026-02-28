@@ -3,6 +3,7 @@ import os from 'os';
 import { loadSessions } from './store.js';
 import { getProjects } from './tasks.js';
 import { atomicWriteJSON, readJSON } from './fs-utils.js';
+import { localDateStr } from './date-utils.js';
 
 export interface TrackedGoal {
   id: string;
@@ -197,7 +198,7 @@ export function computeStreak(goalId: string, data: GoalsData): { current: numbe
   for (let i = 0; i < 365; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const dateStr = formatDate(d);
+    const dateStr = localDateStr(d);
     const complete = isGoalComplete(goal, dateStr, data);
 
     if (complete) {
@@ -223,17 +224,6 @@ export function computeStreak(goalId: string, data: GoalsData): { current: numbe
   return { current, best };
 }
 
-function formatDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-export function getTodayStr(): string {
-  return formatDate(new Date());
-}
-
 export function getRecentWeeks(count: number): string[][] {
   // Returns arrays of date strings grouped by week (Mon-Sun), most recent first
   const today = new Date();
@@ -252,7 +242,7 @@ export function getRecentWeeks(count: number): string[][] {
     for (let d = 0; d < 7; d++) {
       const date = new Date(monday);
       date.setDate(monday.getDate() + d);
-      weekDates.push(formatDate(date));
+      weekDates.push(localDateStr(date));
     }
     weeks.push(weekDates);
   }

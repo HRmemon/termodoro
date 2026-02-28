@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { SessionType } from '../types.js';
-import { SESSION_COLORS, colors } from '../lib/theme.js';
+import { SESSION_COLORS, colors, MODE_LABELS } from '../lib/theme.js';
 import { formatMinutes } from '../lib/format.js';
 
 interface StatusLineProps {
@@ -13,12 +13,6 @@ interface StatusLineProps {
   todaySessions: number;
   todayFocusMinutes: number;
 }
-
-const MODE_LABELS: Record<SessionType, string> = {
-  'work': 'Focus',
-  'short-break': 'Short Break',
-  'long-break': 'Long Break',
-};
 
 export const StatusLine = React.memo(function StatusLine({ sessionType, isRunning, isPaused, timerMode, streak, todaySessions, todayFocusMinutes }: StatusLineProps) {
   const isStopwatch = timerMode === 'stopwatch';

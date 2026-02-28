@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
 import type { Task, CalendarEvent } from '../types.js';
 import { colors } from '../lib/theme.js';
+import { MONTH_NAMES_SHORT } from '../lib/date-utils.js';
 import { getPrivacyDisplay, getEventIcon } from '../lib/event-icons.js';
 import type { CalendarConfig } from '../types.js';
 
@@ -67,9 +68,8 @@ export function DayPanel({
 
   // Format date for header: "Feb 27" style
   const dateParts = selectedDate.split('-');
-  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const dateLabel = dateParts.length === 3
-    ? `${monthNames[Number(dateParts[1]) - 1]} ${Number(dateParts[2])}`
+    ? `${MONTH_NAMES_SHORT[Number(dateParts[1]) - 1]} ${Number(dateParts[2])}`
     : selectedDate;
 
   const border = colors.dim;

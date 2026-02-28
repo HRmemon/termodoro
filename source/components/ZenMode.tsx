@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import type { SessionType } from '../types.js';
 import { renderBigTime } from '../lib/bigDigits.js';
 import { useFullScreen } from '../hooks/useFullScreen.js';
-import { SESSION_COLORS, colors } from '../lib/theme.js';
+import { SESSION_COLORS, colors, MODE_LABELS } from '../lib/theme.js';
 
 interface ZenModeProps {
   secondsLeft: number;
@@ -15,12 +15,6 @@ interface ZenModeProps {
   timerMode: 'countdown' | 'stopwatch';
   stopwatchElapsed: number;
 }
-
-const MODE_LABELS: Record<SessionType, string> = {
-  'work': 'Focus',
-  'short-break': 'Short Break',
-  'long-break': 'Long Break',
-};
 
 export const ZenMode = React.memo(function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning, timerFormat, timerMode, stopwatchElapsed }: ZenModeProps) {
   const { columns, rows } = useFullScreen();
