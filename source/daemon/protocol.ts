@@ -65,6 +65,20 @@ export interface DaemonEvent {
   data: unknown;
 }
 
+// --- Runtime type guards ---
+
+/** Narrow an unknown JSON value to DaemonResponse. */
+export function isDaemonResponse(v: unknown): v is DaemonResponse {
+  if (typeof v !== 'object' || v === null) return false;
+  return 'ok' in v;
+}
+
+/** Narrow an unknown JSON value to DaemonEvent. */
+export function isDaemonEvent(v: unknown): v is DaemonEvent {
+  if (typeof v !== 'object' || v === null) return false;
+  return 'event' in v;
+}
+
 // Socket and PID paths
 export const DAEMON_SOCKET_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'daemon.sock');
 export const DAEMON_PID_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'daemon.pid');

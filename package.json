@@ -2,7 +2,14 @@
   "name": "pomodorocli",
   "version": "1.0.0",
   "description": "Terminal-first Pomodoro + productivity system",
+  "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist"
+  ],
   "bin": {
     "pomodorocli": "./dist/cli.js"
   },
@@ -11,7 +18,8 @@
     "dev": "tsx source/cli.tsx",
     "dev:daemon": "tsx source/cli.tsx daemon start",
     "start": "node dist/cli.js",
-    "daemon": "node dist/cli.js daemon start"
+    "daemon": "node dist/cli.js daemon start",
+    "test": "echo \"No test suite yet\" && exit 0"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

@@ -1,6 +1,6 @@
 import * as net from 'node:net';
-import type { DaemonCommand, DaemonResponse, DaemonEvent } from './protocol.js';
-import { DAEMON_SOCKET_PATH } from './protocol.js';
+import type { DaemonCommand, DaemonResponse } from './protocol.js';
+import { DAEMON_SOCKET_PATH, isDaemonResponse, isDaemonEvent } from './protocol.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 
 /**
@@ -51,7 +51,12 @@ export function sendCommand(cmd: DaemonCommand): Promise<DaemonResponse> {
         const line = buffer.slice(0, newlineIdx);
         socket.destroy();
         try {
-          resolve(JSON.parse(line) as DaemonResponse);
+          const parsed: unknown = JSON.parse(line);
+          if (!isDaemonResponse(parsed)) {
+            reject(new Error('Malformed response from daemon'));
+            return;
+          }
+          resolve(parsed);
         } catch {
           reject(new Error('Invalid response from daemon'));
         }
@@ -132,20 +137,18 @@ export class DaemonSubscription {
         if (!line) continue;
 
         try {
-          const msg = JSON.parse(line);
-          if ('ok' in msg) {
+          const msg: unknown = JSON.parse(line);
+          if (isDaemonResponse(msg)) {
             // Initial state response from subscribe
-            const resp = msg as DaemonResponse;
-            if (resp.ok) {
-              this.callbacks.onState(resp.state);
+            if (msg.ok) {
+              this.callbacks.onState(msg.state);
             }
-          } else if ('event' in msg) {
+          } else if (isDaemonEvent(msg)) {
             // Event broadcast
-            const evt = msg as DaemonEvent;
-            if (evt.event === 'tick' || evt.event === 'state:change') {
-              this.callbacks.onState(evt.data as EngineFullState);
+            if (msg.event === 'tick' || msg.event === 'state:change') {
+              this.callbacks.onState(msg.data as EngineFullState);
             }
-            this.callbacks.onEvent(evt.event, evt.data);
+            this.callbacks.onEvent(msg.event, msg.data);
           }
         } catch {
           // Skip malformed messages

@@ -1,3 +1,6 @@
+import type { SoundConfig } from './lib/sounds.js';
+import type { KeybindingConfig } from './lib/keymap.js';
+
 export interface WorkInterval {
   start: string;       // ISO timestamp — when work actually started/resumed
   end: string | null;  // ISO timestamp — when paused/completed; null while open
@@ -33,7 +36,7 @@ export interface Config {
   vimKeys: boolean;
   compactTime: boolean;
   timerFormat: 'mm:ss' | 'hh:mm:ss' | 'minutes';
-  sounds: import('./lib/sounds.js').SoundConfig;
+  sounds: SoundConfig;
   browserTracking: boolean;
   webDomainLimit: number;
   sidebarWidth: number;
@@ -41,7 +44,7 @@ export interface Config {
   customThemes?: Record<string, ThemeColors>;
   layout?: LayoutConfig;
   views?: ViewEntry[];
-  keybindings?: import('./lib/keymap.js').KeybindingConfig;
+  keybindings?: KeybindingConfig;
   calendar?: CalendarConfig;
 }
 
