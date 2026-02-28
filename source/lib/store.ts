@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import type { Session, DayPlan, SessionType, SequenceBlock, WorkInterval } from '../types.js';
 import { getAllSessions, insertSession, replaceAllSessions, migrateFromJson, getDbPath } from './session-db.js';
-import { atomicWriteJSON } from './fs-utils.js';
+import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
@@ -29,17 +29,6 @@ export interface TimerSnapshot {
   sequenceBlocks?: SequenceBlock[];
   sequenceBlockIndex?: number;
   workIntervals?: WorkInterval[];
-}
-
-function readJSON<T>(filePath: string, fallback: T): T {
-  try {
-    if (fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
-    }
-  } catch {
-    // corrupt file, return fallback
-  }
-  return fallback;
 }
 
 // Sessions — delegated to SQLite via session-db

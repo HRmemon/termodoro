@@ -1,21 +1,15 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { nanoid } from 'nanoid';
 import type { CalendarEvent } from '../types.js';
 import { localDateStr, addDays, dateToNum, getMonthDays } from './date-utils.js';
-import { atomicWriteJSON } from './fs-utils.js';
+import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const EVENTS_PATH = path.join(DATA_DIR, 'events.json');
 
 export function loadEvents(): CalendarEvent[] {
-  try {
-    if (fs.existsSync(EVENTS_PATH)) {
-      return JSON.parse(fs.readFileSync(EVENTS_PATH, 'utf-8')) as CalendarEvent[];
-    }
-  } catch { /* corrupt file */ }
-  return [];
+  return readJSON<CalendarEvent[]>(EVENTS_PATH, []);
 }
 
 export function saveEvents(events: CalendarEvent[]): void {

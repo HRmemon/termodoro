@@ -1,23 +1,15 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { nanoid } from 'nanoid';
 import type { Task } from '../types.js';
-import { atomicWriteJSON } from './fs-utils.js';
+import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const TASKS_PATH = path.join(DATA_DIR, 'tasks.json');
 const PROJECTS_PATH = path.join(DATA_DIR, 'projects.json');
 
 export function loadTasks(): Task[] {
-  try {
-    if (fs.existsSync(TASKS_PATH)) {
-      return JSON.parse(fs.readFileSync(TASKS_PATH, 'utf-8')) as Task[];
-    }
-  } catch {
-    // corrupt file
-  }
-  return [];
+  return readJSON<Task[]>(TASKS_PATH, []);
 }
 
 export function saveTasks(tasks: Task[]): void {
@@ -91,14 +83,7 @@ export function getProjects(): string[] {
 // ─── Project CRUD ─────────────────────────────────────────────────────────────
 
 export function loadProjects(): string[] {
-  try {
-    if (fs.existsSync(PROJECTS_PATH)) {
-      return JSON.parse(fs.readFileSync(PROJECTS_PATH, 'utf-8')) as string[];
-    }
-  } catch {
-    // corrupt file
-  }
-  return [];
+  return readJSON<string[]>(PROJECTS_PATH, []);
 }
 
 export function saveProjects(projects: string[]): void {

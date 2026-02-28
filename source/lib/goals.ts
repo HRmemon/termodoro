@@ -1,9 +1,8 @@
-import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { loadSessions } from './store.js';
 import { getProjects } from './tasks.js';
-import { atomicWriteJSON } from './fs-utils.js';
+import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
 export interface TrackedGoal {
   id: string;
@@ -25,16 +24,12 @@ export interface GoalsData {
 const GOALS_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'goals.json');
 
 export function loadGoals(): GoalsData {
-  try {
-    if (fs.existsSync(GOALS_PATH)) {
-      const raw = JSON.parse(fs.readFileSync(GOALS_PATH, 'utf8'));
-      // Backward compat: old files may lack ratings/notes
-      if (!raw.ratings) raw.ratings = {};
-      if (!raw.notes) raw.notes = {};
-      return raw;
-    }
-  } catch { /* ignore */ }
-  return { goals: [], completions: {}, overrides: {}, ratings: {}, notes: {} };
+  const raw = readJSON<GoalsData | null>(GOALS_PATH, null);
+  if (!raw) return { goals: [], completions: {}, overrides: {}, ratings: {}, notes: {} };
+  // Backward compat: old files may lack ratings/notes
+  if (!raw.ratings) raw.ratings = {};
+  if (!raw.notes) raw.notes = {};
+  return raw;
 }
 
 export function saveGoals(data: GoalsData): void {

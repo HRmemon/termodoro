@@ -1,8 +1,7 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { SequenceBlock, SessionSequence } from '../types.js';
-import { atomicWriteJSON } from './fs-utils.js';
+import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
 const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
 const SEQUENCES_PATH = path.join(DATA_DIR, 'sequences.json');
@@ -44,14 +43,7 @@ export const DEFAULT_SEQUENCES: SessionSequence[] = [
 ];
 
 export function loadSequences(): SessionSequence[] {
-  try {
-    if (fs.existsSync(SEQUENCES_PATH)) {
-      return JSON.parse(fs.readFileSync(SEQUENCES_PATH, 'utf-8')) as SessionSequence[];
-    }
-  } catch {
-    // ignore
-  }
-  return [];
+  return readJSON<SessionSequence[]>(SEQUENCES_PATH, []);
 }
 
 export function saveSequences(sequences: SessionSequence[]): void {

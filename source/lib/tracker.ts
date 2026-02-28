@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { atomicWriteJSON } from './fs-utils.js';
+import { atomicWriteJSON, readJSON, ensureDir } from './fs-utils.js';
 
 export interface SlotCategory {
   code: string;
@@ -31,12 +31,7 @@ export interface TrackerConfig {
 const TRACKER_CONFIG_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'tracker-config.json');
 
 export function loadTrackerConfig(): TrackerConfig {
-  try {
-    if (fs.existsSync(TRACKER_CONFIG_PATH)) {
-      return JSON.parse(fs.readFileSync(TRACKER_CONFIG_PATH, 'utf8'));
-    }
-  } catch { /* ignore */ }
-  return { categories: CATEGORIES };
+  return readJSON<TrackerConfig>(TRACKER_CONFIG_PATH, { categories: CATEGORIES });
 }
 
 export function saveTrackerConfig(config: TrackerConfig): void {
@@ -81,7 +76,7 @@ export interface WeekData {
 
 function getWeeksDir(): string {
   const dir = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'weeks');
-  fs.mkdirSync(dir, { recursive: true });
+  ensureDir(dir);
   return dir;
 }
 
@@ -124,13 +119,10 @@ export function getWeekDates(mondayStr: string): string[] {
 }
 
 export function loadWeek(weekStr: string): WeekData | null {
-  const fp = weekFilePath(weekStr);
-  if (!fs.existsSync(fp)) return null;
-  try {
-    const raw = JSON.parse(fs.readFileSync(fp, 'utf8'));
-    if (!raw.pending) raw.pending = {};
-    return raw;
-  } catch { return null; }
+  const raw = readJSON<WeekData | null>(weekFilePath(weekStr), null);
+  if (!raw) return null;
+  if (!raw.pending) raw.pending = {};
+  return raw;
 }
 
 export function saveWeek(data: WeekData): void {
@@ -387,16 +379,11 @@ export interface TrackerConfigFull {
 }
 
 export function loadTrackerConfigFull(): TrackerConfigFull {
-  try {
-    if (fs.existsSync(TRACKER_CONFIG_PATH)) {
-      const raw = JSON.parse(fs.readFileSync(TRACKER_CONFIG_PATH, 'utf8'));
-      return {
-        categories: raw.categories ?? CATEGORIES,
-        domainRules: raw.domainRules ?? [],
-      };
-    }
-  } catch { /* ignore */ }
-  return { categories: CATEGORIES, domainRules: [] };
+  const raw = readJSON<Partial<TrackerConfigFull> | null>(TRACKER_CONFIG_PATH, null);
+  return {
+    categories: raw?.categories ?? CATEGORIES,
+    domainRules: raw?.domainRules ?? [],
+  };
 }
 
 export function saveTrackerConfigFull(config: TrackerConfigFull): void {
