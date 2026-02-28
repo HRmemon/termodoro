@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useInput, useApp, Box, Text } from 'ink';
-import type { Config, View } from './types.js';
+import type { Config, View, Overlay, LayoutConfig } from './types.js';
 import { loadSessions } from './lib/store.js';
 import { parseSequenceString, loadSequences } from './lib/sequences.js';
 import { useDaemonConnection } from './hooks/useDaemonConnection.js';
@@ -33,7 +33,6 @@ import { loadConfig } from './lib/config.js';
 import { initTheme } from './lib/theme.js';
 import { getShortcutMap } from './lib/views.js';
 import { createKeymap } from './lib/keymap.js';
-import type { LayoutConfig } from './types.js';
 
 interface AppProps {
   config: Config;
@@ -61,13 +60,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
 
   // Runtime sidebar toggle state — starts from config layout setting
   const [sidebarOverride, setSidebarOverride] = useState<'visible' | 'hidden' | null>(null);
-  const [isZen, setIsZen] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [showInsights, setShowInsights] = useState(false);
-  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [showResetModal, setShowResetModal] = useState(false);
+  const [overlay, setOverlay] = useState<Overlay>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [editGeneration, setEditGeneration] = useState(0);
@@ -104,9 +97,10 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     }
   }, [connectionStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Reload sequences when externally edited (editGeneration bumps on nvim save).
   const allSequences = useMemo(() => {
     return loadSequences();
-  }, [view]);
+  }, [editGeneration]);
 
   const statusBarData = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -138,14 +132,12 @@ export function App({ config: initialConfig, initialView, initialProject, initia
 
   const handleResetConfirm = useCallback((asProductive: boolean) => {
     actions.resetAndLog(asProductive);
-    setShowResetModal(false);
+    setOverlay(null);
   }, [actions]);
 
   const commandCallbacks = useMemo(() => ({
-    setShowCommandPalette,
+    setOverlay,
     setSearchQuery,
-    setShowSearch,
-    setShowInsights,
     setView,
   }), []);
 
@@ -157,7 +149,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   );
 
   const handleGlobalSearchNavigate = useCallback((targetView: View, focusId: string, type: 'task' | 'sequence' | 'reminder') => {
-    setShowGlobalSearch(false);
+    setOverlay(null);
     setView(targetView);
     if (type === 'task') {
       setTaskFocusId(focusId);
@@ -172,38 +164,42 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   useInput((input, key) => {
     // Let q close any open overlay or exit zen mode
     if (keymap.matches('global.quit', input, key)) {
-      if (showHelp) { setShowHelp(false); return; }
-      if (showInsights) { setShowInsights(false); return; }
-      if (showGlobalSearch) { setShowGlobalSearch(false); return; }
-      if (showCommandPalette) { setShowCommandPalette(false); return; }
-      if (showSearch) { setShowSearch(false); return; }
-      if (showResetModal) { setShowResetModal(false); return; }
-      if (isZen) { setIsZen(false); return; }
+      if (overlay !== null) { setOverlay(null); return; }
     }
 
     // ? toggles help, Esc closes help (close if open)
-    if (showHelp && !isTyping && (key.escape || keymap.matches('global.help', input, key))) {
-      setShowHelp(false);
+    if (overlay === 'help' && !isTyping && (key.escape || keymap.matches('global.help', input, key))) {
+      setOverlay(null);
       return;
     }
 
-    if (showCommandPalette || showSearch || showInsights || showGlobalSearch || showHelp || showResetModal || isTyping) return;
+    // Zen mode: allow toggle and timer controls, but block everything else
+    if (overlay === 'zen') {
+      if (keymap.matches('global.zen', input, key) && (view === 'timer' || view === 'clock')) {
+        setOverlay(null);
+        return;
+      }
+      if (keymap.matches('timer.toggle', input, key)) {
+        actions.toggle();
+        return;
+      }
+      return;
+    }
+
+    // Block all keys when a non-zen overlay is open or text input is active
+    if (overlay !== null || isTyping) return;
 
     if (keymap.matches('global.zen', input, key) && (view === 'timer' || view === 'clock')) {
-      setIsZen(prev => !prev);
-      return;
-    }
-    if ((key.escape || keymap.matches('global.quit', input, key)) && isZen) {
-      setIsZen(false);
+      setOverlay('zen');
       return;
     }
 
-    if (keymap.matches('global.help', input, key) && !isZen) {
-      setShowHelp(true);
+    if (keymap.matches('global.help', input, key)) {
+      setOverlay('help');
       return;
     }
 
-    if (keymap.matches('global.editor', input, key) && !isZen) {
+    if (keymap.matches('global.editor', input, key)) {
       const changed = openInNvim(view);
       if (changed) {
         setEditGeneration(g => g + 1);
@@ -215,7 +211,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       return;
     }
 
-    if (keymap.matches('global.toggle_sidebar', input, key) && !isZen) {
+    if (keymap.matches('global.toggle_sidebar', input, key)) {
       setSidebarOverride(prev => {
         // Resolve effective current state: override takes precedence, then config
         const current = prev ?? config.layout?.sidebar ?? 'visible';
@@ -224,19 +220,17 @@ export function App({ config: initialConfig, initialView, initialProject, initia
       return;
     }
 
-    if (!isZen) {
-      const shortcutView = shortcutMap.get(input);
-      if (shortcutView) { setView(shortcutView); return; }
-    }
+    const shortcutView = shortcutMap.get(input);
+    if (shortcutView) { setView(shortcutView); return; }
 
-    if (keymap.matches('global.command_palette', input, key) && !isZen) {
-      setShowCommandPalette(true);
+    if (keymap.matches('global.command_palette', input, key)) {
+      setOverlay('commandPalette');
       return;
     }
 
-    if (keymap.matches('global.search', input, key) && !isZen) {
+    if (keymap.matches('global.search', input, key)) {
       if (view !== 'tasks') {
-        setShowGlobalSearch(true);
+        setOverlay('globalSearch');
       }
       return;
     }
@@ -252,16 +246,16 @@ export function App({ config: initialConfig, initialView, initialProject, initia
         actions.advanceSession();
         return;
       }
-      setShowResetModal(true);
+      setOverlay('resetModal');
       return;
     }
 
-    if (view === 'timer' || isZen) {
+    if (view === 'timer') {
       if (keymap.matches('timer.toggle', input, key)) {
         actions.toggle();
         return;
       }
-      if (keymap.matches('timer.skip', input, key) && !engine.isStrictMode && timer.isRunning && !isZen && timer.timerMode !== 'stopwatch') {
+      if (keymap.matches('timer.skip', input, key) && !engine.isStrictMode && timer.isRunning && timer.timerMode !== 'stopwatch') {
         actions.skip();
         return;
       }
@@ -274,54 +268,54 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   }
 
   // Full-screen overlays
-  if (showCommandPalette) {
+  if (overlay === 'commandPalette') {
     return (
       <CommandPalette
         onCommand={handleCommand}
-        onDismiss={() => setShowCommandPalette(false)}
+        onDismiss={() => setOverlay(null)}
       />
     );
   }
 
-  if (showSearch) {
+  if (overlay === 'search') {
     return (
       <SearchView
-        onBack={() => setShowSearch(false)}
+        onBack={() => setOverlay(null)}
         initialQuery={searchQuery}
       />
     );
   }
 
-  if (showInsights) {
+  if (overlay === 'insights') {
     return (
       <InsightsView
-        onBack={() => setShowInsights(false)}
+        onBack={() => setOverlay(null)}
       />
     );
   }
 
-  if (showGlobalSearch) {
+  if (overlay === 'globalSearch') {
     return (
       <GlobalSearch
         onNavigate={handleGlobalSearchNavigate}
-        onDismiss={() => setShowGlobalSearch(false)}
+        onDismiss={() => setOverlay(null)}
       />
     );
   }
 
-  if (showResetModal) {
+  if (overlay === 'resetModal') {
     return (
       <ResetModal
         elapsed={timer.timerMode === 'stopwatch' ? timer.stopwatchElapsed : timer.elapsed}
         sessionType={engine.sessionType}
         onConfirm={handleResetConfirm}
-        onCancel={() => setShowResetModal(false)}
+        onCancel={() => setOverlay(null)}
       />
     );
   }
 
   // Zen mode
-  if (isZen) {
+  if (overlay === 'zen') {
     if (view === 'clock') {
       return <ZenClock />;
     }
@@ -373,9 +367,9 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   ) : null;
 
   return (
-    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config} hideViewHeader={showHelp}>
-      {showHelp ? (
-        <HelpView onClose={() => setShowHelp(false)} keymap={keymap} setIsTyping={setIsTyping} sidebarWidth={config.sidebarWidth} />
+    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config} hideViewHeader={overlay === 'help'}>
+      {overlay === 'help' ? (
+        <HelpView onClose={() => setOverlay(null)} keymap={keymap} setIsTyping={setIsTyping} sidebarWidth={config.sidebarWidth} />
       ) : (
         <>
           {view === 'timer' && (

@@ -107,6 +107,16 @@ export type Priority = TimeBlock['priority'];
 
 export type View = 'calendar' | 'timer' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks' | 'web' | 'tracker' | 'graphs';
 
+export type Overlay =
+  | 'zen'
+  | 'commandPalette'
+  | 'search'
+  | 'insights'
+  | 'globalSearch'
+  | 'help'
+  | 'resetModal'
+  | null;
+
 export interface ThemeColors {
   focus: string;
   break: string;

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { nanoid } from 'nanoid';
-import type { Config, View } from '../types.js';
+import type { Config, View, Overlay } from '../types.js';
 import { addTask } from '../lib/tasks.js';
 import { addReminder, updateReminder } from '../lib/reminders.js';
 import { notifyReminder } from '../lib/notify.js';
@@ -13,10 +13,8 @@ interface CommandActions {
 }
 
 interface CommandCallbacks {
-  setShowCommandPalette: (v: boolean) => void;
+  setOverlay: (v: Overlay) => void;
   setSearchQuery: (q: string) => void;
-  setShowSearch: (v: boolean) => void;
-  setShowInsights: (v: boolean) => void;
   setView: (v: View) => void;
 }
 
@@ -27,7 +25,7 @@ export function useCommandDispatch(
   exit: () => void,
 ): (cmd: string, args: string) => void {
   return useCallback((cmd: string, args: string) => {
-    callbacks.setShowCommandPalette(false);
+    callbacks.setOverlay(null);
     switch (cmd) {
       case 'stats':
         callbacks.setView('stats');
@@ -40,10 +38,10 @@ export function useCommandDispatch(
         break;
       case 'search':
         callbacks.setSearchQuery(args);
-        callbacks.setShowSearch(true);
+        callbacks.setOverlay('search');
         break;
       case 'insights':
-        callbacks.setShowInsights(true);
+        callbacks.setOverlay('insights');
         break;
       case 'session': {
         const named = loadSequences().find(s => s.name === args.trim());
