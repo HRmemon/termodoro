@@ -356,6 +356,16 @@ export function generateHtmlReport(startDate: string, endDate: string, rules: { 
       ORDER BY hour
     `).all(startDate, endDate) as { hour: number; activeMinutes: number }[];
 
+    const daily = db.prepare(`
+      SELECT
+        date(recorded_at) as date,
+        ROUND(SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as activeMinutes
+      FROM page_visits
+      WHERE date(recorded_at) BETWEEN ? AND ?
+      GROUP BY date
+      ORDER BY date
+    `).all(startDate, endDate) as { date: string; activeMinutes: number }[];
+
     const totals = db.prepare(`
       SELECT
         ROUND(SUM(duration_sec) / 60.0, 1) as totalMinutes,
@@ -387,71 +397,231 @@ export function generateHtmlReport(startDate: string, endDate: string, rules: { 
       S: '#1565c0', N: '#9e9e9e', W: '#e53935', SF: '#ff1744', WU: '#e040fb',
     };
 
-    const domainBars = domains.map(d => {
+    const domainBars = domains.slice(0, 20).map(d => {
       const pct = Math.max(1, (d.totalMinutes / maxDomain) * 100);
       const cat = flaggedMap.get(d.domain);
-      const color = cat ? (catColors[cat] ?? '#888') : '#888';
-      const badge = cat ? ` <span style="color:${color};font-weight:bold">[${cat}]</span>` : '';
-      return `<div style="margin:2px 0"><span style="display:inline-block;width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(d.domain)}${badge}</span><span style="display:inline-block;width:${pct}%;max-width:400px;background:${color};height:16px;border-radius:3px;vertical-align:middle"></span> <span>${fmtMin(d.totalMinutes)}</span></div>`;
+      const color = cat ? (catColors[cat] ?? '#00bcd4') : '#888';
+      return `
+        <div style="margin:12px 0">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px">
+            <span><b style="color:${color}">${cat ? `[${cat}] ` : ''}</b>${escHtml(d.domain)}</span>
+            <span style="color:#848d97">${fmtMin(d.totalMinutes)}</span>
+          </div>
+          <div style="background:#21262d; height:8px; border-radius:4px; overflow:hidden">
+            <div style="background:${color}; width:${pct}%; height:100%; border-radius:4px"></div>
+          </div>
+        </div>
+      `;
     }).join('\n');
 
-    const pageRows = pages.slice(0, 100).map(p => {
-      const title = p.title || p.path;
-      return `<tr><td style="padding:2px 8px">${fmtMin(p.totalMinutes)}</td><td style="padding:2px 8px;max-width:500px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(title)}</td><td style="padding:2px 8px;color:#888">${escHtml(p.domain)}${escHtml(p.path)}</td></tr>`;
-    }).join('\n');
+    const recentActivityHtml = daily.slice(-10).reverse().map(d => `
+      <div class="activity-item">
+        <div class="activity-dot" style="background:var(--cyan)"></div>
+        <div class="activity-content">
+          <div class="activity-title"><b>${d.date}</b></div>
+          <div class="activity-meta">Active: ${fmtMin(d.activeMinutes)}</div>
+        </div>
+      </div>
+    `).join('');
 
     const hourBars = Array.from({ length: 24 }, (_, h) => {
       const entry = hourly.find(e => e.hour === h);
       const mins = entry?.activeMinutes ?? 0;
       const pct = Math.max(0, (mins / maxHour) * 100);
-      return `<div style="margin:1px 0"><span style="display:inline-block;width:40px;text-align:right;color:#888">${String(h).padStart(2, '0')}:00</span> <span style="display:inline-block;width:${pct}%;max-width:400px;background:#e040fb;height:14px;border-radius:2px;vertical-align:middle"></span> <span style="color:#aaa">${mins > 0 ? fmtMin(mins) : ''}</span></div>`;
+      return `<div style="margin:2px 0; display:flex; align-items:center; gap:8px">
+        <span style="width:40px; font-size:11px; color:#848d97">${String(h).padStart(2, '0')}:00</span>
+        <div style="flex:1; background:#21262d; height:12px; border-radius:2px; overflow:hidden">
+          <div style="background:var(--cyan); width:${pct}%; height:100%"></div>
+        </div>
+        <span style="width:45px; font-size:11px; color:#e6edf3; text-align:right">${mins > 0 ? fmtMin(mins) : ''}</span>
+      </div>`;
     }).join('\n');
 
-    // Flagged domains section
-    const flaggedByCategory = new Map<string, DomainStats[]>();
-    for (const [domain, cat] of flaggedMap) {
-      const d = domains.find(dd => dd.domain === domain);
-      if (d) {
-        if (!flaggedByCategory.has(cat)) flaggedByCategory.set(cat, []);
-        flaggedByCategory.get(cat)!.push(d);
-      }
-    }
-    const flaggedSection = flaggedByCategory.size > 0 ? Array.from(flaggedByCategory.entries()).map(([cat, ds]) => {
-      const color = catColors[cat] ?? '#888';
-      const items = ds.map(d => `<li>${escHtml(d.domain)} — ${fmtMin(d.totalMinutes)} (active: ${fmtMin(d.activeMinutes)})</li>`).join('');
-      return `<h3 style="color:${color}">${escHtml(cat)}</h3><ul>${items}</ul>`;
-    }).join('\n') : '<p style="color:#888">No flagged domains.</p>';
-
     return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Web Report ${startDate} to ${endDate}</title>
-<style>
-  body { background:#1a1a2e; color:#e0e0e0; font-family:monospace; padding:20px; max-width:900px; margin:0 auto }
-  h1,h2,h3 { color:#e040fb } h2 { border-bottom:1px solid #333; padding-bottom:4px }
-  table { border-collapse:collapse } tr:nth-child(even) { background:#222 }
-</style></head><body>
-<h1>Web Report</h1>
-<p>${startDate} to ${endDate}</p>
-<p>Active: <b>${fmtMin(totals?.activeMinutes ?? 0)}</b> | Audible: <b>${fmtMin(totals?.audibleMinutes ?? 0)}</b> | Total: <b>${fmtMin(totals?.totalMinutes ?? 0)}</b></p>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Web Time Dashboard</title>
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --card-bg: #161b22;
+      --text: #e6edf3;
+      --text-dim: #848d97;
+      --cyan: #00bcd4;
+      --green: #4caf50;
+      --orange: #ff9800;
+    }
+    body { 
+      background: var(--bg); 
+      color: var(--text); 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; 
+      padding: 40px; 
+      margin: 0; 
+      display: flex;
+      justify-content: center;
+    }
+    .container { max-width: 1200px; width: 100%; }
+    
+    header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+    h1 { color: var(--cyan); margin: 0; font-size: 32px; font-weight: 600; }
+    .header-meta { color: var(--text-dim); font-size: 14px; margin-top: 8px; }
 
-<h2>Domains (${domains.length})</h2>
-${domainBars}
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-bottom: 40px; }
+    .stat-card { background: var(--card-bg); border-radius: 12px; padding: 24px; display: flex; align-items: center; min-height: 120px; }
+    
+    .completion-info h3 { margin: 0; color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .completion-val { font-size: 42px; font-weight: 700; margin: 8px 0; }
+    
+    .streaks-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: #30363d; border-radius: 12px; overflow: hidden; }
+    .mini-stat { background: var(--card-bg); padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .mini-stat h3 { margin: 0; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+    .mini-stat .val { font-size: 24px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 
-<h2>Pages (${pages.length})</h2>
-<table>${pageRows}</table>
+    .main-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px; }
+    
+    .goals-list { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    .goal-card { background: var(--card-bg); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; }
+    .goal-card.scrollable { max-height: 500px; }
+    .goal-content { overflow-y: auto; flex: 1; padding-right: 10px; }
+    /* Scrollbar styling */
+    .goal-content::-webkit-scrollbar { width: 6px; }
+    .goal-content::-webkit-scrollbar-track { background: transparent; }
+    .goal-content::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
 
-<h2>Hourly Activity</h2>
-${hourBars}
+    .goal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-shrink: 0; }
+    .goal-info { display: flex; align-items: center; gap: 12px; }
+    .goal-accent { width: 4px; height: 24px; border-radius: 2px; }
+    .goal-name { font-size: 18px; font-weight: 600; }
 
-<h2>Flagged Domains</h2>
-${flaggedSection}
+    .activity-sidebar { min-width: 0; }
+    .activity-card { background: var(--card-bg); border-radius: 12px; padding: 24px; height: fit-content; }
+    .activity-card h2 { margin: 0 0 20px 0; font-size: 18px; }
+    .activity-list { display: flex; flex-direction: column; gap: 20px; position: relative; max-height: 600px; overflow-y: auto; padding-right: 10px; }
+    .activity-list::-webkit-scrollbar { width: 4px; }
+    .activity-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+    .activity-list::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 1px; background: #30363d; }
+    
+    .activity-item { display: flex; gap: 16px; position: relative; }
+    .activity-dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--card-bg); margin-top: 4px; z-index: 1; }
+    .activity-content { flex: 1; }
+    .activity-title { font-size: 14px; color: var(--text); }
+    .activity-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 
-</body></html>`;
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { text-align: left; color: var(--text-dim); font-size: 12px; text-transform: uppercase; padding: 8px; border-bottom: 1px solid #30363d; }
+    td { padding: 10px 8px; font-size: 13px; border-bottom: 1px solid #21262d; }
+    .dim { color: var(--text-dim); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Web Time Dashboard</h1>
+        <div class="header-meta">${startDate} to ${endDate}</div>
+      </div>
+    </header>
+
+    <div class="dashboard-grid">
+      <div class="stat-card">
+        <div class="completion-info">
+          <h3>Total Browsing</h3>
+          <div class="completion-val">${fmtMin(totals?.totalMinutes ?? 0)}</div>
+        </div>
+      </div>
+      
+      <div class="streaks-row">
+        <div class="mini-stat">
+          <h3>Active</h3>
+          <div class="val" style="color:var(--green)">${fmtMin(totals?.activeMinutes ?? 0)}</div>
+        </div>
+        <div class="mini-stat">
+          <h3>Audible</h3>
+          <div class="val" style="color:var(--cyan)">${fmtMin(totals?.audibleMinutes ?? 0)}</div>
+        </div>
+        <div class="mini-stat">
+          <h3>Top Domain</h3>
+          <div class="val">${domains[0]?.domain || 'N/A'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-layout">
+      <div class="goals-list">
+        <div class="goal-card scrollable">
+          <div class="goal-header">
+            <div class="goal-info">
+              <div class="goal-accent" style="background:var(--cyan)"></div>
+              <span class="goal-name">Top Domains</span>
+            </div>
+          </div>
+          <div class="goal-content">
+            ${domainBars}
+          </div>
+        </div>
+
+        <div class="goal-card">
+          <div class="goal-header">
+            <div class="goal-info">
+              <div class="goal-accent" style="background:var(--orange)"></div>
+              <span class="goal-name">Hourly Activity</span>
+            </div>
+          </div>
+          <div style="margin-top:10px">
+            ${hourBars}
+          </div>
+        </div>
+
+        <div class="goal-card scrollable">
+          <div class="goal-header">
+            <div class="goal-info">
+              <div class="goal-accent" style="background:var(--green)"></div>
+              <span class="goal-name">Top Pages</span>
+            </div>
+          </div>
+          <div class="goal-content">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:80px">Time</th>
+                  <th>Page Title</th>
+                  <th>Domain</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${pages.slice(0, 50).map(p => `
+                  <tr>
+                    <td><b>${fmtMin(p.totalMinutes)}</b></td>
+                    <td>${escHtml(p.title || p.path)}</td>
+                    <td class="dim">${escHtml(p.domain)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      
+      <div class="activity-sidebar">
+        <div class="activity-card">
+          <h2>🕒 Daily Trend</h2>
+          <div class="activity-list">
+            ${recentActivityHtml || '<div style="color:var(--text-dim)">No recent data</div>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
   } catch {
     return null;
   } finally {
     db?.close();
   }
 }
+
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
