@@ -105,14 +105,15 @@ export function parseCalendarEvents(text: string): void {
     if (trimmed.includes('[ics]')) continue;
 
     // Parse event line
-    const statusMatch = trimmed.match(/^\[([x !\u2022])\]\s*/);
-    if (!statusMatch) continue;
-
     let status: 'normal' | 'done' | 'important' = 'normal';
-    if (statusMatch[1] === 'x') status = 'done';
-    if (statusMatch[1] === '!') status = 'important';
+    let rest = trimmed;
 
-    let rest = trimmed.replace(/^\[[x !\u2022]\]\s*/, '');
+    const statusMatch = trimmed.match(/^\[([x !\u2022])\]\s*/);
+    if (statusMatch) {
+      if (statusMatch[1] === 'x') status = 'done';
+      if (statusMatch[1] === '!') status = 'important';
+      rest = trimmed.replace(/^\[[x !\u2022]\]\s*/, '');
+    }
 
     // Parse %id
     const idMatch = rest.match(/%id:(\S+)/);

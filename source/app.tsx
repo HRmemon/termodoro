@@ -400,7 +400,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
               keymap={keymap}
             />
           )}
-          {view === 'stats' && <ReportsView keymap={keymap} />}
+          {view === 'stats' && <ReportsView key={editGeneration} keymap={keymap} />}
           {view === 'config' && (
             <ConfigView
               key={editGeneration}
@@ -438,7 +438,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
           {view === 'web' && <WebView keymap={keymap} />}
           {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
           {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
-          {view === 'calendar' && <CalendarView setIsTyping={setIsTyping} config={config} keymap={keymap} />}
+          {view === 'calendar' && <CalendarView key={editGeneration} setIsTyping={setIsTyping} config={config} keymap={keymap} />}
         </>
       )}
     </Layout>
