@@ -45,6 +45,7 @@ const ACTION_LABELS: Record<KeyAction, string> = {
   'tracker.week_summary': 'Week Summary',
   'tracker.new_week': 'New Week',
   'tracker.browse': 'Browse Weeks',
+  'tracker.prev_week': 'Previous Week',
   'stats.prev_tab': 'Previous Tab',
   'stats.next_tab': 'Next Tab',
   'config.save': 'Save Config',

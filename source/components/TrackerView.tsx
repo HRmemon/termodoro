@@ -1,5 +1,9 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
+import { spawnSync, spawn } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { type Keymap, kmMatches } from '../lib/keymap.js';
 import {
   ALL_SLOTS, DAY_NAMES, WeekData,
@@ -8,6 +12,8 @@ import {
   expirePending, getPendingCount, acceptPending, rejectPending, acceptAllPending,
   PendingSuggestion, loadTrackerConfigFull, addPendingSuggestions, generateWebSuggestions,
 } from '../lib/tracker.js';
+import { generateTrackerHtmlReport } from '../lib/tracker-report.js';
+import { sendReminderNotification } from '../lib/notify.js';
 import { getSlotDomainBreakdown } from '../lib/browser-stats.js';
 import { formatHours } from '../lib/format.js';
 import { COL_WIDTH } from './tracker/SlotCell.js';
@@ -90,7 +96,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
         }
       }
     } catch { /* browser DB may not exist */ }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [week, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pendingCount = week ? getPendingCount(week) : 0;
 
@@ -211,20 +217,47 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
       setCursorCol(p => Math.min(6, p + 1));
     } else if (key.tab) {
       setCursorCol(p => (p + 1) % 7);
-    } else if ((kmMatches(km, 'tracker.pick', input, key)) || key.return) {
+    } else if (kmMatches(km, 'tracker.pick', input, key)) {
       if (week) { setPickerCursor(0); setMode('pick'); }
     } else if (kmMatches(km, 'tracker.clear', input, key)) {
       handleSetSlot(null);
-    }
-    else {
-      const cat = categories.find(c => c.key && c.key === input);
-      if (cat) handleSetSlot(cat.code);
-      else if (kmMatches(km, 'tracker.review', input, key) && pendingCount > 0) {
-        setReviewIdx(0);
-        setMode('review');
-      } else if (input === 'A' && pendingCount > 0) {
-        setWeek(prev => prev ? acceptAllPending(prev) : prev);
-      } else if (kmMatches(km, 'tracker.new_week', input, key)) {
+    } else if (input === 'R') {
+      const html = generateTrackerHtmlReport();
+      const tmpPath = path.join(os.tmpdir(), `pomodorocli-tracker-report-${Date.now()}.html`);
+      fs.writeFileSync(tmpPath, html);
+      const openers = ['xdg-open', 'open', 'sensible-browser'];
+      let opened = false;
+      for (const opener of openers) {
+        const which = spawnSync('which', [opener], { stdio: 'ignore' });
+        if (which.status === 0) {
+          spawn(opener, [tmpPath], { detached: true, stdio: 'ignore' }).unref();
+          opened = true;
+          break;
+        }
+      }
+      if (opened) {
+        sendReminderNotification('Tracker Report', 'Opening report in browser...');
+      }
+    } else if (kmMatches(km, 'tracker.prev_week', input, key)) {
+      if (weekStr) {
+        const all = listWeeks();
+        const idx = all.indexOf(weekStr);
+        if (idx >= 0 && idx < all.length - 1) {
+          const prev = all[idx + 1]!;
+          const w = loadWeek(prev);
+          if (w) { setWeek(w); setWeekStr(prev); }
+        }
+      }
+    } else if (kmMatches(km, 'tracker.new_week', input, key)) {
+      const all = listWeeks();
+      const idx = all.indexOf(weekStr || '');
+      if (idx > 0) {
+        // We are in the past, go to next week in the list
+        const next = all[idx - 1]!;
+        const w = loadWeek(next);
+        if (w) { setWeek(w); setWeekStr(next); }
+      } else {
+        // We are at the latest or have no week, do the "new week" logic
         const existing = loadWeek(currentWeekStr);
         if (existing) {
           setWeek(existing);
@@ -234,15 +267,15 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
           setWeek(w);
           setWeekStr(w.week);
         }
-        setMode('grid');
-      } else if (kmMatches(km, 'tracker.browse', input, key)) {
-        setMode('browse');
-        setBrowseCursor(0);
-      } else if (kmMatches(km, 'tracker.day_summary', input, key)) {
-        setMode(m => m === 'day' ? 'grid' : 'day');
-      } else if (kmMatches(km, 'tracker.week_summary', input, key)) {
-        setMode(m => m === 'week' ? 'grid' : 'week');
       }
+      setMode('grid');
+    } else if (kmMatches(km, 'tracker.browse', input, key)) {
+      setMode('browse');
+      setBrowseCursor(0);
+    } else if (kmMatches(km, 'tracker.day_summary', input, key)) {
+      setMode(m => m === 'day' ? 'grid' : 'day');
+    } else if (kmMatches(km, 'tracker.week_summary', input, key)) {
+      setMode(m => m === 'week' ? 'grid' : 'week');
     }
   });
 
@@ -267,9 +300,11 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   if (mode === 'browse') {
     return (
       <Box flexDirection="column" flexGrow={1}>
-        <Text bold color="cyan">Browse Weeks</Text>
-        <Text dimColor>Enter to open  Esc to cancel</Text>
-        <Box flexDirection="column" marginTop={1}>
+        <Box marginBottom={1}>
+          <Text bold color="cyan">Browse Weeks</Text>
+          <Text dimColor>  Enter:open  Esc:cancel</Text>
+        </Box>
+        <Box flexDirection="column" marginTop={0}>
           {browseList.map((ws, i) => (
             <Box key={ws}>
               <Text color={i === browseCursor ? 'cyan' : undefined} bold={i === browseCursor}>
@@ -292,12 +327,21 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   })();
   const dayNum = cursorCol + 1;
 
+  const header = (
+    <Box>
+      <Text bold>{weekLabel}</Text>
+      {todayDayName && <Text dimColor>{'  '}[Today: {todayDayName}]</Text>}
+      <Text dimColor>{'  '}Day {dayNum}/7</Text>
+    </Box>
+  );
+
   // Day summary for current cursor day
   const dayStats = computeDayStats(week.slots[currentDate ?? ''] ?? {});
   const dayTotal = Object.values(dayStats).reduce((s, h) => s + h, 0);
 
   // Visible rows
-  const visibleSlots = ALL_SLOTS.slice(scrollOffset, scrollOffset + VISIBLE_ROWS);
+  const visibleRowsCount = VISIBLE_ROWS;
+  const visibleSlots = ALL_SLOTS.slice(scrollOffset, scrollOffset + visibleRowsCount);
 
   // When picker is open, show only rows up to cursor then picker below
   if (mode === 'pick') {
@@ -310,11 +354,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
     return (
       <Box flexDirection="column" flexGrow={1}>
         {/* Header */}
-        <Box>
-          <Text bold>{weekLabel}</Text>
-          {todayDayName && <Text dimColor>{'  '}[Today: {todayDayName}]</Text>}
-          <Text dimColor>{'  '}Day {dayNum}/7</Text>
-        </Box>
+        {header}
         {/* Column headers + divider */}
         <Box marginTop={1} flexDirection="column">
           <Text>
@@ -356,11 +396,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   return (
     <Box flexDirection="column" flexGrow={1}>
       {/* Header */}
-      <Box>
-        <Text bold>{weekLabel}</Text>
-        {todayDayName && <Text dimColor>{'  '}[Today: {todayDayName}]</Text>}
-        <Text dimColor>{'  '}Day {dayNum}/7</Text>
-      </Box>
+      {header}
 
       {/* Grid */}
       <TrackerGridView

@@ -16,7 +16,7 @@ export type KeyAction =
   // Tracker
   | 'tracker.pick' | 'tracker.clear' | 'tracker.review'
   | 'tracker.day_summary' | 'tracker.week_summary'
-  | 'tracker.new_week' | 'tracker.browse'
+  | 'tracker.new_week' | 'tracker.browse' | 'tracker.prev_week'
   // Stats
   | 'stats.prev_tab' | 'stats.next_tab'
   // Config
@@ -62,6 +62,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, string> = {
   'tracker.week_summary': 'w',
   'tracker.new_week': 'n',
   'tracker.browse': 'b',
+  'tracker.prev_week': 'p',
   'stats.prev_tab': 'h',
   'stats.next_tab': 'l',
   'config.save': 's',

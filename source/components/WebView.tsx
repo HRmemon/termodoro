@@ -11,6 +11,7 @@ import { loadTrackerConfigFull } from '../lib/tracker.js';
 import { loadConfig } from '../lib/config.js';
 import { useFullScreen } from '../hooks/useFullScreen.js';
 import { formatMinutes } from '../lib/format.js';
+import { sendReminderNotification } from '../lib/notify.js';
 
 function getTodayString(): string {
   const d = new Date();
@@ -147,6 +148,8 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
         if (!opened) {
           setReportError(`Report saved to: ${tmpPath} (no browser opener found)`);
           setTimeout(() => setReportError(null), 5000);
+        } else {
+          sendReminderNotification('Web Report', 'Opening report in browser...');
         }
       }
       return;

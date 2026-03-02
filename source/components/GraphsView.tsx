@@ -9,6 +9,12 @@ import {
   setRating, getRating, setNote, getNote,
 } from '../lib/goals.js';
 import { getTodayStr } from '../lib/date-utils.js';
+import { generateGoalsHtmlReport } from '../lib/goals-report.js';
+import { sendReminderNotification } from '../lib/notify.js';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { spawnSync, spawn } from 'node:child_process';
 import { GoalSection } from './graphs/GoalSection.js';
 import { GoalFormView } from './graphs/GoalFormView.js';
 import { TabBar } from './graphs/TabBar.js';
@@ -79,6 +85,13 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
   const weeks = useMemo(() => getRecentWeeks(WEEKS_TO_SHOW + weekOffset).slice(weekOffset, weekOffset + WEEKS_TO_SHOW), [weekOffset]);
 
   const today = getTodayStr();
+
+  const header = (
+    <Box>
+      <Box flexGrow={1} />
+      <Text dimColor>R:report</Text>
+    </Box>
+  );
 
   // Part 4: Toggle selected date instead of today
   const handleToggleDate = useCallback(() => {
@@ -361,6 +374,23 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
       } else {
         handleToggleDate();
       }
+    } else if (input === 'R') {
+      const html = generateGoalsHtmlReport();
+      const tmpPath = path.join(os.tmpdir(), `pomodorocli-goals-report-${Date.now()}.html`);
+      fs.writeFileSync(tmpPath, html);
+      const openers = ['xdg-open', 'open', 'sensible-browser'];
+      let opened = false;
+      for (const opener of openers) {
+        const which = spawnSync('which', [opener], { stdio: 'ignore' });
+        if (which.status === 0) {
+          spawn(opener, [tmpPath], { detached: true, stdio: 'ignore' }).unref();
+          opened = true;
+          break;
+        }
+      }
+      if (opened) {
+        sendReminderNotification('Goals Report', 'Opening report in browser...');
+      }
     } else if (kmMatches(km, 'list.add', input, key)) {
       handleStartAdd();
     }
@@ -456,6 +486,7 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
     const showScrollIndicator = data.goals.length > visibleGoalCount;
     return (
       <Box flexDirection="column" flexGrow={1}>
+        {header}
         {tabBar}
         {visibleGoals.map(goal => (
           <GoalSection key={goal.id} goal={goal} data={data} weeks={weeks} today={today} selectedDate={selectedDate} compact />
@@ -471,6 +502,7 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
 
   return (
     <Box flexDirection="column" flexGrow={1}>
+      {header}
       {tabBar}
       {activeGoal && <GoalSection goal={activeGoal} data={data} weeks={weeks} today={today} selectedDate={selectedDate} />}
       {ratePicker}

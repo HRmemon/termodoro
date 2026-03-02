@@ -84,6 +84,7 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
     const navLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
     actionHints.push({ key: navLabel, label: 'Scroll' });
     actionHints.push({ key: 'Tab', label: 'Domains/Pages' });
+    actionHints.push({ key: 'R', label: 'Report' });
   }
 
   if (view === 'tracker') {
@@ -99,8 +100,9 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
     const daySummaryLabel = km ? km.label('tracker.day_summary') : 'D';
     const weekSummaryLabel = km ? km.label('tracker.week_summary') : 'w';
     actionHints.push({ key: `${daySummaryLabel}/${weekSummaryLabel}`, label: 'Summary' });
-    actionHints.push({ key: km ? km.label('tracker.new_week') : 'n', label: 'New week' });
+    actionHints.push({ key: 'n/p', label: 'Week' });
     actionHints.push({ key: km ? km.label('tracker.browse') : 'b', label: 'Browse' });
+    actionHints.push({ key: 'R', label: 'Report' });
   }
 
   if (view === 'graphs') {
@@ -113,6 +115,7 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
     actionHints.push({ key: km ? km.label('list.delete') : 'd', label: 'Delete' });
     const jkLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
     actionHints.push({ key: jkLabel, label: 'Scroll weeks' });
+    actionHints.push({ key: 'R', label: 'Report' });
   }
 
   if (view === 'calendar') {

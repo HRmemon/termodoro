@@ -126,9 +126,10 @@ function buildSections(km: Keymap): HelpSection[] {
         [km.label('tracker.clear'), 'Clear slot'],
         [km.label('tracker.review'), 'Review suggestions'],
         ['A', 'Accept all pending'],
-        [km.label('tracker.new_week'), 'New week'],
+        [km.label('tracker.new_week') + '/' + km.label('tracker.prev_week'), 'Next / Prev week'],
         [km.label('tracker.browse'), 'Browse weeks'],
         [km.label('tracker.day_summary') + '/' + km.label('tracker.week_summary'), 'Day / week summary'],
+        ['R', 'HTML report'],
       ],
     },
     {
@@ -141,6 +142,7 @@ function buildSections(km: Keymap): HelpSection[] {
         [km.label('list.add'), 'Add goal'],
         [km.label('list.edit'), 'Edit goal'],
         [km.label('list.delete'), 'Delete goal'],
+        ['R', 'HTML report'],
       ],
     },
     {
