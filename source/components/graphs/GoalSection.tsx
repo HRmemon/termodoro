@@ -50,27 +50,37 @@ export function GoalSection({
   const thisWeek = weeks[weeks.length - 1] ?? [];
   const thisWeekDone = thisWeek.filter(d => isGoalComplete(goal, d, data)).length;
 
+  const boxWidth = 5 + weeks.length * 3 + 4;
+
   return (
-    <Box flexDirection="column" marginBottom={compact ? 1 : 0}>
+    <Box flexDirection="column" marginBottom={1}>
+      {/* Header Border Row */}
       <Box>
-        <Text bold color={goal.color}>{'── '}{goal.name}</Text>
-        <Text dimColor> ({goal.type}{isRate ? ` 0-${rateMax}` : ''}){compact ? `  ${totalDays}d  streak:${streak.current}d  best:${streak.best}d${isRate ? `  avg:${avgRating.toFixed(1)}` : ''}` : ''}</Text>
+        <Text color="gray">┌── </Text>
+        <Text bold color={goal.color}>{goal.name.toUpperCase()}</Text>
+        <Text color="gray"> {goal.type === 'auto' ? '(auto)' : ''} </Text>
+        <Box flexGrow={1}>
+          <Text color="gray">{'─'.repeat(100)}</Text>
+        </Box>
+        <Text color="gray"> Streak: </Text>
+        <Text bold color="yellow">{streak.current}🔥 </Text>
+        <Text color="gray">──┐</Text>
       </Box>
 
-      {/* Heatmap grid */}
-      <Box flexDirection="column" marginTop={compact ? 0 : 1}>
+      {/* Grid Content with side borders */}
+      <Box flexDirection="column" paddingX={1}>
         {/* Week number headers */}
         <Box>
           <Box width={5}><Text> </Text></Box>
           {weeks.map((_, wi) => (
-            <Text key={wi} dimColor>{`W${wi + 1} `}</Text>
+            <Text key={wi} color="gray">{`W${wi + 1} `}</Text>
           ))}
         </Box>
 
         {/* Day rows */}
         {DAY_NAMES.map((dayName, dayIdx) => (
           <Box key={dayName}>
-            <Box width={5}><Text dimColor>{dayName}</Text></Box>
+            <Box width={5}><Text color="gray">{dayName}</Text></Box>
             {weeks.map((weekDates, wi) => {
               const date = weekDates[dayIdx]!;
               const isFuture = date > today;
@@ -87,7 +97,7 @@ export function GoalSection({
                 const shade = ratingToShade(rating, rateMax);
                 const hasRating = rating > 0;
                 return (
-                  <Text key={wi} color={hasRating ? goal.color : undefined} dimColor={!hasRating} bold={isSelected}>
+                  <Text key={wi} color={hasRating ? goal.color : 'gray'} bold={isSelected}>
                     {shade}{suffix}
                   </Text>
                 );
@@ -97,32 +107,37 @@ export function GoalSection({
               if (done) {
                 return <Text key={wi} color={goal.color} bold={isSelected}>{'█'}{suffix}</Text>;
               }
-              return <Text key={wi} color={isSelected ? 'white' : undefined} dimColor={!isSelected} bold={isSelected}>{'·'}{suffix}</Text>;
+              // Improved visibility for unhighlighted cells (removed dimColor, using gray)
+              return <Text key={wi} color={isSelected ? 'white' : 'gray'} bold={isSelected}>{'·'}{suffix}</Text>;
             })}
           </Box>
         ))}
       </Box>
 
+      {/* Footer Border Row */}
+      <Box>
+        <Text color="gray">└── </Text>
+        <Text dimColor>Total: </Text><Text bold>{totalDays}d</Text>
+        <Text dimColor>  Best: </Text><Text bold>{streak.best}d</Text>
+        <Text dimColor>  This week: </Text><Text bold>{thisWeekDone}/7</Text>
+        <Box flexGrow={1}>
+          <Text color="gray">{'─'.repeat(100)}</Text>
+        </Box>
+        <Text color="gray">──┘</Text>
+      </Box>
+
       {!compact && (
-        <Box flexDirection="column" marginTop={1}>
+        <Box flexDirection="column" marginTop={0} paddingX={2}>
           {isRate ? (
             <Text dimColor>{'·'} = none  {'░▒▓█'} = rating intensity  * = today  {'◄'} = selected</Text>
           ) : (
             <Text dimColor>{'·'} = not done  {'█'} = done  * = today  {'◄'} = selected</Text>
           )}
-          <Box marginTop={1}>
-            <Text>Total: <Text bold>{totalDays}d</Text></Text>
-            <Text>{'  '}Streak: <Text bold color={streak.current > 0 ? 'green' : undefined}>{streak.current}d</Text></Text>
-            <Text>{'  '}Best: <Text bold>{streak.best}d</Text></Text>
-            {isRate && <Text>{'  '}Avg: <Text bold color="yellow">{avgRating.toFixed(1)}/{rateMax}</Text></Text>}
-          </Box>
-          <Text>This week: <Text bold>{thisWeekDone}/7</Text></Text>
           {isRate && selectedDate && (
             <Text dimColor>Selected: {getRating(goal, selectedDate, data)}/{rateMax}  (Enter to rate)</Text>
-          )}
-          {goal.type === 'note' && selectedDate && (
+          ) || (goal.type === 'note' && selectedDate && (
             <Text dimColor>Note: {getNote(goal, selectedDate, data) || '(empty)'}  (Enter to edit)</Text>
-          )}
+          ))}
         </Box>
       )}
     </Box>

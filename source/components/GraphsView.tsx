@@ -36,8 +36,8 @@ export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) 
 
   const { stdout } = useStdout();
   const termRows = stdout?.rows ?? 24;
-  // Each compact GoalSection uses: 1 name row + 1 week header row + 7 day rows + 1 blank = ~10 lines
-  const GOAL_SECTION_HEIGHT = 10;
+  // Each compact GoalSection uses: 1 header + 1 week row + 7 day rows + 1 footer = 10 rows + 1 margin = 11 lines
+  const GOAL_SECTION_HEIGHT = 11;
   const visibleGoalCount = Math.max(1, Math.floor((termRows - 6) / GOAL_SECTION_HEIGHT));
 
   // Selected date for heatmap navigation (Part 4)
