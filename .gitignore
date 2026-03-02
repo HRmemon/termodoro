@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 .beads/
+/browser-ext/web-ext-artifacts
+.reviews/
+.agent-logs/
+/archive/tmp_reports

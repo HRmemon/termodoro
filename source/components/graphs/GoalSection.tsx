@@ -50,46 +50,66 @@ export function GoalSection({
   const thisWeek = weeks[weeks.length - 1] ?? [];
   const thisWeekDone = thisWeek.filter(d => isGoalComplete(goal, d, data)).length;
 
-  const boxWidth = 5 + weeks.length * 3 + 4;
+  // Exact width of the grid content: 5 (day label) + (weeks * 3)
+  const gridWidth = 5 + (weeks.length * 3);
+
+  const nameLabel = goal.name.toUpperCase();
+  const typeLabel = goal.type === 'auto' ? '(auto)' : '';
+  const streakLabel = `Streak: ${streak.current}`;
+  
+  // ┌── NAME (auto) ─── Streak: 5 ──┐
+  // 4 (┌── ) + name + type + 1 ( ) + streak + 3 (──┐)
+  const headerMin = 4 + nameLabel.length + (typeLabel ? typeLabel.length + 1 : 0) + 2 + streakLabel.length + 3;
+  const statsLabel = `Total: ${totalDays}d  Best: ${streak.best}d  This week: ${thisWeekDone}/7`;
+  const footerMin = 4 + statsLabel.length + 3;
+
+  // Total box width including borders, ensuring it doesn't wrap labels
+  const totalBoxWidth = Math.max(gridWidth + 4, headerMin, footerMin);
+
+  // Calculate filler for footer: totalBoxWidth - stats - borders
+  // └── Total: 24d  Best: 12d  This week: 5/7 ──┘
+  const footerUsed = 4 + statsLabel.length + 1 + 3;
+  const footerFiller = Math.max(1, totalBoxWidth - footerUsed);
 
   return (
     <Box flexDirection="column" marginBottom={1}>
       {/* Header Border Row */}
-      <Box>
+      <Box width={totalBoxWidth}>
         <Text color="gray">┌── </Text>
-        <Text bold color={goal.color}>{goal.name.toUpperCase()}</Text>
-        <Text color="gray"> {goal.type === 'auto' ? '(auto)' : ''} </Text>
-        <Box flexGrow={1}>
-          <Text color="gray">{'─'.repeat(100)}</Text>
+        <Box flexShrink={0}>
+          <Text bold color={goal.color}>{nameLabel}</Text>
+          {typeLabel && <Text color="gray"> {typeLabel}</Text>}
         </Box>
-        <Text color="gray"> Streak: </Text>
-        <Text bold color="yellow">{streak.current}🔥 </Text>
-        <Text color="gray">──┐</Text>
+        <Box flexGrow={1} />
+        <Box flexShrink={0}>
+          <Text color="gray">{streakLabel}</Text>
+          <Text color="gray">──┐</Text>
+        </Box>
       </Box>
 
       {/* Grid Content with side borders */}
-      <Box flexDirection="column" paddingX={1}>
+      <Box flexDirection="column" paddingX={1} borderStyle="single" borderTop={false} borderBottom={false} borderColor="gray" width={totalBoxWidth}>
         {/* Week number headers */}
         <Box>
           <Box width={5}><Text> </Text></Box>
-          {weeks.map((_, wi) => (
-            <Text key={wi} color="gray">{`W${wi + 1} `}</Text>
+          {weeks.map((weekDates, wi) => (
+            <Text key={weekDates[0] || wi} color="gray">{`W${wi + 1} `}</Text>
           ))}
         </Box>
 
         {/* Day rows */}
-        {DAY_NAMES.map((dayName, dayIdx) => (
+        {DAY_NAMES.map((dayName) => (
           <Box key={dayName}>
             <Box width={5}><Text color="gray">{dayName}</Text></Box>
             {weeks.map((weekDates, wi) => {
-              const date = weekDates[dayIdx]!;
+              const date = weekDates[DAY_NAMES.indexOf(dayName)]!;
               const isFuture = date > today;
               const isToday = date === today;
               const isSelected = date === selectedDate;
               const suffix = isSelected ? '◄ ' : isToday ? '* ' : '  ';
 
               if (isFuture) {
-                return <Text key={wi} dimColor>{isSelected ? ' ◄ ' : '   '}</Text>;
+                return <Text key={date || wi} dimColor>{isSelected ? ' ◄ ' : '   '}</Text>;
               }
 
               if (isRate) {
@@ -97,7 +117,7 @@ export function GoalSection({
                 const shade = ratingToShade(rating, rateMax);
                 const hasRating = rating > 0;
                 return (
-                  <Text key={wi} color={hasRating ? goal.color : 'gray'} bold={isSelected}>
+                  <Text key={date || wi} color={hasRating ? goal.color : 'gray'} bold={isSelected}>
                     {shade}{suffix}
                   </Text>
                 );
@@ -105,29 +125,24 @@ export function GoalSection({
 
               const done = isGoalComplete(goal, date, data);
               if (done) {
-                return <Text key={wi} color={goal.color} bold={isSelected}>{'█'}{suffix}</Text>;
+                return <Text key={date || wi} color={goal.color} bold={isSelected}>{'█'}{suffix}</Text>;
               }
-              // Improved visibility for unhighlighted cells (removed dimColor, using gray)
-              return <Text key={wi} color={isSelected ? 'white' : 'gray'} bold={isSelected}>{'·'}{suffix}</Text>;
+              return <Text key={date || wi} color={isSelected ? 'white' : 'gray'} bold={isSelected}>{'·'}{suffix}</Text>;
             })}
           </Box>
         ))}
       </Box>
 
       {/* Footer Border Row */}
-      <Box>
+      <Box width={totalBoxWidth}>
         <Text color="gray">└── </Text>
-        <Text dimColor>Total: </Text><Text bold>{totalDays}d</Text>
-        <Text dimColor>  Best: </Text><Text bold>{streak.best}d</Text>
-        <Text dimColor>  This week: </Text><Text bold>{thisWeekDone}/7</Text>
-        <Box flexGrow={1}>
-          <Text color="gray">{'─'.repeat(100)}</Text>
-        </Box>
+        <Text color="gray">{statsLabel} </Text>
+        <Text color="gray">{'─'.repeat(footerFiller)}</Text>
         <Text color="gray">──┘</Text>
       </Box>
 
       {!compact && (
-        <Box flexDirection="column" marginTop={0} paddingX={2}>
+        <Box flexDirection="column" marginTop={1} paddingX={2}>
           {isRate ? (
             <Text dimColor>{'·'} = none  {'░▒▓█'} = rating intensity  * = today  {'◄'} = selected</Text>
           ) : (
