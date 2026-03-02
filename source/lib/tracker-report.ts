@@ -161,28 +161,51 @@ export function generateTrackerHtmlReport(): string {
     }
     .container { max-width: 1200px; width: 100%; }
     
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --card-bg: #161b22;
+      --text: #e6edf3;
+      --text-dim: #848d97;
+      --cyan: #00bcd4;
+      --green: #4caf50;
+      --orange: #ff9800;
+    }
+    * { box-sizing: border-box; }
+    body { 
+      background: var(--bg); 
+      color: var(--text); 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; 
+      padding: 40px; 
+      margin: 0; 
+      display: flex;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+    .container { max-width: 1200px; width: 100%; min-width: 0; }
+    
     header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
     h1 { color: var(--cyan); margin: 0; font-size: 32px; font-weight: 600; }
     .header-meta { color: var(--text-dim); font-size: 14px; margin-top: 8px; }
 
-    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-bottom: 40px; }
-    .stat-card { background: var(--card-bg); border-radius: 12px; padding: 24px; display: flex; align-items: center; min-height: 120px; }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 40px; }
+    .stat-card { background: var(--card-bg); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; min-height: 140px; border: 1px solid #30363d; }
     
     .completion-info h3 { margin: 0; color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .completion-val { font-size: 42px; font-weight: 700; margin: 8px 0; }
+    .completion-val { font-size: 42px; font-weight: 700; margin: 8px 0; line-height: 1; }
     .completion-trend { font-size: 13px; font-weight: 500; }
     
-    .streaks-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: #30363d; border-radius: 12px; overflow: hidden; }
-    .mini-stat { background: var(--card-bg); padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .streaks-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: #30363d; border-radius: 12px; overflow: hidden; border: 1px solid #30363d; }
+    .mini-stat { background: var(--card-bg); padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; justify-content: center; }
     .mini-stat h3 { margin: 0; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
-    .mini-stat .val { font-size: 24px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+    .mini-stat .val { font-size: 24px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; line-height: 1.2; }
 
     .main-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px; }
     
     .goals-list { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-    .goal-card { background: var(--card-bg); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; }
+    .goal-card { background: var(--card-bg); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; border: 1px solid #30363d; }
     .goal-card.scrollable { max-height: 500px; }
-    .goal-content { overflow-y: auto; flex: 1; padding-right: 10px; }
+    .goal-content { overflow-y: auto; flex: 1; padding-right: 10px; min-height: 0; }
     .goal-content::-webkit-scrollbar { width: 6px; }
     .goal-content::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
 
@@ -198,9 +221,9 @@ export function generateTrackerHtmlReport(): string {
     .week-cat-tag .dot { width: 6px; height: 6px; border-radius: 50%; }
 
     .activity-sidebar { min-width: 0; }
-    .activity-card { background: var(--card-bg); border-radius: 12px; padding: 24px; height: fit-content; }
+    .activity-card { background: var(--card-bg); border-radius: 12px; padding: 24px; height: fit-content; border: 1px solid #30363d; }
     .activity-card h2 { margin: 0 0 20px 0; font-size: 18px; }
-    .activity-list { display: flex; flex-direction: column; gap: 20px; position: relative; max-height: 600px; overflow-y: auto; padding-right: 10px; }
+    .activity-list { display: flex; flex-direction: column; gap: 20px; position: relative; max-height: 600px; overflow-y: auto; padding-right: 10px; min-height: 0; }
     .activity-list::-webkit-scrollbar { width: 4px; }
     .activity-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
     .activity-list::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 1px; background: #30363d; }

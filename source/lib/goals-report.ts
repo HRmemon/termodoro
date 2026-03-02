@@ -177,6 +177,7 @@ export function generateGoalsHtmlReport(): string {
       --green: #4caf50;
       --orange: #ff9800;
     }
+    * { box-sizing: border-box; }
     body { 
       background: var(--bg); 
       color: var(--text); 
@@ -185,8 +186,9 @@ export function generateGoalsHtmlReport(): string {
       margin: 0; 
       display: flex;
       justify-content: center;
+      overflow-x: hidden;
     }
-    .container { max-width: 1200px; width: 100%; }
+    .container { max-width: 1200px; width: 100%; min-width: 0; }
     
     /* Header */
     header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
@@ -194,11 +196,11 @@ export function generateGoalsHtmlReport(): string {
     .header-meta { color: var(--text-dim); font-size: 14px; margin-top: 8px; }
 
     /* Dashboard Grid */
-    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-bottom: 40px; }
-    .stat-card { background: var(--card-bg); border-radius: 12px; padding: 24px; display: flex; align-items: center; min-height: 120px; }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 40px; }
+    .stat-card { background: var(--card-bg); border-radius: 12px; padding: 24px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; min-height: 140px; border: 1px solid #30363d; }
     
     .completion-info h3 { margin: 0; color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .completion-val { font-size: 42px; font-weight: 700; margin: 8px 0; }
+    .completion-val { font-size: 42px; font-weight: 700; margin: 8px 0; line-height: 1; }
     .completion-trend { font-size: 13px; font-weight: 500; }
     
     .progress-ring { width: 80px; height: 80px; position: relative; flex-shrink: 0; }
@@ -211,10 +213,10 @@ export function generateGoalsHtmlReport(): string {
       display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
     }
 
-    .streaks-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: #30363d; border-radius: 12px; overflow: hidden; }
-    .mini-stat { background: var(--card-bg); padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .streaks-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: #30363d; border-radius: 12px; overflow: hidden; border: 1px solid #30363d; }
+    .mini-stat { background: var(--card-bg); padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; justify-content: center; }
     .mini-stat h3 { margin: 0; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
-    .mini-stat .val { font-size: 24px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+    .mini-stat .val { font-size: 24px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; line-height: 1.2; }
     .mini-stat .val span { font-size: 14px; color: var(--text-dim); font-weight: 500; margin-left: 4px; }
     .val-streak { color: white; }
     .val-best { color: var(--green); }
@@ -224,7 +226,7 @@ export function generateGoalsHtmlReport(): string {
     .main-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px; }
     
     .goals-list { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-    .goal-card { background: var(--card-bg); border-radius: 12px; padding: 20px; }
+    .goal-card { background: var(--card-bg); border-radius: 12px; padding: 20px; border: 1px solid #30363d; }
     .goal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .goal-info { display: flex; align-items: center; gap: 12px; }
     .goal-accent { width: 4px; height: 24px; border-radius: 2px; }
@@ -237,6 +239,7 @@ export function generateGoalsHtmlReport(): string {
     /* Heatmap Grid */
     .heatmap-container { overflow-x: auto; padding-bottom: 10px; }
     .heatmap-container::-webkit-scrollbar { height: 4px; }
+    .heatmap-container::-webkit-scrollbar-track { background: transparent; }
     .heatmap-container::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
     .heatmap-grid { display: flex; flex-direction: column; gap: 3px; min-width: min-content; }
     .grid-row { display: flex; gap: 3px; align-items: center; }
@@ -247,9 +250,9 @@ export function generateGoalsHtmlReport(): string {
 
     /* Sidebar */
     .activity-sidebar { min-width: 0; }
-    .activity-card { background: var(--card-bg); border-radius: 12px; padding: 24px; height: fit-content; }
+    .activity-card { background: var(--card-bg); border-radius: 12px; padding: 24px; height: fit-content; border: 1px solid #30363d; }
     .activity-card h2 { margin: 0 0 20px 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
-    .activity-list { display: flex; flex-direction: column; gap: 24px; position: relative; max-height: 600px; overflow-y: auto; padding-right: 10px; }
+    .activity-list { display: flex; flex-direction: column; gap: 24px; position: relative; max-height: 600px; overflow-y: auto; padding-right: 10px; min-height: 0; }
     .activity-list::-webkit-scrollbar { width: 4px; }
     .activity-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
     .activity-list::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 1px; background: #30363d; }

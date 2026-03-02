@@ -357,7 +357,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
         {header}
         {/* Column headers + divider */}
         <Box marginTop={1} flexDirection="column">
-          <Text>
+          <Box>
             <Text dimColor>{'Time  '}</Text>
             {DAY_NAMES.map((name, i) => (
               <Text
@@ -368,27 +368,27 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
                 {name.padEnd(COL_WIDTH)}
               </Text>
             ))}
-          </Text>
+          </Box>
           <Text dimColor>{'      ' + DAY_NAMES.map(() => '\u2500'.repeat(COL_WIDTH)).join('')}</Text>
+
+          {/* Grid rows up to and including cursor row */}
+          <TrackerGridView
+            week={week}
+            weekDates={weekDates}
+            visibleSlots={pickVisibleSlots}
+            scrollOffset={pickScrollStart}
+            cursorRow={cursorRow}
+            cursorCol={cursorCol}
+          />
+
+          {/* Inline picker */}
+          <TrackerPickerOverlay
+            categories={categories}
+            pickerCursor={pickerCursor}
+            currentDate={currentDate}
+            currentTime={currentTime}
+          />
         </Box>
-
-        {/* Grid rows up to and including cursor row */}
-        <TrackerGridView
-          week={week}
-          weekDates={weekDates}
-          visibleSlots={pickVisibleSlots}
-          scrollOffset={pickScrollStart}
-          cursorRow={cursorRow}
-          cursorCol={cursorCol}
-        />
-
-        {/* Inline picker */}
-        <TrackerPickerOverlay
-          categories={categories}
-          pickerCursor={pickerCursor}
-          currentDate={currentDate}
-          currentTime={currentTime}
-        />
       </Box>
     );
   }
