@@ -45,3 +45,45 @@ export function formatHours(h: number): string {
 	const mins = Math.round((h - whole) * 60);
 	return mins > 0 ? `${whole}h${mins}m` : `${whole}h`;
 }
+
+export function parseTimeInput(input: string, compact: boolean): string | null {
+  const trimmed = input.trim().toLowerCase();
+  
+  // Try 12-hour format with AM/PM (e.g., "2:30 pm", "2:30pm", "2pm")
+  const ampmMatch = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  if (ampmMatch) {
+    let h = parseInt(ampmMatch[1]!, 10);
+    const m = ampmMatch[2] ? parseInt(ampmMatch[2], 10) : 0;
+    const isPm = ampmMatch[3] === 'pm';
+
+    if (h >= 1 && h <= 12 && m >= 0 && m < 60) {
+      if (isPm && h !== 12) h += 12;
+      if (!isPm && h === 12) h = 0;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    return null;
+  }
+
+  if (!compact) {
+    // standard HH:MM
+    if (/^\d{2}:\d{2}$/.test(trimmed)) return trimmed;
+    return null;
+  }
+  
+  // compact: digits only, 3 or 4 chars
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length === 3) {
+    const h = '0' + digits[0];
+    const m = digits[1] + digits[2];
+    const candidate = `${h}:${m}`;
+    if (parseInt(h) < 24 && parseInt(m) < 60) return candidate;
+  }
+  if (digits.length === 4) {
+    const h = digits[0] + digits[1];
+    const m = digits[2] + digits[3];
+    const candidate = `${h}:${m}`;
+    if (parseInt(h) < 24 && parseInt(m) < 60) return candidate;
+  }
+  
+  return null;
+}

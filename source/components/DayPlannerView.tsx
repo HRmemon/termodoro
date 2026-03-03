@@ -7,10 +7,12 @@ import { loadReminders, updateReminder, deleteReminder } from '../lib/reminders.
 import { addDays, localDateStr } from '../lib/date-utils.js';
 import { kmMatches } from '../lib/keymap.js';
 import { FilterInput } from './FilterInput.js';
+import { parseTimeInput } from '../lib/format.js';
 
 interface DayPlannerViewProps {
   keymap?: Keymap;
   setIsTyping: (v: boolean) => void;
+  compactTime: boolean;
 }
 
 type InputMode = 'none' | 'add' | 'edit' | 'schedule';
@@ -19,7 +21,7 @@ type TimelineItem =
   | { type: 'task'; id: string; time: string; endTime?: string; text: string; completed: boolean; completedAt?: string; project?: string }
   | { type: 'reminder'; id: string; time: string; title: string; enabled: boolean; recurring: boolean };
 
-export function DayPlannerView({ keymap, setIsTyping }: DayPlannerViewProps) {
+export function DayPlannerView({ keymap, setIsTyping, compactTime }: DayPlannerViewProps) {
   const [selectedDate, setSelectedDate] = useState(() => localDateStr(new Date()));
   const [selectedIdx, setSelectedIdx] = useState(0);
   

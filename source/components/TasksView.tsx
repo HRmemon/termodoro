@@ -21,7 +21,7 @@ interface TasksViewProps {
   keymap?: Keymap;
 }
 
-type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project' | 'schedule';
+type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
 
 export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: TasksViewProps) {
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
@@ -37,12 +37,6 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
   // For confirm-project prompt (unknown #tag)
   const [confirmProjectName, setConfirmProjectName] = useState('');
   const [confirmProjectFrom, setConfirmProjectFrom] = useState<'add' | 'edit'>('add');
-
-  // Scheduling state
-  const [scheduleStep, setScheduleStep] = useState<'date' | 'time' | 'end'>('date');
-  const [scheduleDate, setScheduleDate] = useState('');
-  const [scheduleTime, setScheduleTime] = useState('');
-  const [scheduleEndTime, setScheduleEndTime] = useState('');
 
   // Task detail view
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
@@ -281,20 +275,6 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       return;
     }
 
-    // ─── Scheduling input (date -> time -> end) ─────────────────────────
-    if (inputMode === 'schedule') {
-      if (key.escape) {
-        setInputMode('none');
-        setIsTyping(false);
-        setScheduleDate('');
-        setScheduleTime('');
-        setScheduleEndTime('');
-        setScheduleStep('date');
-        return;
-      }
-      return;
-    }
-
     // ─── Confirm unknown project prompt ────────────────────────────────
     if (inputMode === 'confirm-project') {
       if (input === 'a' && pendingAdd?.unknownProject) {
@@ -421,19 +401,6 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
         if (task.project) editValue += ` #${task.project}`;
         setInputValue(editValue);
         setInputMode('edit');
-        setIsTyping(true);
-      }
-      return;
-    }
-
-    if (input === 's' && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
-      const task = incompleteTasks[selectedIdx];
-      if (task) {
-        setScheduleDate(task.date || new Date().toISOString().slice(0, 10));
-        setScheduleTime(task.time || '');
-        setScheduleEndTime(task.endTime || '');
-        setScheduleStep('date');
-        setInputMode('schedule');
         setIsTyping(true);
       }
       return;
@@ -572,37 +539,6 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
     setDescInputValue('');
   }, [incompleteTasks, selectedIdx, refresh, setIsTyping]);
 
-  const handleScheduleSubmit = useCallback((value: string) => {
-    const task = incompleteTasks[selectedIdx];
-    if (!task) return;
-
-    if (scheduleStep === 'date') {
-      setScheduleDate(value.trim());
-      setScheduleStep('time');
-      return;
-    }
-    if (scheduleStep === 'time') {
-      setScheduleTime(value.trim());
-      setScheduleStep('end');
-      return;
-    }
-    if (scheduleStep === 'end') {
-      const endTime = value.trim();
-      updateTask(task.id, {
-        date: scheduleDate || undefined,
-        time: scheduleTime || undefined,
-        endTime: endTime || undefined,
-      });
-      refresh();
-      setInputMode('none');
-      setIsTyping(false);
-      setScheduleDate('');
-      setScheduleTime('');
-      setScheduleEndTime('');
-      setScheduleStep('date');
-    }
-  }, [incompleteTasks, selectedIdx, scheduleStep, scheduleDate, scheduleTime, refresh, setIsTyping]);
-
   // Project overlay handlers
   const handleProjectAddSubmit = useCallback((value: string) => {
     if (value.trim()) {
@@ -706,45 +642,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
           </Box>
         </Box>
       )}
-      {inputMode === 'schedule' && (
-        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="cyan" paddingX={1}>
-          <Text color="cyan" bold>Schedule Task: {incompleteTasks[selectedIdx]?.text}</Text>
-          <Box>
-            <Text color="yellow">{scheduleStep === 'date' ? '🗓️ Date (YYYY-MM-DD): ' : scheduleStep === 'time' ? '⏱️ Start Time (HH:MM): ' : '🛑 End Time (HH:MM): '}</Text>
-            <TextInput
-              value={scheduleStep === 'date' ? scheduleDate : scheduleStep === 'time' ? scheduleTime : scheduleEndTime}
-              onChange={(v) => {
-                if (scheduleStep === 'date') setScheduleDate(v);
-                else if (scheduleStep === 'time') setScheduleTime(v);
-                else setScheduleEndTime(v);
-              }}
-              onSubmit={(v) => {
-                if (scheduleStep === 'date') {
-                  setScheduleDate(v);
-                  setScheduleStep('time');
-                } else if (scheduleStep === 'time') {
-                  setScheduleTime(v);
-                  setScheduleStep('end');
-                } else {
-                  updateTask(incompleteTasks[selectedIdx]!.id, {
-                    date: scheduleDate || undefined,
-                    time: scheduleTime || undefined,
-                    endTime: v.trim() || undefined,
-                  });
-                  refresh();
-                  setInputMode('none');
-                  setIsTyping(false);
-                  setScheduleDate('');
-                  setScheduleTime('');
-                  setScheduleEndTime('');
-                  setScheduleStep('date');
-                }
-              }}
-              placeholder={scheduleStep === 'date' ? 'YYYY-MM-DD' : scheduleStep === 'time' ? 'HH:MM' : 'HH:MM (Enter to skip)'}
-            />
-          </Box>
-        </Box>
-      )}
+      {/* Remove schedule block entirely since it's not needed anymore */}
 
       <CompletedTaskList tasks={completedTasks} selectedIdx={selectedIdx} offset={incompleteTasks.length} />
     </Box>

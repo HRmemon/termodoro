@@ -6,6 +6,7 @@ import type { ScheduledNotification, Task } from '../types.js';
 import { loadReminders, addReminder, deleteReminder, updateReminder } from '../lib/reminders.js';
 import { loadTasks } from '../lib/tasks.js';
 import { type Keymap, kmMatches } from '../lib/keymap.js';
+import { parseTimeInput } from '../lib/format.js';
 
 interface RemindersViewProps {
   setIsTyping: (v: boolean) => void;
@@ -16,29 +17,6 @@ interface RemindersViewProps {
 }
 
 type InputStep = 'none' | 'time' | 'title' | 'task';
-
-function parseTimeInput(input: string, compact: boolean): string | null {
-  if (!compact) {
-    // standard HH:MM
-    if (/^\d{2}:\d{2}$/.test(input)) return input;
-    return null;
-  }
-  // compact: digits only, 3 or 4 chars
-  const digits = input.replace(/\D/g, '');
-  if (digits.length === 3) {
-    const h = '0' + digits[0];
-    const m = digits[1] + digits[2];
-    const candidate = `${h}:${m}`;
-    if (parseInt(h) < 24 && parseInt(m) < 60) return candidate;
-  }
-  if (digits.length === 4) {
-    const h = digits[0] + digits[1];
-    const m = digits[2] + digits[3];
-    const candidate = `${h}:${m}`;
-    if (parseInt(h) < 24 && parseInt(m) < 60) return candidate;
-  }
-  return null;
-}
 
 export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsumed, keymap }: RemindersViewProps) {
   const [reminders, setReminders] = useState<ScheduledNotification[]>(loadReminders);
