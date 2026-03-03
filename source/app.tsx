@@ -433,12 +433,13 @@ export function App({ config: initialConfig, initialView, initialProject, initia
               focusId={taskFocusId}
               onFocusConsumed={() => setTaskFocusId(null)}
               keymap={keymap}
+              compactTime={config.compactTime}
             />
           )}
           {view === 'web' && <WebView keymap={keymap} />}
           {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
           {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
-          {view === 'dayplanner' && <DayPlannerView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
+          {view === 'dayplanner' && <DayPlannerView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} compactTime={config.compactTime} />}
         </>
       )}
     </Layout>

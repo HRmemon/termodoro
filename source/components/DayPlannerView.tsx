@@ -15,7 +15,7 @@ interface DayPlannerViewProps {
   compactTime: boolean;
 }
 
-type InputMode = 'none' | 'add' | 'edit' | 'schedule';
+type InputMode = 'none' | 'add' | 'add-time' | 'add-end' | 'add-desc' | 'edit' | 'schedule';
 
 type TimelineItem =
   | { type: 'task'; id: string; time: string; endTime?: string; text: string; completed: boolean; completedAt?: string; project?: string }
@@ -28,6 +28,9 @@ export function DayPlannerView({ keymap, setIsTyping, compactTime }: DayPlannerV
   const [inputMode, setInputMode] = useState<InputMode>('none');
   const [inputValue, setInputValue] = useState('');
   const [inputKey, setInputKey] = useState(0);
+
+  const [descInputValue, setDescInputValue] = useState('');
+  const [pendingAdd, setPendingAdd] = useState<{ text: string; project?: string; unknownProject?: string; date?: string; time?: string; endTime?: string } | null>(null);
 
   const [scheduleStep, setScheduleStep] = useState<'date' | 'time' | 'end'>('date');
   const [scheduleDate, setScheduleDate] = useState('');
@@ -116,6 +119,34 @@ export function DayPlannerView({ keymap, setIsTyping, compactTime }: DayPlannerV
         setInputMode('none');
         setIsTyping(false);
         setInputValue('');
+        setPendingAdd(null);
+        return;
+      }
+      return;
+    }
+
+    if (inputMode === 'add-time' || inputMode === 'add-end') {
+      if (key.escape) {
+        setInputMode('none');
+        setIsTyping(false);
+        setInputValue('');
+        setPendingAdd(null);
+        return;
+      }
+      return;
+    }
+
+    if (inputMode === 'add-desc') {
+      if (key.escape) {
+        if (pendingAdd) {
+          const assignedDate = pendingAdd.date || selectedDate;
+          addTask(pendingAdd.text, pendingAdd.project, undefined, assignedDate, pendingAdd.time, pendingAdd.endTime);
+          refresh();
+        }
+        setInputMode('none');
+        setIsTyping(false);
+        setDescInputValue('');
+        setPendingAdd(null);
         return;
       }
       return;
@@ -230,15 +261,61 @@ export function DayPlannerView({ keymap, setIsTyping, compactTime }: DayPlannerV
   const handleAddSubmit = useCallback((value: string) => {
     if (value.trim()) {
       const parsed = parseTaskInput(value);
-      // Automatically attach the currently selected date in the Day Planner to the task
-      const assignedDate = parsed.date || selectedDate;
-      addTask(parsed.text, parsed.project, undefined, assignedDate, parsed.time, parsed.endTime);
-      refresh();
+      setPendingAdd(parsed);
+      setInputMode('add-time');
+      setInputValue(parsed.time || '');
+      setDescInputValue('');
+      return;
     }
     setInputMode('none');
     setIsTyping(false);
     setInputValue('');
-  }, [setIsTyping, refresh, selectedDate]);
+  }, [setIsTyping]);
+
+  const handleAddTimeSubmit = useCallback((value: string) => {
+    if (!pendingAdd) return;
+    if (value.trim()) {
+      const parsedTime = parseTimeInput(value, compactTime);
+      if (parsedTime) {
+        setPendingAdd(prev => ({ ...prev!, time: parsedTime }));
+        setInputMode('add-end');
+        setInputValue(pendingAdd.endTime || '');
+      }
+    } else {
+      setPendingAdd(prev => ({ ...prev!, time: undefined, endTime: undefined }));
+      setInputMode('add-desc');
+      setDescInputValue('');
+    }
+  }, [pendingAdd, compactTime]);
+
+  const handleAddEndSubmit = useCallback((value: string) => {
+    if (!pendingAdd) return;
+    if (value.trim()) {
+      const parsedTime = parseTimeInput(value, compactTime);
+      if (parsedTime) {
+        setPendingAdd(prev => ({ ...prev!, endTime: parsedTime }));
+        setInputMode('add-desc');
+        setDescInputValue('');
+      }
+    } else {
+      setPendingAdd(prev => ({ ...prev!, endTime: undefined }));
+      setInputMode('add-desc');
+      setDescInputValue('');
+    }
+  }, [pendingAdd, compactTime]);
+
+  const handleAddDescSubmit = useCallback((value: string) => {
+    if (pendingAdd) {
+      const desc = value.trim() || undefined;
+      const assignedDate = pendingAdd.date || selectedDate;
+      addTask(pendingAdd.text, pendingAdd.project, desc, assignedDate, pendingAdd.time, pendingAdd.endTime);
+      refresh();
+    }
+    setInputMode('none');
+    setIsTyping(false);
+    setDescInputValue('');
+    setPendingAdd(null);
+  }, [pendingAdd, refresh, setIsTyping, selectedDate]);
 
   const handleEditSubmit = useCallback((value: string) => {
     const item = allNavItems[selectedIdx];
@@ -375,9 +452,33 @@ export function DayPlannerView({ keymap, setIsTyping, compactTime }: DayPlannerV
             value={inputValue}
             onChange={setInputValue}
             onSubmit={handleAddSubmit}
-            placeholder="Task name #project time:HH:MM end:HH:MM"
+            placeholder="Task name #project"
             items={existingTaskTexts}
           />
+        </Box>
+      )}
+      {inputMode === 'add-time' && (
+        <Box flexDirection="column" marginTop={1}>
+          <Box>
+            <Text color="yellow">{'⏱️ Start Time (HH:MM): '}</Text>
+            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleAddTimeSubmit} placeholder="HH:MM (Enter to skip)" />
+          </Box>
+        </Box>
+      )}
+      {inputMode === 'add-end' && (
+        <Box flexDirection="column" marginTop={1}>
+          <Box>
+            <Text color="yellow">{'🛑 End Time (HH:MM): '}</Text>
+            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleAddEndSubmit} placeholder="HH:MM (Enter to skip)" />
+          </Box>
+        </Box>
+      )}
+      {inputMode === 'add-desc' && (
+        <Box flexDirection="column" marginTop={1}>
+          <Box>
+            <Text color="yellow">{'Desc: '}</Text>
+            <TextInput value={descInputValue} onChange={setDescInputValue} onSubmit={handleAddDescSubmit} placeholder="Description (Enter to skip)" />
+          </Box>
         </Box>
       )}
       {inputMode === 'edit' && (

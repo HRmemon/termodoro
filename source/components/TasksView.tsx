@@ -13,17 +13,19 @@ import { FilterBar } from './tasks/FilterBar.js';
 import { ProjectOverlay } from './tasks/ProjectOverlay.js';
 import { TaskInputBar } from './tasks/TaskInputBar.js';
 import { useProjectAutocomplete } from '../hooks/useProjectAutocomplete.js';
+import { parseTimeInput } from '../lib/format.js';
 
 interface TasksViewProps {
   setIsTyping: (v: boolean) => void;
   focusId?: string | null;
   onFocusConsumed?: () => void;
   keymap?: Keymap;
+  compactTime: boolean;
 }
 
-type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
+type InputMode = 'none' | 'add' | 'add-time' | 'add-end' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
 
-export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: TasksViewProps) {
+export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compactTime }: TasksViewProps) {
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [inputMode, setInputMode] = useState<InputMode>('none');
@@ -246,6 +248,18 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       // Fall through to normal navigation keys below
     }
 
+    // ─── Time input (add-time / add-end) ────────────────────────────────
+    if (inputMode === 'add-time' || inputMode === 'add-end') {
+      if (key.escape) {
+        setInputMode('none');
+        setIsTyping(false);
+        setInputValue('');
+        setPendingAdd(null);
+        return;
+      }
+      return;
+    }
+
     // ─── Description input (add-desc / edit-desc) ───────────────────────
     if (inputMode === 'add-desc') {
       if (key.escape) {
@@ -294,7 +308,8 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
           }
         } else {
           setPendingAdd(updated);
-          setInputMode('add-desc');
+          setInputMode('add-time');
+          setInputValue(updated.time || '');
           setDescInputValue('');
         }
         setConfirmProjectName('');
@@ -316,7 +331,8 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
           }
         } else {
           setPendingAdd(updated);
-          setInputMode('add-desc');
+          setInputMode('add-time');
+          setInputValue(updated?.time || '');
           setDescInputValue('');
         }
         setConfirmProjectName('');
@@ -477,9 +493,9 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
         setInputValue('');
         return;
       }
-      // Move to description step
-      setInputMode('add-desc');
-      setInputValue('');
+      // Move to time step
+      setInputMode('add-time');
+      setInputValue(parsed.time || '');
       setDescInputValue('');
       return;
     }
@@ -487,6 +503,42 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
     setIsTyping(false);
     setInputValue('');
   }, [setIsTyping, projectMenu]);
+
+  const handleAddTimeSubmit = useCallback((value: string) => {
+    if (!pendingAdd) return;
+    if (value.trim()) {
+      const parsedTime = parseTimeInput(value, compactTime);
+      if (parsedTime) {
+        setPendingAdd(prev => ({ ...prev!, time: parsedTime }));
+        setInputMode('add-end');
+        setInputValue(pendingAdd.endTime || '');
+      }
+      // If invalid, wait for user to fix
+    } else {
+      // Skipped time
+      setPendingAdd(prev => ({ ...prev!, time: undefined, endTime: undefined }));
+      setInputMode('add-desc');
+      setDescInputValue('');
+    }
+  }, [pendingAdd, compactTime]);
+
+  const handleAddEndSubmit = useCallback((value: string) => {
+    if (!pendingAdd) return;
+    if (value.trim()) {
+      const parsedTime = parseTimeInput(value, compactTime);
+      if (parsedTime) {
+        setPendingAdd(prev => ({ ...prev!, endTime: parsedTime }));
+        setInputMode('add-desc');
+        setDescInputValue('');
+      }
+      // If invalid, wait
+    } else {
+      // Skipped end time
+      setPendingAdd(prev => ({ ...prev!, endTime: undefined }));
+      setInputMode('add-desc');
+      setDescInputValue('');
+    }
+  }, [pendingAdd, compactTime]);
 
   const handleAddDescSubmit = useCallback((value: string) => {
     if (pendingAdd) {
@@ -621,6 +673,22 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       {inputMode === 'add' && (
         <TaskInputBar label="> " inputKey={inputKey} inputValue={inputValue} setInputValue={setInputValue}
           onSubmit={handleAddSubmit} placeholder="Task name #project" projectMenu={projectMenu} suggestionIdx={suggestionIdx} />
+      )}
+      {inputMode === 'add-time' && (
+        <Box flexDirection="column" marginTop={1}>
+          <Box>
+            <Text color="yellow">{'⏱️ Start Time (HH:MM): '}</Text>
+            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleAddTimeSubmit} placeholder="HH:MM (Enter to skip)" />
+          </Box>
+        </Box>
+      )}
+      {inputMode === 'add-end' && (
+        <Box flexDirection="column" marginTop={1}>
+          <Box>
+            <Text color="yellow">{'🛑 End Time (HH:MM): '}</Text>
+            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleAddEndSubmit} placeholder="HH:MM (Enter to skip)" />
+          </Box>
+        </Box>
       )}
       {inputMode === 'add-desc' && (
         <Box flexDirection="column" marginTop={1}>
