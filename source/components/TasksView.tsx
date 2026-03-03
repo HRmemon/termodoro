@@ -21,11 +21,12 @@ interface TasksViewProps {
   onFocusConsumed?: () => void;
   keymap?: Keymap;
   compactTime: boolean;
+  onOpenPicker: (mode: 'select' | 'text') => void;
 }
 
-type InputMode = 'none' | 'add' | 'add-time' | 'add-end' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
+type InputMode = 'none' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
 
-export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compactTime }: TasksViewProps) {
+export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compactTime, onOpenPicker }: TasksViewProps) {
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [inputMode, setInputMode] = useState<InputMode>('none');
@@ -69,7 +70,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
   // Project autocomplete (hash-anchor mode for #tag parsing)
   const { projectMenu, suggestionIdx, navigateUp, navigateDown, selectedProject } = useProjectAutocomplete({
     input: inputValue,
-    enabled: inputMode === 'add' || inputMode === 'edit',
+    enabled: inputMode === 'edit',
     hashAnchor: true,
     refreshDeps: [tasks],
   });
@@ -248,36 +249,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
       // Fall through to normal navigation keys below
     }
 
-    // ─── Time input (add-time / add-end) ────────────────────────────────
-    if (inputMode === 'add-time' || inputMode === 'add-end') {
-      if (key.escape) {
-        setInputMode('none');
-        setIsTyping(false);
-        setInputValue('');
-        setPendingAdd(null);
-        return;
-      }
-      return;
-    }
-
-    // ─── Description input (add-desc / edit-desc) ───────────────────────
-    if (inputMode === 'add-desc') {
-      if (key.escape) {
-        // Skip description, save task without it
-        if (pendingAdd) {
-          addTask(pendingAdd.text, pendingAdd.project, undefined, pendingAdd.date, pendingAdd.time, pendingAdd.endTime);
-          refresh();
-        }
-        setInputMode('none');
-        setIsTyping(false);
-        setDescInputValue('');
-        setPendingAdd(null);
-        return;
-      }
-      // TextInput handles the rest via onSubmit
-      return;
-    }
-
+    // ─── Description input (edit-desc) ───────────────────────
     if (inputMode === 'edit-desc') {
       if (key.escape) {
         // Keep existing description unchanged
@@ -306,11 +278,6 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
             setInputMode('none');
             setIsTyping(false);
           }
-        } else {
-          setPendingAdd(updated);
-          setInputMode('add-time');
-          setInputValue(updated.time || '');
-          setDescInputValue('');
         }
         setConfirmProjectName('');
         return;
@@ -329,11 +296,6 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
             setInputMode('none');
             setIsTyping(false);
           }
-        } else {
-          setPendingAdd(updated);
-          setInputMode('add-time');
-          setInputValue(updated?.time || '');
-          setDescInputValue('');
         }
         setConfirmProjectName('');
         return;
@@ -349,7 +311,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
     }
 
     // ─── Add/Edit text input ────────────────────────────────────────────
-    if (inputMode === 'add' || inputMode === 'edit') {
+    if (inputMode === 'edit') {
       if (key.escape) {
         setInputMode('none');
         setIsTyping(false);
@@ -404,9 +366,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
     }
 
     if (kmMatches(km, 'list.add', input, key) && inputMode !== 'filtered') {
-      setInputValue('');
-      setInputMode('add');
-      setIsTyping(true);
+      onOpenPicker('text');
       return;
     }
 
@@ -478,79 +438,6 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
       return;
     }
   });
-
-  const handleAddSubmit = useCallback((value: string) => {
-    // If project menu is open, Enter was consumed by autocomplete — skip submit
-    if (projectMenu) return;
-    if (value.trim()) {
-      const parsed = parseTaskInput(value);
-      setPendingAdd(parsed);
-      if (parsed.unknownProject) {
-        setConfirmProjectName(parsed.unknownProject);
-        setConfirmProjectFrom('add');
-        setInputMode('confirm-project');
-        setIsTyping(false);
-        setInputValue('');
-        return;
-      }
-      // Move to time step
-      setInputMode('add-time');
-      setInputValue(parsed.time || '');
-      setDescInputValue('');
-      return;
-    }
-    setInputMode('none');
-    setIsTyping(false);
-    setInputValue('');
-  }, [setIsTyping, projectMenu]);
-
-  const handleAddTimeSubmit = useCallback((value: string) => {
-    if (!pendingAdd) return;
-    if (value.trim()) {
-      const parsedTime = parseTimeInput(value, compactTime);
-      if (parsedTime) {
-        setPendingAdd(prev => ({ ...prev!, time: parsedTime }));
-        setInputMode('add-end');
-        setInputValue(pendingAdd.endTime || '');
-      }
-      // If invalid, wait for user to fix
-    } else {
-      // Skipped time
-      setPendingAdd(prev => ({ ...prev!, time: undefined, endTime: undefined }));
-      setInputMode('add-desc');
-      setDescInputValue('');
-    }
-  }, [pendingAdd, compactTime]);
-
-  const handleAddEndSubmit = useCallback((value: string) => {
-    if (!pendingAdd) return;
-    if (value.trim()) {
-      const parsedTime = parseTimeInput(value, compactTime);
-      if (parsedTime) {
-        setPendingAdd(prev => ({ ...prev!, endTime: parsedTime }));
-        setInputMode('add-desc');
-        setDescInputValue('');
-      }
-      // If invalid, wait
-    } else {
-      // Skipped end time
-      setPendingAdd(prev => ({ ...prev!, endTime: undefined }));
-      setInputMode('add-desc');
-      setDescInputValue('');
-    }
-  }, [pendingAdd, compactTime]);
-
-  const handleAddDescSubmit = useCallback((value: string) => {
-    if (pendingAdd) {
-      const desc = value.trim() || undefined;
-      addTask(pendingAdd.text, pendingAdd.project, desc, pendingAdd.date, pendingAdd.time, pendingAdd.endTime);
-      refresh();
-    }
-    setInputMode('none');
-    setIsTyping(false);
-    setDescInputValue('');
-    setPendingAdd(null);
-  }, [pendingAdd, refresh, setIsTyping]);
 
   const handleEditSubmit = useCallback((value: string) => {
     // If project menu is open, Enter was consumed by autocomplete — skip submit
@@ -669,34 +556,6 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
 
       {inputMode === 'confirm-project' && (
         <ConfirmProjectPrompt projectName={confirmProjectName} />
-      )}
-      {inputMode === 'add' && (
-        <TaskInputBar label="> " inputKey={inputKey} inputValue={inputValue} setInputValue={setInputValue}
-          onSubmit={handleAddSubmit} placeholder="Task name #project" projectMenu={projectMenu} suggestionIdx={suggestionIdx} />
-      )}
-      {inputMode === 'add-time' && (
-        <Box flexDirection="column" marginTop={1}>
-          <Box>
-            <Text color="yellow">{'⏱️ Start Time (HH:MM): '}</Text>
-            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleAddTimeSubmit} placeholder="HH:MM (Enter to skip)" />
-          </Box>
-        </Box>
-      )}
-      {inputMode === 'add-end' && (
-        <Box flexDirection="column" marginTop={1}>
-          <Box>
-            <Text color="yellow">{'🛑 End Time (HH:MM): '}</Text>
-            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleAddEndSubmit} placeholder="HH:MM (Enter to skip)" />
-          </Box>
-        </Box>
-      )}
-      {inputMode === 'add-desc' && (
-        <Box flexDirection="column" marginTop={1}>
-          <Box>
-            <Text color="yellow">{'Desc: '}</Text>
-            <TextInput value={descInputValue} onChange={setDescInputValue} onSubmit={handleAddDescSubmit} placeholder="Description (Enter to skip)" />
-          </Box>
-        </Box>
       )}
       {inputMode === 'edit' && (
         <TaskInputBar label="Edit: " inputKey={inputKey} inputValue={inputValue} setInputValue={setInputValue}

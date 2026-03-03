@@ -119,6 +119,7 @@ export type Overlay =
   | 'globalSearch'
   | 'help'
   | 'resetModal'
+  | 'taskPicker'
   | null;
 
 export interface ThemeColors {

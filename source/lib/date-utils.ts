@@ -42,3 +42,40 @@ export const MONTH_NAMES_SHORT = [
 export function dateToNum(d: string): number {
   return parseInt(d.replace(/-/g, ''), 10);
 }
+
+export function getRelativeDateHints(selectedDate?: string): { label: string; date: string }[] {
+  const today = getTodayStr();
+  const tomorrow = addDays(today, 1);
+  const hints = [
+    { label: 'Today', date: today },
+    { label: 'Tomorrow', date: tomorrow },
+  ];
+  if (selectedDate && selectedDate !== today && selectedDate !== tomorrow) {
+    hints.push({ label: 'Currently Viewed', date: selectedDate });
+  }
+  return hints;
+}
+
+export function getConsecutiveDates(prefix: string, count: number): { label: string; date: string }[] {
+  // If prefix is empty, return relative hints
+  if (!prefix) return getRelativeDateHints();
+
+  const hints: { label: string; date: string }[] = [];
+  
+  // Try to parse partial date
+  const parts = prefix.split('-');
+  const year = parseInt(parts[0]!) || new Date().getFullYear();
+  const month = parseInt(parts[1]!) || (new Date().getMonth() + 1);
+  const day = parseInt(parts[2]!) || 1;
+
+  // Start from the parsed date and generate count consecutive days
+  let currentStr = formatDateStr(year, month, day);
+  for (let i = 0; i < count; i++) {
+    const d = new Date(currentStr + 'T00:00:00');
+    const label = d.toLocaleDateString('en-US', { weekday: 'long' });
+    hints.push({ label, date: currentStr });
+    currentStr = addDays(currentStr, 1);
+  }
+  return hints;
+}
+
