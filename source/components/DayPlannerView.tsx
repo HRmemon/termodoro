@@ -157,7 +157,7 @@ export function DayPlannerView({ keymap, setIsTyping }: DayPlannerViewProps) {
     }
 
     if (kmMatches(keymap, 'list.add', input, key)) {
-      setInputValue(`date:${selectedDate} `);
+      setInputValue('');
       setInputMode('add');
       setIsTyping(true);
       return;
@@ -228,13 +228,15 @@ export function DayPlannerView({ keymap, setIsTyping }: DayPlannerViewProps) {
   const handleAddSubmit = useCallback((value: string) => {
     if (value.trim()) {
       const parsed = parseTaskInput(value);
-      addTask(parsed.text, parsed.project, undefined, parsed.date, parsed.time, parsed.endTime);
+      // Automatically attach the currently selected date in the Day Planner to the task
+      const assignedDate = parsed.date || selectedDate;
+      addTask(parsed.text, parsed.project, undefined, assignedDate, parsed.time, parsed.endTime);
       refresh();
     }
     setInputMode('none');
     setIsTyping(false);
     setInputValue('');
-  }, [setIsTyping, refresh]);
+  }, [setIsTyping, refresh, selectedDate]);
 
   const handleEditSubmit = useCallback((value: string) => {
     const item = allNavItems[selectedIdx];
@@ -364,7 +366,8 @@ export function DayPlannerView({ keymap, setIsTyping }: DayPlannerViewProps) {
 
       {/* Inputs */}
       {inputMode === 'add' && (
-        <Box marginTop={1}>
+        <Box marginTop={1} flexDirection="column">
+          <Text dimColor>Adding task for date: <Text color="cyan">{selectedDate}</Text></Text>
           <FilterInput
             label={<Text color="yellow">{'> '}</Text>}
             value={inputValue}
@@ -376,7 +379,8 @@ export function DayPlannerView({ keymap, setIsTyping }: DayPlannerViewProps) {
         </Box>
       )}
       {inputMode === 'edit' && (
-        <Box marginTop={1}>
+        <Box marginTop={1} flexDirection="column">
+          <Text dimColor>Editing task for date: <Text color="cyan">{selectedDate}</Text></Text>
           <FilterInput
             label={<Text color="yellow">{'Edit: '}</Text>}
             value={inputValue}
