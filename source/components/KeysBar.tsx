@@ -57,6 +57,7 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
     actionHints.push({ key: 'x', label: 'Done/Undo' });
     actionHints.push({ key: km ? km.label('list.add') : 'a', label: 'Add' });
     actionHints.push({ key: km ? km.label('list.edit') : 'e', label: 'Edit' });
+    actionHints.push({ key: 's', label: 'Schedule' });
     actionHints.push({ key: km ? km.label('list.delete') : 'd', label: 'Delete' });
     actionHints.push({ key: 'P', label: 'Projects' });
   }
@@ -118,25 +119,19 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
     actionHints.push({ key: 'R', label: 'Report' });
   }
 
-  if (view === 'calendar') {
-    const hlLabel = km ? `${km.label('nav.left')}/${km.label('nav.right')}` : 'h/l';
-    const jkLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
-    actionHints.push({ key: hlLabel, label: 'Days' });
-    actionHints.push({ key: jkLabel, label: 'Weeks' });
-    actionHints.push({ key: 'Tab', label: 'Pane' });
-    actionHints.push({ key: km ? km.label('calendar.goto_today') : 't', label: 'Today' });
-    actionHints.push({ key: km ? km.label('list.add') : 'a', label: 'Add' });
-    actionHints.push({ key: km ? km.label('calendar.delete') : 'd', label: 'Del' });
-    actionHints.push({ key: km ? km.label('calendar.toggle_done') : 'x', label: 'Done' });
-    actionHints.push({ key: km ? km.label('calendar.toggle_view') : 'v', label: 'View' });
-    actionHints.push({ key: km ? km.label('calendar.toggle_heatmap') : 'f', label: 'Focus' });
-  }
-
   if (view === 'config') {
     const navLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
     actionHints.push({ key: navLabel, label: 'Navigate' });
     actionHints.push({ key: 'Enter', label: 'Edit/Toggle' });
     actionHints.push({ key: km ? km.label('config.save') : 's', label: 'Save' });
+  }
+
+  if (view === 'dayplanner') {
+    const hlLabel = km ? `${km.label('nav.left')}/${km.label('nav.right')}` : 'h/l';
+    const jkLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
+    actionHints.push({ key: hlLabel, label: 'Days' });
+    actionHints.push({ key: jkLabel, label: 'Navigate' });
+    actionHints.push({ key: 't', label: 'Today' });
   }
 
   // Global nav hints (bottom row) — build shortcut range dynamically

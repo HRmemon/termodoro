@@ -1,3 +1,4 @@
+// DEPRECATED: Retained for future reference. Currently detached from UI routing.
 import { Box, Text } from 'ink';
 import type { CalendarEvent, CalendarConfig, Task, ScheduledNotification, Session } from '../types.js';
 import { colors } from '../lib/theme.js';

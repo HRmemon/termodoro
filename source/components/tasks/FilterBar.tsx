@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 
-type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
+type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project' | 'schedule';
 
 interface FilterBarProps {
   inputMode: InputMode;

@@ -32,10 +32,19 @@ export function useReminderChecker(config: Config): void {
           }
         }
       }
+
+      const tasks = loadTasks();
+      for (const t of tasks) {
+        if (t.completed || !t.date || !t.time) continue;
+        if (t.date === today && t.time === currentTime && !firedRemindersRef.current.has(firedKey + t.id)) {
+          firedRemindersRef.current.add(firedKey + t.id);
+          notifyReminder('Task Reminder', t.text, config.sound, config.notificationDuration, config.sounds);
+        }
+      }
     };
 
     checkReminders();
     const interval = setInterval(checkReminders, 30_000);
     return () => clearInterval(interval);
-  }, [config.notifications, config.notificationDuration]);
+  }, [config.notifications, config.notificationDuration, config.sound, config.sounds]);
 }

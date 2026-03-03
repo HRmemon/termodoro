@@ -9,7 +9,6 @@ import { formatTasks, parseTasks } from './tasks.js';
 import { formatReminders, parseReminders } from './reminders.js';
 import { formatTracker, parseTracker } from './tracker.js';
 import { formatGoals, parseGoals } from './goals.js';
-import { formatCalendarEvents, parseCalendarEvents } from './calendar.js';
 import { formatStats } from './stats.js';
 import { formatKeybindings, parseKeybindings } from './keybindings.js';
 
@@ -18,13 +17,6 @@ export { openSequencesInNvim } from './sequences.js';
 
 const CONFIG_PATH = path.join(os.homedir(), '.config', 'pomodorocli', 'config.json');
 const SKIPPED_VIEWS: View[] = ['timer', 'web', 'clock'];
-
-// Shared state: CalendarView sets this so Ctrl+G knows which date to jump to
-let calendarSelectedDate: string | undefined;
-
-export function setCalendarSelectedDate(date: string): void {
-  calendarSelectedDate = date;
-}
 
 // Shared state: ConfigView sets this so Ctrl+G knows which sub-view is active
 let configSubMode: string = 'main';
@@ -95,10 +87,6 @@ function formatView(view: View): { content: string; tmpPath: string; cursorLine?
     case 'tracker': return { content: formatTracker(), tmpPath: tmpFile('tracker') };
     case 'graphs': return { content: formatGoals(), tmpPath: tmpFile('goals') };
     case 'stats': return { content: formatStats(), tmpPath: tmpFile('stats') };
-    case 'calendar': {
-      const { content, cursorLine } = formatCalendarEvents(calendarSelectedDate);
-      return { content, tmpPath: tmpFile('calendar'), cursorLine };
-    }
     default: return { content: '', tmpPath: tmpFile(view) };
   }
 }
@@ -114,7 +102,6 @@ function parseAndSave(view: View, text: string): void {
     case 'reminders': parseReminders(text); break;
     case 'tracker': parseTracker(text); break;
     case 'graphs': parseGoals(text); break;
-    case 'calendar': parseCalendarEvents(text); break;
     // 'stats' is read-only: no case needed, default does nothing
   }
 }

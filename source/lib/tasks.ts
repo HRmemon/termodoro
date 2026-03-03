@@ -16,7 +16,7 @@ export function saveTasks(tasks: Task[]): void {
   atomicWriteJSON(TASKS_PATH, tasks);
 }
 
-export function addTask(text: string, expectedPomodoros: number = 1, project?: string, description?: string): Task {
+export function addTask(text: string, project?: string, description?: string, date?: string, time?: string, endTime?: string): Task {
   const tasks = loadTasks();
   const task: Task = {
     id: nanoid(),
@@ -24,8 +24,9 @@ export function addTask(text: string, expectedPomodoros: number = 1, project?: s
     completed: false,
     description,
     project,
-    expectedPomodoros,
-    completedPomodoros: 0,
+    date,
+    time,
+    endTime,
     createdAt: new Date().toISOString(),
   };
   tasks.push(task);
@@ -48,16 +49,7 @@ export function deleteTask(id: string): void {
   saveTasks(tasks);
 }
 
-export function incrementTaskPomodoro(id: string): void {
-  const tasks = loadTasks();
-  const task = tasks.find(t => t.id === id);
-  if (task) {
-    task.completedPomodoros++;
-    saveTasks(tasks);
-  }
-}
-
-export function updateTask(id: string, updates: Partial<Pick<Task, 'text' | 'expectedPomodoros' | 'project' | 'description'>>): void {
+export function updateTask(id: string, updates: Partial<Task>): void {
   const tasks = loadTasks();
   const task = tasks.find(t => t.id === id);
   if (task) {
@@ -78,6 +70,51 @@ export function getProjects(): string[] {
     projects.add(p);
   }
   return [...projects].sort();
+}
+
+export function parseTaskInput(value: string): { text: string; project?: string; unknownProject?: string; date?: string; time?: string; endTime?: string } {
+  let text = value.trim();
+  let project: string | undefined;
+  let unknownProject: string | undefined;
+  let date: string | undefined;
+  let time: string | undefined;
+  let endTime: string | undefined;
+
+  // Parse date:YYYY-MM-DD
+  const dateMatch = text.match(/date:(\d{4}-\d{2}-\d{2})/);
+  if (dateMatch) {
+    date = dateMatch[1];
+    text = text.replace(/date:\d{4}-\d{2}-\d{2}/, '').trim();
+  }
+
+  // Parse time:HH:MM
+  const timeMatch = text.match(/time:(\d{2}:\d{2})/);
+  if (timeMatch) {
+    time = timeMatch[1];
+    text = text.replace(/time:\d{2}:\d{2}/, '').trim();
+  }
+
+  // Parse end:HH:MM
+  const endMatch = text.match(/end:(\d{2}:\d{2})/);
+  if (endMatch) {
+    endTime = endMatch[1];
+    text = text.replace(/end:\d{2}:\d{2}/, '').trim();
+  }
+
+  // Extract #project
+  const projMatch = text.match(/(?:^|\s+)#(\S+)\s*$/);
+  if (projMatch) {
+    const candidate = projMatch[1]!;
+    const existing = getProjects();
+    text = text.replace(new RegExp(`(?:^|\\s+)#${candidate}\\s*$`), '').trim();
+    if (existing.includes(candidate)) {
+      project = candidate;
+    } else {
+      unknownProject = candidate;
+    }
+  }
+
+  return { text, project, unknownProject, date, time, endTime };
 }
 
 // ─── Project CRUD ─────────────────────────────────────────────────────────────

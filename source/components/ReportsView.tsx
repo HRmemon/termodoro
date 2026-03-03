@@ -59,13 +59,12 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
     const allSessions = loadSessions();
     const tasks = loadTasks();
 
-    const projectMap = new Map<string, { total: number; completed: number; pomodoros: number }>();
+    const projectMap = new Map<string, { total: number; completed: number }>();
     for (const task of tasks) {
       const proj = task.project ?? '(none)';
-      const entry = projectMap.get(proj) ?? { total: 0, completed: 0, pomodoros: 0 };
+      const entry = projectMap.get(proj) ?? { total: 0, completed: 0 };
       entry.total++;
       if (task.completed) entry.completed++;
-      entry.pomodoros += task.completedPomodoros;
       projectMap.set(proj, entry);
     }
 
@@ -99,7 +98,7 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
         .reverse(),
       taskProjects: [...projectMap.entries()]
         .filter(([name]) => name !== '(none)')
-        .sort((a, b) => b[1].pomodoros - a[1].pomodoros),
+        .sort((a, b) => b[1].completed - a[1].completed),
       deepWork: getDeepWorkRatio(allSessions),
       streaks: getStreaks(allSessions),
       todaySessions,
@@ -449,7 +448,7 @@ function TaskProjectsSection({
   taskProjects,
   projectActivity,
 }: {
-  taskProjects: [string, { total: number; completed: number; pomodoros: number }][];
+  taskProjects: [string, { total: number; completed: number }][];
   projectActivity: Map<string, number[]>;
 }) {
   if (taskProjects.length === 0) {
@@ -467,9 +466,6 @@ function TaskProjectsSection({
             </Box>
             <Box width={14}>
               <Text>{stats.completed}/{stats.total} tasks</Text>
-            </Box>
-            <Box width={9}>
-              <Text dimColor>{stats.pomodoros} pom</Text>
             </Box>
             {activity.length > 0 && (
               <Box>

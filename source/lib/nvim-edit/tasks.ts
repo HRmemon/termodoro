@@ -5,19 +5,25 @@ import { clampStr, clampInt, isValidId, LIMITS } from '../sanitize.js';
 
 export function formatTasks(): string {
   const tasks = loadTasks();
-  return tasks.map(t => {
+  const header = `// ─── TASKS & TIMEBLOCKING ───────────────────────────────────────────────────
+// Syntax: [ ] Task text #project date:YYYY-MM-DD time:HH:MM end:HH:MM %id:...
+// Example: [ ] Write API endpoints #coding date:2026-03-03 time:14:00 end:16:00
+// ────────────────────────────────────────────────────────────────────────────\n\n`;
+
+  return header + tasks.map(t => {
     const check = t.completed ? '[x]' : '[ ]';
     let line = `${check} ${t.text}`;
     if (t.project) line += ` #${t.project}`;
-    line += ` /${t.expectedPomodoros}`;
-    if (t.completedPomodoros > 0) line += ` (${t.completedPomodoros}/${t.expectedPomodoros})`;
+    if (t.date) line += ` date:${t.date}`;
+    if (t.time) line += ` time:${t.time}`;
+    if (t.endTime) line += ` end:${t.endTime}`;
     line += `  %id:${t.id}`;
     return line;
   }).join('\n') + '\n';
 }
 
 export function parseTasks(text: string): void {
-  const lines = text.split('\n').filter(l => l.trim());
+  const lines = text.split('\n').filter(l => l.trim() && !l.trim().startsWith('//'));
   const existing = loadTasks();
   const existingMap = new Map(existing.map(t => [t.id, t]));
   const seenIds = new Set<string>();
@@ -33,20 +39,28 @@ export function parseTasks(text: string): void {
 
     let rest = line.replace(/%id:\S+/, '').replace(/^\[[x ]\]\s*/, '').trim();
 
-    // Parse (M/N) progress
-    let completedPomodoros = 0;
-    const progressMatch = rest.match(/\((\d+)\/(\d+)\)\s*$/);
-    if (progressMatch) {
-      completedPomodoros = parseInt(progressMatch[1]!, 10);
-      rest = rest.replace(/\(\d+\/\d+\)\s*$/, '').trim();
+    // Parse date:YYYY-MM-DD
+    let date: string | undefined;
+    const dateMatch = rest.match(/date:(\d{4}-\d{2}-\d{2})/);
+    if (dateMatch) {
+      date = dateMatch[1];
+      rest = rest.replace(/date:\d{4}-\d{2}-\d{2}/, '').trim();
     }
 
-    // Parse /N expected pomodoros
-    let expectedPomodoros = 1;
-    const pomMatch = rest.match(/\/(\d+)\s*$/);
-    if (pomMatch) {
-      expectedPomodoros = parseInt(pomMatch[1]!, 10);
-      rest = rest.replace(/\/\d+\s*$/, '').trim();
+    // Parse time:HH:MM
+    let time: string | undefined;
+    const timeMatch = rest.match(/time:(\d{2}:\d{2})/);
+    if (timeMatch) {
+      time = timeMatch[1];
+      rest = rest.replace(/time:\d{2}:\d{2}/, '').trim();
+    }
+
+    // Parse end:HH:MM
+    let endTime: string | undefined;
+    const endMatch = rest.match(/end:(\d{2}:\d{2})/);
+    if (endMatch) {
+      endTime = endMatch[1];
+      rest = rest.replace(/end:\d{2}:\d{2}/, '').trim();
     }
 
     // Parse #project
@@ -64,8 +78,9 @@ export function parseTasks(text: string): void {
       completed,
       description: old?.description,
       project: clampStr(project, LIMITS.PROJECT),
-      expectedPomodoros: clampInt(expectedPomodoros, 1, LIMITS.POMODOROS),
-      completedPomodoros: clampInt(completedPomodoros || (old?.completedPomodoros ?? 0), 0, LIMITS.POMODOROS),
+      date,
+      time,
+      endTime,
       createdAt: old?.createdAt ?? new Date().toISOString(),
       completedAt: completed ? (old?.completedAt ?? new Date().toISOString()) : undefined,
     });

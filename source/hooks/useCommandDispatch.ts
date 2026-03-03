@@ -58,19 +58,13 @@ export function useCommandDispatch(
         if (args.trim()) {
           let text = args.trim();
           let project: string | undefined;
-          let expectedPomodoros = 1;
 
-          const pomMatch = text.match(/^(.+?)\s*\/(\d+)\s*$/);
-          if (pomMatch) {
-            text = pomMatch[1]!.trim();
-            expectedPomodoros = parseInt(pomMatch[2]!, 10);
-          }
           const projMatch = text.match(/^(.+?)\s+#(\S+)\s*$/);
           if (projMatch) {
             text = projMatch[1]!.trim();
             project = projMatch[2]!;
           }
-          addTask(text, expectedPomodoros, project);
+          addTask(text, project);
           callbacks.setView('tasks');
         }
         break;

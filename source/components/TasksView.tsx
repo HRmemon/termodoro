@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Task } from '../types.js';
-import { loadTasks, saveTasks, addTask, completeTask, deleteTask, updateTask, getProjects, addProject, renameProject, removeProjectTag, deleteProjectTasks } from '../lib/tasks.js';
+import { loadTasks, saveTasks, addTask, completeTask, deleteTask, updateTask, getProjects, addProject, renameProject, removeProjectTag, deleteProjectTasks, parseTaskInput } from '../lib/tasks.js';
 import { fuzzyMatchAny } from '../lib/fuzzy.js';
 import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { TaskDetailOverlay } from './tasks/TaskDetailOverlay.js';
@@ -21,37 +21,7 @@ interface TasksViewProps {
   keymap?: Keymap;
 }
 
-type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
-
-/** Parse `text #project /N` from input string */
-function parseTaskInput(value: string): { text: string; project?: string; unknownProject?: string; expectedPomodoros: number } {
-  let text = value.trim();
-  let project: string | undefined;
-  let unknownProject: string | undefined;
-  let expectedPomodoros = 1;
-
-  // Extract /N pomodoros suffix
-  const pomMatch = text.match(/^(.+?)\s*\/(\d+)\s*$/);
-  if (pomMatch) {
-    text = pomMatch[1]!.trim();
-    expectedPomodoros = parseInt(pomMatch[2]!, 10);
-  }
-
-  // Extract #project
-  const projMatch = text.match(/^(.+?)\s+#(\S+)\s*$/);
-  if (projMatch) {
-    const candidate = projMatch[2]!;
-    const existing = getProjects();
-    text = projMatch[1]!.trim();
-    if (existing.includes(candidate)) {
-      project = candidate;
-    } else {
-      unknownProject = candidate;
-    }
-  }
-
-  return { text, project, unknownProject, expectedPomodoros };
-}
+type InputMode = 'none' | 'add' | 'add-desc' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project' | 'schedule';
 
 export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: TasksViewProps) {
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
@@ -63,10 +33,16 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
   const [filterQuery, setFilterQuery] = useState('');
 
   // Pending add data (for two-step add)
-  const [pendingAdd, setPendingAdd] = useState<{ text: string; project?: string; unknownProject?: string; expectedPomodoros: number } | null>(null);
+  const [pendingAdd, setPendingAdd] = useState<{ text: string; project?: string; unknownProject?: string; date?: string; time?: string; endTime?: string } | null>(null);
   // For confirm-project prompt (unknown #tag)
   const [confirmProjectName, setConfirmProjectName] = useState('');
   const [confirmProjectFrom, setConfirmProjectFrom] = useState<'add' | 'edit'>('add');
+
+  // Scheduling state
+  const [scheduleStep, setScheduleStep] = useState<'date' | 'time' | 'end'>('date');
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleEndTime, setScheduleEndTime] = useState('');
 
   // Task detail view
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
@@ -281,7 +257,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       if (key.escape) {
         // Skip description, save task without it
         if (pendingAdd) {
-          addTask(pendingAdd.text, pendingAdd.expectedPomodoros, pendingAdd.project);
+          addTask(pendingAdd.text, pendingAdd.project, undefined, pendingAdd.date, pendingAdd.time, pendingAdd.endTime);
           refresh();
         }
         setInputMode('none');
@@ -305,6 +281,20 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       return;
     }
 
+    // ─── Scheduling input (date -> time -> end) ─────────────────────────
+    if (inputMode === 'schedule') {
+      if (key.escape) {
+        setInputMode('none');
+        setIsTyping(false);
+        setScheduleDate('');
+        setScheduleTime('');
+        setScheduleEndTime('');
+        setScheduleStep('date');
+        return;
+      }
+      return;
+    }
+
     // ─── Confirm unknown project prompt ────────────────────────────────
     if (inputMode === 'confirm-project') {
       if (input === 'a' && pendingAdd?.unknownProject) {
@@ -314,7 +304,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
         if (confirmProjectFrom === 'edit') {
           const task = incompleteTasks[selectedIdx];
           if (task) {
-            updateTask(task.id, { text: updated.text, project: updated.project, expectedPomodoros: updated.expectedPomodoros });
+            updateTask(task.id, { text: updated.text, project: updated.project, date: updated.date, time: updated.time, endTime: updated.endTime });
             refresh();
             setDescInputValue(task.description ?? '');
             setInputMode('edit-desc');
@@ -336,7 +326,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
         if (confirmProjectFrom === 'edit') {
           const task = incompleteTasks[selectedIdx];
           if (task && updated) {
-            updateTask(task.id, { text: updated.text, project: undefined, expectedPomodoros: updated.expectedPomodoros });
+            updateTask(task.id, { text: updated.text, project: undefined, date: updated.date, time: updated.time, endTime: updated.endTime });
             refresh();
             setDescInputValue(task.description ?? '');
             setInputMode('edit-desc');
@@ -436,6 +426,19 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       return;
     }
 
+    if (input === 's' && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
+      const task = incompleteTasks[selectedIdx];
+      if (task) {
+        setScheduleDate(task.date || new Date().toISOString().slice(0, 10));
+        setScheduleTime(task.time || '');
+        setScheduleEndTime(task.endTime || '');
+        setScheduleStep('date');
+        setInputMode('schedule');
+        setIsTyping(true);
+      }
+      return;
+    }
+
     if (input === 'x') {
       if (selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
         const task = incompleteTasks[selectedIdx];
@@ -521,7 +524,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
   const handleAddDescSubmit = useCallback((value: string) => {
     if (pendingAdd) {
       const desc = value.trim() || undefined;
-      addTask(pendingAdd.text, pendingAdd.expectedPomodoros, pendingAdd.project, desc);
+      addTask(pendingAdd.text, pendingAdd.project, desc, pendingAdd.date, pendingAdd.time, pendingAdd.endTime);
       refresh();
     }
     setInputMode('none');
@@ -545,7 +548,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
         setInputValue('');
         return;
       }
-      updateTask(task.id, { text: parsed.text, project: parsed.project, expectedPomodoros: parsed.expectedPomodoros });
+      updateTask(task.id, { text: parsed.text, project: parsed.project, date: parsed.date, time: parsed.time, endTime: parsed.endTime });
       refresh();
       // Move to description edit step
       setDescInputValue(task.description ?? '');
@@ -568,6 +571,37 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
     setIsTyping(false);
     setDescInputValue('');
   }, [incompleteTasks, selectedIdx, refresh, setIsTyping]);
+
+  const handleScheduleSubmit = useCallback((value: string) => {
+    const task = incompleteTasks[selectedIdx];
+    if (!task) return;
+
+    if (scheduleStep === 'date') {
+      setScheduleDate(value.trim());
+      setScheduleStep('time');
+      return;
+    }
+    if (scheduleStep === 'time') {
+      setScheduleTime(value.trim());
+      setScheduleStep('end');
+      return;
+    }
+    if (scheduleStep === 'end') {
+      const endTime = value.trim();
+      updateTask(task.id, {
+        date: scheduleDate || undefined,
+        time: scheduleTime || undefined,
+        endTime: endTime || undefined,
+      });
+      refresh();
+      setInputMode('none');
+      setIsTyping(false);
+      setScheduleDate('');
+      setScheduleTime('');
+      setScheduleEndTime('');
+      setScheduleStep('date');
+    }
+  }, [incompleteTasks, selectedIdx, scheduleStep, scheduleDate, scheduleTime, refresh, setIsTyping]);
 
   // Project overlay handlers
   const handleProjectAddSubmit = useCallback((value: string) => {
@@ -650,7 +684,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
       )}
       {inputMode === 'add' && (
         <TaskInputBar label="> " inputKey={inputKey} inputValue={inputValue} setInputValue={setInputValue}
-          onSubmit={handleAddSubmit} placeholder="Task name #project /N" projectMenu={projectMenu} suggestionIdx={suggestionIdx} />
+          onSubmit={handleAddSubmit} placeholder="Task name #project" projectMenu={projectMenu} suggestionIdx={suggestionIdx} />
       )}
       {inputMode === 'add-desc' && (
         <Box flexDirection="column" marginTop={1}>
@@ -669,6 +703,45 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap }: Tas
           <Box>
             <Text color="yellow">{'Desc: '}</Text>
             <TextInput value={descInputValue} onChange={setDescInputValue} onSubmit={handleEditDescSubmit} placeholder="Description (Enter to keep, Esc to skip)" />
+          </Box>
+        </Box>
+      )}
+      {inputMode === 'schedule' && (
+        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="cyan" paddingX={1}>
+          <Text color="cyan" bold>Schedule Task: {incompleteTasks[selectedIdx]?.text}</Text>
+          <Box>
+            <Text color="yellow">{scheduleStep === 'date' ? '🗓️ Date (YYYY-MM-DD): ' : scheduleStep === 'time' ? '⏱️ Start Time (HH:MM): ' : '🛑 End Time (HH:MM): '}</Text>
+            <TextInput
+              value={scheduleStep === 'date' ? scheduleDate : scheduleStep === 'time' ? scheduleTime : scheduleEndTime}
+              onChange={(v) => {
+                if (scheduleStep === 'date') setScheduleDate(v);
+                else if (scheduleStep === 'time') setScheduleTime(v);
+                else setScheduleEndTime(v);
+              }}
+              onSubmit={(v) => {
+                if (scheduleStep === 'date') {
+                  setScheduleDate(v);
+                  setScheduleStep('time');
+                } else if (scheduleStep === 'time') {
+                  setScheduleTime(v);
+                  setScheduleStep('end');
+                } else {
+                  updateTask(incompleteTasks[selectedIdx]!.id, {
+                    date: scheduleDate || undefined,
+                    time: scheduleTime || undefined,
+                    endTime: v.trim() || undefined,
+                  });
+                  refresh();
+                  setInputMode('none');
+                  setIsTyping(false);
+                  setScheduleDate('');
+                  setScheduleTime('');
+                  setScheduleEndTime('');
+                  setScheduleStep('date');
+                }
+              }}
+              placeholder={scheduleStep === 'date' ? 'YYYY-MM-DD' : scheduleStep === 'time' ? 'HH:MM' : 'HH:MM (Enter to skip)'}
+            />
           </Box>
         </Box>
       )}

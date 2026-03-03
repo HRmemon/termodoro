@@ -77,11 +77,12 @@ export interface Task {
   completed: boolean;
   description?: string;
   project?: string;
-  expectedPomodoros: number;
-  completedPomodoros: number;
   createdAt: string;
   completedAt?: string;
   deadline?: string;  // YYYY-MM-DD
+  date?: string;       // YYYY-MM-DD
+  time?: string;       // HH:MM
+  endTime?: string;    // HH:MM
 }
 
 export interface ScheduledNotification {
@@ -108,7 +109,7 @@ export type SessionStatus = Session['status'];
 export type EnergyLevel = NonNullable<Session['energyLevel']>;
 export type Priority = TimeBlock['priority'];
 
-export type View = 'calendar' | 'timer' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks' | 'web' | 'tracker' | 'graphs';
+export type View = 'timer' | 'stats' | 'config' | 'clock' | 'reminders' | 'tasks' | 'web' | 'tracker' | 'graphs' | 'dayplanner';
 
 export type Overlay =
   | 'zen'

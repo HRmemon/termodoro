@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 
 interface FilterInputProps {
-  label: string;
+  label: React.ReactNode | string;
   value: string;
   onChange: (v: string) => void;
   onSubmit: (v: string) => void;
@@ -59,7 +59,7 @@ export function FilterInput({ label, value, onChange, onSubmit, placeholder, ite
   return (
     <Box flexDirection="column">
       <Box>
-        <Text>{label}</Text>
+        {typeof label === 'string' ? <Text>{label}</Text> : label}
         <TextInput
           key={inputKey}
           value={value}

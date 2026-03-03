@@ -1,3 +1,4 @@
+// DEPRECATED: Retained for future reference. Currently detached from UI routing.
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, useInput, useStdout } from 'ink';
 import type { CalendarEvent, Config } from '../types.js';
@@ -9,7 +10,7 @@ import { EventForm } from './EventForm.js';
 import type { Keymap } from '../lib/keymap.js';
 import { getTodayStr, parseDateParts, addDays } from '../lib/date-utils.js';
 import { saveConfig, loadConfig } from '../lib/config.js';
-import { setCalendarSelectedDate } from '../lib/nvim-edit/index.js';
+// import { setCalendarSelectedDate } from '../lib/nvim-edit/index.js';
 import { useCalendarData } from '../hooks/useCalendarData.js';
 
 type ViewMode = 'monthly' | 'daily' | 'add' | 'edit';
@@ -55,7 +56,7 @@ export function CalendarView({ setIsTyping, config, keymap }: CalendarViewProps)
 
   // Keep nvim-edit in sync with selected date for cursor positioning
   useEffect(() => {
-    setCalendarSelectedDate(selectedDate);
+    // setCalendarSelectedDate(selectedDate);
   }, [selectedDate]);
 
   // ICS version for reloading
