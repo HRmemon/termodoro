@@ -157,14 +157,15 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
     }
   });
 
-  const finalizeReminder = useCallback(() => {
+  const finalizeReminder = useCallback((titleOverride?: string) => {
+    const finalTitle = titleOverride ?? pendingTitle;
     if (editingId) {
-      updateReminder(editingId, { time: pendingTime, title: pendingTitle });
+      updateReminder(editingId, { time: pendingTime, title: finalTitle });
     } else {
       addReminder({
         id: nanoid(),
         time: pendingTime,
-        title: pendingTitle || pendingTime,
+        title: finalTitle || pendingTime,
         enabled: true,
         recurring: pendingRecurring,
       });
@@ -197,9 +198,10 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
   }, [editingId, pendingTitle, compactTime]);
 
   const handleTitleSubmit = useCallback((value: string) => {
-    setPendingTitle(value.trim() || pendingTime);
+    const finalTitle = value.trim() || pendingTime;
+    setPendingTitle(finalTitle);
     setInputValue('');
-    finalizeReminder();
+    finalizeReminder(finalTitle);
   }, [pendingTime, finalizeReminder]);
 
   return (
