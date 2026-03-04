@@ -5,57 +5,54 @@ import type { SessionType, SequenceBlock, SessionSequence } from '../types.js';
 import { BigTimer } from './BigTimer.js';
 import { useProjectAutocomplete } from '../hooks/useProjectAutocomplete.js';
 import { colors } from '../lib/theme.js';
-import { type Keymap, kmMatches } from '../lib/keymap.js';
+import { kmMatches } from '../lib/keymap.js';
 import { ModePickerOverlay } from './timer/ModePickerOverlay.js';
 import { SequencePickerOverlay } from './timer/SequencePickerOverlay.js';
+import { useDaemon } from '../contexts/DaemonContext.js';
+import { useConfig } from '../contexts/ConfigContext.js';
+import { useUI } from '../contexts/UIContext.js';
 
 interface TimerViewProps {
-  secondsLeft: number;
-  totalSeconds: number;
-  sessionType: SessionType;
-  isPaused: boolean;
-  isRunning: boolean;
-  sessionNumber: number;
-  totalWorkSessions: number;
-  sequenceBlocks?: SequenceBlock[];
-  currentBlockIndex?: number;
-  setIsTyping: (isTyping: boolean) => void;
-  timerFormat?: 'mm:ss' | 'hh:mm:ss' | 'minutes';
-  onSetCustomDuration: (minutes: number) => void;
-  currentProject?: string;
-  onSetProject: (project: string) => void;
   sequences: SessionSequence[];
-  activeSequence: SessionSequence | null;
-  onActivateSequence: (seq: SessionSequence) => void;
-  onClearSequence: () => void;
   onEditSequences: () => void;
-  timerMode: 'countdown' | 'stopwatch';
-  stopwatchElapsed: number;
-  onSwitchToStopwatch: () => void;
-  onStopStopwatch: () => void;
-  keymap?: Keymap;
 }
 
 export function TimerView({
-  secondsLeft, totalSeconds, sessionType, isPaused, isRunning,
-  sessionNumber, totalWorkSessions,
-  sequenceBlocks, currentBlockIndex,
-  setIsTyping,
-  timerFormat,
-  onSetCustomDuration,
-  currentProject,
-  onSetProject,
   sequences,
-  activeSequence,
-  onActivateSequence,
-  onClearSequence,
   onEditSequences,
-  timerMode,
-  stopwatchElapsed,
-  onSwitchToStopwatch,
-  onStopStopwatch,
-  keymap,
 }: TimerViewProps) {
+  const { timer, engine, sequence: seqState, actions } = useDaemon();
+  const { config, keymap } = useConfig();
+  const { setIsTyping, setView } = useUI();
+
+  const secondsLeft = timer.secondsLeft;
+  const totalSeconds = timer.totalSeconds;
+  const isPaused = timer.isPaused;
+  const isRunning = timer.isRunning;
+  const timerMode = timer.timerMode;
+  const stopwatchElapsed = timer.stopwatchElapsed;
+
+  const sessionType = engine.sessionType;
+  const sessionNumber = engine.sessionNumber;
+  const totalWorkSessions = engine.totalWorkSessions;
+  const currentProject = engine.currentProject;
+
+  const sequenceBlocks = seqState.sequenceBlocks;
+  const currentBlockIndex = seqState.sequenceBlockIndex;
+  const activeSequence = seqState.sequenceName ? { name: seqState.sequenceName, blocks: seqState.sequenceBlocks ?? [] } : null;
+
+  const timerFormat = config.timerFormat;
+
+  const onSetCustomDuration = actions.setDuration;
+  const onSetProject = actions.setProject;
+  const onActivateSequence = useCallback((seq: SessionSequence) => {
+    actions.activateSequence(seq.name);
+    setView('timer');
+  }, [actions, setView]);
+  const onClearSequence = actions.clearSequence;
+  const onSwitchToStopwatch = actions.switchToStopwatch;
+  const onStopStopwatch = actions.stopStopwatch;
+
   const [isSettingDuration, setIsSettingDuration] = useState(false);
   const [durationInput, setDurationInput] = useState('');
   const [showProjectInput, setShowProjectInput] = useState(false);

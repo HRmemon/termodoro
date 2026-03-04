@@ -35,6 +35,10 @@ import { initTheme } from './lib/theme.js';
 import { getShortcutMap } from './lib/views.js';
 import { createKeymap } from './lib/keymap.js';
 
+import { DaemonContext } from './contexts/DaemonContext.js';
+import { ConfigContext } from './contexts/ConfigContext.js';
+import { UIContext } from './contexts/UIContext.js';
+
 interface AppProps {
   config: Config;
   initialView?: View;
@@ -75,7 +79,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   const { exit } = useApp();
 
   // Connect to daemon
-  const { timer, engine, sequence, actions, connectionStatus } = useDaemonConnection();
+  const { state, timer, engine, sequence, actions, connectionStatus } = useDaemonConnection();
 
   // Reminder checker — runs every 30s
   useReminderChecker(config);
@@ -266,210 +270,200 @@ export function App({ config: initialConfig, initialView, initialProject, initia
     }
   });
 
-  // Show connection status screens
-  if (connectionStatus !== 'connected') {
-    return <Connecting status={connectionStatus} />;
-  }
-
-  // Full-screen overlays
-  if (overlay === 'commandPalette') {
-    return (
-      <CommandPalette
-        onCommand={handleCommand}
-        onDismiss={() => setOverlay(null)}
-      />
-    );
-  }
-
-  if (overlay === 'search') {
-    return (
-      <SearchView
-        onBack={() => setOverlay(null)}
-        initialQuery={searchQuery}
-      />
-    );
-  }
-
-  if (overlay === 'insights') {
-    return (
-      <InsightsView
-        onBack={() => setOverlay(null)}
-      />
-    );
-  }
-
-  if (overlay === 'globalSearch') {
-    return (
-      <GlobalSearch
-        onNavigate={handleGlobalSearchNavigate}
-        onDismiss={() => setOverlay(null)}
-      />
-    );
-  }
-
-  if (overlay === 'resetModal') {
-    return (
-      <ResetModal
-        elapsed={timer.timerMode === 'stopwatch' ? timer.stopwatchElapsed : timer.elapsed}
-        sessionType={engine.sessionType}
-        onConfirm={handleResetConfirm}
-        onCancel={() => setOverlay(null)}
-      />
-    );
-  }
-
-  if (overlay === 'taskPicker') {
-    return (
-      <TaskPickerModal
-        onDismiss={() => {
-          setOverlay(null);
-          setIsTyping(false);
-          setPickerInitialTask(undefined);
-        }}
-        onComplete={() => {
-          setOverlay(null);
-          setIsTyping(false);
-          setPickerInitialTask(undefined);
-          setEditGeneration(g => g + 1);
-        }}
-        compactTime={config.compactTime}
-        setIsTyping={setIsTyping}
-        initialDate={pickerInitialDate}
-        initialMode={pickerMode}
-        initialTask={pickerInitialTask}
-      />
-    );
-  }
-
-  // Zen mode
-  if (overlay === 'zen') {
-    if (view === 'clock') {
-      return <ZenClock />;
+  const content = (() => {
+    // Show connection status screens
+    if (connectionStatus !== 'connected') {
+      return <Connecting status={connectionStatus} />;
     }
-    return (
-      <ZenMode
-        secondsLeft={timer.secondsLeft}
-        totalSeconds={timer.totalSeconds}
+
+    // Full-screen overlays
+    if (overlay === 'commandPalette') {
+      return (
+        <CommandPalette
+          onCommand={handleCommand}
+          onDismiss={() => setOverlay(null)}
+        />
+      );
+    }
+
+    if (overlay === 'search') {
+      return (
+        <SearchView
+          onBack={() => setOverlay(null)}
+          initialQuery={searchQuery}
+        />
+      );
+    }
+
+    if (overlay === 'insights') {
+      return (
+        <InsightsView
+          onBack={() => setOverlay(null)}
+        />
+      );
+    }
+
+    if (overlay === 'globalSearch') {
+      return (
+        <GlobalSearch
+          onNavigate={handleGlobalSearchNavigate}
+          onDismiss={() => setOverlay(null)}
+        />
+      );
+    }
+
+    if (overlay === 'resetModal') {
+      return (
+        <ResetModal
+          elapsed={timer.timerMode === 'stopwatch' ? timer.stopwatchElapsed : timer.elapsed}
+          sessionType={engine.sessionType}
+          onConfirm={handleResetConfirm}
+          onCancel={() => setOverlay(null)}
+        />
+      );
+    }
+
+    if (overlay === 'taskPicker') {
+      return (
+        <TaskPickerModal
+          onDismiss={() => {
+            setOverlay(null);
+            setIsTyping(false);
+            setPickerInitialTask(undefined);
+          }}
+          onComplete={() => {
+            setOverlay(null);
+            setIsTyping(false);
+            setPickerInitialTask(undefined);
+            setEditGeneration(g => g + 1);
+          }}
+          compactTime={config.compactTime}
+          setIsTyping={setIsTyping}
+          initialDate={pickerInitialDate}
+          initialMode={pickerMode}
+          initialTask={pickerInitialTask}
+        />
+      );
+    }
+
+    // Zen mode
+    if (overlay === 'zen') {
+      if (view === 'clock') {
+        return <ZenClock />;
+      }
+      return (
+        <ZenMode
+          secondsLeft={timer.secondsLeft}
+          totalSeconds={timer.totalSeconds}
+          sessionType={engine.sessionType}
+          isPaused={timer.isPaused}
+          isRunning={timer.isRunning}
+          timerFormat={config.timerFormat}
+          timerMode={timer.timerMode}
+          stopwatchElapsed={timer.stopwatchElapsed}
+        />
+      );
+    }
+
+    const statusLine = (
+      <StatusLine
         sessionType={engine.sessionType}
-        isPaused={timer.isPaused}
         isRunning={timer.isRunning}
-        timerFormat={config.timerFormat}
+        isPaused={timer.isPaused}
         timerMode={timer.timerMode}
-        stopwatchElapsed={timer.stopwatchElapsed}
+        streak={statusBarData.streak}
+        todaySessions={statusBarData.todayCount}
+        todayFocusMinutes={statusBarData.todayFocusMinutes}
       />
     );
-  }
 
-  const statusLine = (
-    <StatusLine
-      sessionType={engine.sessionType}
-      isRunning={timer.isRunning}
-      isPaused={timer.isPaused}
-      timerMode={timer.timerMode}
-      streak={statusBarData.streak}
-      todaySessions={statusBarData.todayCount}
-      todayFocusMinutes={statusBarData.todayFocusMinutes}
-    />
-  );
+    // Resolve effective layout — runtime sidebar override takes precedence
+    const baseLayout = config.layout ?? { sidebar: 'visible', showKeysBar: true, compact: false };
+    const effectiveLayout: LayoutConfig = sidebarOverride !== null
+      ? { ...baseLayout, sidebar: sidebarOverride }
+      : baseLayout;
 
-  // Resolve effective layout — runtime sidebar override takes precedence
-  const baseLayout = config.layout ?? { sidebar: 'visible', showKeysBar: true, compact: false };
-  const effectiveLayout: LayoutConfig = sidebarOverride !== null
-    ? { ...baseLayout, sidebar: sidebarOverride }
-    : baseLayout;
+    const keysBar = effectiveLayout.showKeysBar ? (
+      <KeysBar
+        view={view}
+        isRunning={timer.isRunning}
+        isPaused={timer.isPaused}
+        strictMode={engine.isStrictMode}
 
-  const keysBar = effectiveLayout.showKeysBar ? (
-    <KeysBar
-      view={view}
-      isRunning={timer.isRunning}
-      isPaused={timer.isPaused}
-      strictMode={engine.isStrictMode}
+        hasActiveSequence={sequence.sequenceIsActive}
+        hasActiveProject={!!engine.currentProject}
+        timerMode={timer.timerMode}
+        config={config}
+        keymap={keymap}
+      />
+    ) : null;
 
-      hasActiveSequence={sequence.sequenceIsActive}
-      hasActiveProject={!!engine.currentProject}
-      timerMode={timer.timerMode}
-      config={config}
-      keymap={keymap}
-    />
-  ) : null;
+    return (
+      <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config} hideViewHeader={overlay === 'help'}>
+        {overlay === 'help' ? (
+          <HelpView onClose={() => setOverlay(null)} keymap={keymap} setIsTyping={setIsTyping} sidebarWidth={config.sidebarWidth} />
+        ) : (
+          <>
+            {view === 'timer' && (
+              <TimerView
+                sequences={allSequences}
+                onEditSequences={() => { setConfigSeqMode(true); setView('config'); }}
+              />
+            )}
+            {view === 'stats' && <ReportsView key={editGeneration} keymap={keymap} />}
+            {view === 'config' && (
+              <ConfigView
+                key={editGeneration}
+                config={config}
+                onConfigChange={(newConfig) => {
+                  setConfig(newConfig);
+                  actions.updateConfig();
+                }}
+                setIsTyping={setIsTyping}
+                initialSeqMode={configSeqMode}
+                onSeqModeConsumed={() => setConfigSeqMode(false)}
+                keymap={keymap}
+              />
+            )}
+            {view === 'clock' && <ClockView />}
+            {view === 'reminders' && (
+              <RemindersView
+                key={editGeneration}
+                setIsTyping={setIsTyping}
+                compactTime={config.compactTime}
+                focusId={reminderFocusId}
+                onFocusConsumed={() => setReminderFocusId(null)}
+                keymap={keymap}
+              />
+            )}
+            {view === 'tasks' && (
+              <TasksView
+                key={editGeneration}
+                setIsTyping={setIsTyping}
+                focusId={taskFocusId}
+                onFocusConsumed={() => setTaskFocusId(null)}
+                keymap={keymap}
+                compactTime={config.compactTime}
+                onOpenPicker={(mode, date, task) => { setPickerMode(mode); setPickerInitialDate(date); setPickerInitialTask(task); setOverlay('taskPicker'); }}
+              />
+            )}
+            {view === 'web' && <WebView keymap={keymap} />}
+            {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
+            {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
+            {view === 'dayplanner' && <DayPlannerView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} compactTime={config.compactTime} onOpenPicker={(mode, date, task) => { setPickerMode(mode); setPickerInitialDate(date); setPickerInitialTask(task); setOverlay('taskPicker'); }} />}
+          </>
+        )}
+      </Layout>
+    );
+  })();
 
   return (
-    <Layout activeView={view} statusLine={statusLine} keysBar={keysBar} sidebarWidth={config.sidebarWidth} layout={effectiveLayout} config={config} hideViewHeader={overlay === 'help'}>
-      {overlay === 'help' ? (
-        <HelpView onClose={() => setOverlay(null)} keymap={keymap} setIsTyping={setIsTyping} sidebarWidth={config.sidebarWidth} />
-      ) : (
-        <>
-          {view === 'timer' && (
-            <TimerView
-              secondsLeft={timer.secondsLeft}
-              totalSeconds={timer.totalSeconds}
-              sessionType={engine.sessionType}
-              isPaused={timer.isPaused}
-              isRunning={timer.isRunning}
-              sessionNumber={engine.sessionNumber}
-              totalWorkSessions={engine.totalWorkSessions}
-              sequenceBlocks={sequence.sequenceBlocks}
-              currentBlockIndex={sequence.sequenceBlockIndex}
-              setIsTyping={setIsTyping}
-              timerFormat={config.timerFormat}
-              onSetCustomDuration={handleSetCustomDuration}
-              currentProject={engine.currentProject}
-              onSetProject={(p) => actions.setProject(p)}
-              sequences={allSequences}
-              activeSequence={sequence.sequenceName ? { name: sequence.sequenceName, blocks: sequence.sequenceBlocks ?? [] } : null}
-              onActivateSequence={handleActivateSequence}
-              onClearSequence={handleClearSequence}
-              onEditSequences={() => { setConfigSeqMode(true); setView('config'); }}
-              timerMode={timer.timerMode}
-              stopwatchElapsed={timer.stopwatchElapsed}
-              onSwitchToStopwatch={() => actions.switchToStopwatch()}
-              onStopStopwatch={() => actions.stopStopwatch()}
-              keymap={keymap}
-            />
-          )}
-          {view === 'stats' && <ReportsView key={editGeneration} keymap={keymap} />}
-          {view === 'config' && (
-            <ConfigView
-              key={editGeneration}
-              config={config}
-              onConfigChange={(newConfig) => {
-                setConfig(newConfig);
-                actions.updateConfig();
-              }}
-              setIsTyping={setIsTyping}
-              initialSeqMode={configSeqMode}
-              onSeqModeConsumed={() => setConfigSeqMode(false)}
-              keymap={keymap}
-            />
-          )}
-          {view === 'clock' && <ClockView />}
-          {view === 'reminders' && (
-            <RemindersView
-              key={editGeneration}
-              setIsTyping={setIsTyping}
-              compactTime={config.compactTime}
-              focusId={reminderFocusId}
-              onFocusConsumed={() => setReminderFocusId(null)}
-              keymap={keymap}
-            />
-          )}
-          {view === 'tasks' && (
-            <TasksView
-              key={editGeneration}
-              setIsTyping={setIsTyping}
-              focusId={taskFocusId}
-              onFocusConsumed={() => setTaskFocusId(null)}
-              keymap={keymap}
-              compactTime={config.compactTime}
-              onOpenPicker={(mode, date, task) => { setPickerMode(mode); setPickerInitialDate(date); setPickerInitialTask(task); setOverlay('taskPicker'); }}
-            />
-          )}
-          {view === 'web' && <WebView keymap={keymap} />}
-          {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
-          {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
-          {view === 'dayplanner' && <DayPlannerView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} compactTime={config.compactTime} onOpenPicker={(mode, date, task) => { setPickerMode(mode); setPickerInitialDate(date); setPickerInitialTask(task); setOverlay('taskPicker'); }} />}
-        </>
-      )}
-    </Layout>
+    <ConfigContext.Provider value={{ config, setConfig, keymap }}>
+      <DaemonContext.Provider value={{ state, timer, engine, sequence, actions }}>
+        <UIContext.Provider value={{ view, setView, overlay, setOverlay, isTyping, setIsTyping }}>
+          {content}
+        </UIContext.Provider>
+      </DaemonContext.Provider>
+    </ConfigContext.Provider>
   );
 }
