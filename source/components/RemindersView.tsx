@@ -26,6 +26,7 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
   const [inputValue, setInputValue] = useState('');
   const [pendingTime, setPendingTime] = useState('');
   const [pendingTitle, setPendingTitle] = useState('');
+  const [pendingRecurring, setPendingRecurring] = useState(true);
   const [error, setError] = useState('');
   const [taskIdx, setTaskIdx] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,17 +48,22 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
 
     if (step === 'task') {
       if (key.escape) {
-        // Skip task linking, save reminder without task
-        finalizeReminder(null);
+        setStep('none');
+        setIsTyping(false);
         return;
       }
       if (key.return) {
-        const t = tasks[taskIdx];
-        finalizeReminder(t?.id ?? null);
+        if (editingId) {
+          const t = taskIdx === 0 ? null : tasks[taskIdx - 1];
+          updateReminder(editingId, { taskId: t?.id ?? undefined });
+          refresh();
+        }
+        setStep('none');
+        setIsTyping(false);
         return;
       }
       if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) {
-        setTaskIdx(i => Math.min(i + 1, tasks.length - 1));
+        setTaskIdx(i => Math.min(i + 1, tasks.length));
       }
       if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) {
         setTaskIdx(i => Math.max(i - 1, 0));
@@ -88,6 +94,7 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
       setInputValue('');
       setPendingTime('');
       setPendingTitle('');
+      setPendingRecurring(true);
       setStep('time');
       setIsTyping(true);
       setError('');
@@ -104,6 +111,19 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
         setStep('time');
         setIsTyping(true);
         setError('');
+      }
+      return;
+    }
+
+    if (input === 'l' && reminders.length > 0) {
+      const r = reminders[selectedIdx];
+      if (r) {
+        setEditingId(r.id);
+        // Find if it has a linked task to pre-select it
+        const currentTaskIdx = tasks.findIndex(t => t.id === r.taskId);
+        setTaskIdx(currentTaskIdx >= 0 ? currentTaskIdx + 1 : 0);
+        setStep('task');
+        setIsTyping(true);
       }
       return;
     }
@@ -137,17 +157,16 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
     }
   });
 
-  const finalizeReminder = useCallback((linkedTaskId: string | null) => {
+  const finalizeReminder = useCallback(() => {
     if (editingId) {
-      updateReminder(editingId, { time: pendingTime, title: pendingTitle, taskId: linkedTaskId ?? undefined });
+      updateReminder(editingId, { time: pendingTime, title: pendingTitle });
     } else {
       addReminder({
         id: nanoid(),
         time: pendingTime,
         title: pendingTitle || pendingTime,
-        taskId: linkedTaskId ?? undefined,
         enabled: true,
-        recurring: true,
+        recurring: pendingRecurring,
       });
     }
     refresh();
@@ -155,7 +174,7 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
     setIsTyping(false);
     setError('');
     setTaskIdx(0);
-  }, [editingId, pendingTime, pendingTitle, refresh, setIsTyping]);
+  }, [editingId, pendingTime, pendingTitle, pendingRecurring, refresh, setIsTyping]);
 
   const handleTimeSubmit = useCallback((value: string) => {
     const trimmed = value.trim();
@@ -166,7 +185,12 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
         : 'Invalid time. Use HH:MM (e.g. 09:30)');
       return;
     }
+
+    const cleanValue = trimmed.toLowerCase().replace(/^remind\s+/, '').trim();
+    const isRelative = cleanValue.length > 0 && /^(?:\+)?(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?$/.test(cleanValue);
+
     setPendingTime(parsed);
+    setPendingRecurring(!isRelative);
     setInputValue(editingId ? pendingTitle : '');
     setStep('title');
     setError('');
@@ -175,12 +199,8 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
   const handleTitleSubmit = useCallback((value: string) => {
     setPendingTitle(value.trim() || pendingTime);
     setInputValue('');
-    if (tasks.length > 0) {
-      setStep('task');
-    } else {
-      finalizeReminder(null);
-    }
-  }, [pendingTime, tasks.length, finalizeReminder]);
+    finalizeReminder();
+  }, [pendingTime, finalizeReminder]);
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -235,14 +255,22 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
       )}
       {step === 'task' && (
         <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Link to task (Esc to skip, Enter to confirm):</Text>
-          {tasks.map((t, i) => (
-            <Box key={t.id}>
-              <Text color={i === taskIdx ? 'yellow' : 'gray'} bold={i === taskIdx}>
-                {i === taskIdx ? '> ' : '  '}{t.text}
-              </Text>
-            </Box>
-          ))}
+          <Text color="yellow">Link to task (Esc to cancel, Enter to confirm):</Text>
+          <Box key="none">
+            <Text color={taskIdx === 0 ? 'yellow' : 'gray'} bold={taskIdx === 0}>
+              {taskIdx === 0 ? '> ' : '  '}None
+            </Text>
+          </Box>
+          {tasks.map((t, i) => {
+            const actualIdx = i + 1;
+            return (
+              <Box key={t.id}>
+                <Text color={actualIdx === taskIdx ? 'yellow' : 'gray'} bold={actualIdx === taskIdx}>
+                  {actualIdx === taskIdx ? '> ' : '  '}{t.text}
+                </Text>
+              </Box>
+            );
+          })}
         </Box>
       )}
 
