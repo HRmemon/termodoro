@@ -234,6 +234,7 @@ export function addPendingSuggestions(
   pomoStart?: string,
   pomoDuration?: number,
 ): WeekData {
+  let changed = false;
   const updated = { ...weekData, pending: { ...weekData.pending } };
   const now = new Date().toISOString();
 
@@ -251,10 +252,14 @@ export function addPendingSuggestions(
       ...(pomoDuration ? { pomoDuration } : {}),
       createdAt: now,
     };
+    changed = true;
   }
 
-  saveWeek(updated);
-  return updated;
+  if (changed) {
+    saveWeek(updated);
+    return updated;
+  }
+  return weekData;
 }
 
 export function acceptPending(weekData: WeekData, date: string, time: string): WeekData {

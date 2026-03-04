@@ -90,12 +90,15 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
           const webSugs = generateWebSuggestions(breakdown, fullConfig.domainRules);
           if (webSugs.length > 0) {
             const withDate = webSugs.map(s => ({ ...s, date: todayStr }));
-            const updated = addPendingSuggestions(current, withDate, 'web');
-            setWeek(updated);
+            current = addPendingSuggestions(current, withDate, 'web');
           }
         }
       }
     } catch { /* browser DB may not exist */ }
+    
+    if (current !== week) {
+      setWeek(current);
+    }
   }, [week, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pendingCount = week ? getPendingCount(week) : 0;
