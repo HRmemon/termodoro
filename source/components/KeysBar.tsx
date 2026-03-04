@@ -132,6 +132,12 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
     actionHints.push({ key: hlLabel, label: 'Days' });
     actionHints.push({ key: jkLabel, label: 'Navigate' });
     actionHints.push({ key: 't', label: 'Today' });
+    actionHints.push({ key: 'x', label: 'Done/Undo' });
+    actionHints.push({ key: km ? km.label('list.add') : 'a', label: 'Add' });
+    actionHints.push({ key: km ? km.label('list.edit') : 'e', label: 'Edit' });
+    actionHints.push({ key: 's', label: 'Schedule' });
+    actionHints.push({ key: 'u', label: 'Detach' });
+    actionHints.push({ key: km ? km.label('list.delete') : 'd', label: 'Delete' });
   }
 
   // Global nav hints (bottom row) — build shortcut range dynamically

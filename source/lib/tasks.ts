@@ -80,33 +80,35 @@ export function parseTaskInput(value: string): { text: string; project?: string;
   let time: string | undefined;
   let endTime: string | undefined;
 
-  // Parse date:YYYY-MM-DD
-  const dateMatch = text.match(/date:(\d{4}-\d{2}-\d{2})/);
+  // Parse date:YYYY-MM-DD or date:YYYY/MM/DD or date:YYYY.MM.DD
+  const dateMatch = text.match(/date:(\d{4}[-/.]\d{2}[-/.]\d{2})/);
   if (dateMatch) {
-    date = dateMatch[1];
-    text = text.replace(/date:\d{4}-\d{2}-\d{2}/, '').trim();
+    date = dateMatch[1]!.replace(/[./]/g, '-');
+    text = text.replace(/date:\d{4}[-/.]\d{2}[-/.]\d{2}/, '').trim();
   }
 
-  // Parse time:HH:MM
-  const timeMatch = text.match(/time:(\d{2}:\d{2})/);
+  // Parse time:<val> (more flexible to support 12h/24h/compact)
+  // We look for time: followed by non-space chars
+  const timeMatch = text.match(/time:(\S+)/);
   if (timeMatch) {
     time = timeMatch[1];
-    text = text.replace(/time:\d{2}:\d{2}/, '').trim();
+    text = text.replace(/time:\S+/, '').trim();
   }
 
-  // Parse end:HH:MM
-  const endMatch = text.match(/end:(\d{2}:\d{2})/);
+  // Parse end:<val>
+  const endMatch = text.match(/end:(\S+)/);
   if (endMatch) {
     endTime = endMatch[1];
-    text = text.replace(/end:\d{2}:\d{2}/, '').trim();
+    text = text.replace(/end:\S+/, '').trim();
   }
 
   // Extract #project
-  const projMatch = text.match(/(?:^|\s+)#(\S+)\s*$/);
+  // Now allows #project anywhere in the string, but typically at the end
+  const projMatch = text.match(/(?:^|\s+)#(\S+)/);
   if (projMatch) {
     const candidate = projMatch[1]!;
     const existing = getProjects();
-    text = text.replace(new RegExp(`(?:^|\\s+)#${candidate}\\s*$`), '').trim();
+    text = text.replace(new RegExp(`(?:^|\\s+)#${candidate}`), '').trim();
     if (existing.includes(candidate)) {
       project = candidate;
     } else {
