@@ -89,7 +89,7 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
       const trimmed = textInput.trim();
       if (!trimmed) return;
       const parsed = parseTaskInput(trimmed);
-      setPendingTask({ text: parsed.text, project: parsed.project });
+      setPendingTask(prev => prev ? { ...prev, text: parsed.text, project: parsed.project } : { text: parsed.text, project: parsed.project });
       
       // If inline tags were found, populate and skip their steps?
       // Actually, user wants the 4 questions to be ASKED (confirmed).
@@ -175,13 +175,15 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
         
         if ('id' in pendingTask) {
           updateTask(pendingTask.id, {
-            date: dateValue,
+            text: pendingTask.text,
+            project: pendingTask.project,
+            date: dateValue || undefined,
             time: finalStart,
             endTime: finalEnd,
             description: desc || undefined
           });
         } else {
-          addTask(pendingTask.text, pendingTask.project, desc || undefined, dateValue, finalStart, finalEnd);
+          addTask(pendingTask.text, pendingTask.project, desc || undefined, dateValue || undefined, finalStart, finalEnd);
         }
       }
       onComplete();
