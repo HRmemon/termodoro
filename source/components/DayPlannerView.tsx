@@ -13,7 +13,7 @@ interface DayPlannerViewProps {
   keymap?: Keymap;
   setIsTyping: (v: boolean) => void;
   compactTime: boolean;
-  onOpenPicker: (mode: 'select' | 'text', date: string) => void;
+  onOpenPicker: (mode: 'select' | 'text', date?: string, task?: any) => void;
 }
 
 type InputMode = 'none' | 'edit' | 'schedule';
@@ -167,11 +167,12 @@ export function DayPlannerView({ keymap, setIsTyping, compactTime, onOpenPicker 
     if (kmMatches(keymap, 'list.edit', input, key) && totalNavItems > 0) {
       const item = allNavItems[selectedIdx];
       if (item && item.type === 'task') {
-        let editValue = item.text;
-        if (item.project) editValue += ` #${item.project}`;
-        setInputValue(editValue);
-        setInputMode('edit');
-        setIsTyping(true);
+        // Find the full task from loadTasks to get description etc.
+        const allTasks = loadTasks();
+        const fullTask = allTasks.find(t => t.id === item.id);
+        if (fullTask) {
+          onOpenPicker('text', selectedDate, fullTask);
+        }
       }
       return;
     }
@@ -221,6 +222,15 @@ export function DayPlannerView({ keymap, setIsTyping, compactTime, onOpenPicker 
         deleteReminder(item.id);
         refresh();
         setSelectedIdx(i => Math.max(0, Math.min(i, totalNavItems - 2)));
+      }
+      return;
+    }
+
+    if (input === 'u' && totalNavItems > 0) {
+      const item = allNavItems[selectedIdx];
+      if (item && item.type === 'task') {
+        updateTask(item.id, { date: undefined, time: undefined, endTime: undefined });
+        refresh();
       }
       return;
     }

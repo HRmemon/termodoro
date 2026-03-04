@@ -14,12 +14,13 @@ interface TaskPickerModalProps {
   compactTime: boolean;
   initialDate?: string;
   initialMode: 'select' | 'text';
+  initialTask?: Task;
   setIsTyping: (v: boolean) => void;
 }
 
 type Step = 'select' | 'text' | 'date' | 'startTime' | 'endTime' | 'desc';
 
-export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDate, initialMode, setIsTyping }: TaskPickerModalProps) {
+export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDate, initialMode, initialTask, setIsTyping }: TaskPickerModalProps) {
   useEffect(() => {
     // By default, the modal is in a typing mode if it's text entry or searching
     return () => setIsTyping(false);
@@ -28,15 +29,20 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
   const [step, setStep] = useState<Step>(initialMode);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [textInput, setTextInput] = useState('');
+  const [textInput, setTextInput] = useState(() => {
+    if (initialTask) {
+      return initialTask.text + (initialTask.project ? ` #${initialTask.project}` : '');
+    }
+    return '';
+  });
   const [selectedIdx, setSelectedIdx] = useState(0);
 
   // Form State
-  const [pendingTask, setPendingTask] = useState<Task | { text: string; project?: string } | null>(null);
-  const [dateValue, setDateValue] = useState(initialDate || getTodayStr());
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
-  const [desc, setDesc] = useState('');
+  const [pendingTask, setPendingTask] = useState<Task | { text: string; project?: string } | null>(initialTask || null);
+  const [dateValue, setDateValue] = useState(initialTask?.date || initialDate || getTodayStr());
+  const [startTime, setStartTime] = useState(initialTask?.time || '');
+  const [endTime, setEndTime] = useState(initialTask?.endTime || '');
+  const [desc, setDesc] = useState(initialTask?.description || '');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

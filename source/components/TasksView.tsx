@@ -21,7 +21,7 @@ interface TasksViewProps {
   onFocusConsumed?: () => void;
   keymap?: Keymap;
   compactTime: boolean;
-  onOpenPicker: (mode: 'select' | 'text') => void;
+  onOpenPicker: (mode: 'select' | 'text', date?: string, task?: Task) => void;
 }
 
 type InputMode = 'none' | 'edit' | 'edit-desc' | 'filter' | 'filtered' | 'confirm-project';
@@ -74,6 +74,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
     hashAnchor: true,
     refreshDeps: [tasks],
   });
+
 
   const acceptSuggestion = useCallback(() => {
     if (!projectMenu || !selectedProject) return;
@@ -201,15 +202,8 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
         return;
       }
       if (input === 'e') {
-        // Jump straight to description edit
-        const idx = incompleteTasks.findIndex(t => t.id === viewingTask.id);
-        if (idx >= 0) {
-          setSelectedIdx(idx);
-          setDescInputValue(viewingTask.description ?? '');
-          setInputMode('edit-desc');
-          setIsTyping(true);
-        }
         setViewingTask(null);
+        onOpenPicker('text', undefined, viewingTask);
         return;
       }
       return;
@@ -373,11 +367,7 @@ export function TasksView({ setIsTyping, focusId, onFocusConsumed, keymap, compa
     if (kmMatches(km, 'list.edit', input, key) && inputMode !== 'filtered' && selectedIdx < incompleteTasks.length && incompleteTasks.length > 0) {
       const task = incompleteTasks[selectedIdx];
       if (task) {
-        let editValue = task.text;
-        if (task.project) editValue += ` #${task.project}`;
-        setInputValue(editValue);
-        setInputMode('edit');
-        setIsTyping(true);
+        onOpenPicker('text', undefined, task);
       }
       return;
     }

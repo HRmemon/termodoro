@@ -70,6 +70,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   const [configSeqMode, setConfigSeqMode] = useState(false);
   const [pickerInitialDate, setPickerInitialDate] = useState<string | undefined>(undefined);
   const [pickerMode, setPickerMode] = useState<'select' | 'text'>('text');
+  const [pickerInitialTask, setPickerInitialTask] = useState<import('./types.js').Task | undefined>(undefined);
 
   const { exit } = useApp();
 
@@ -320,15 +321,22 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   if (overlay === 'taskPicker') {
     return (
       <TaskPickerModal
-        onDismiss={() => setOverlay(null)}
+        onDismiss={() => {
+          setOverlay(null);
+          setIsTyping(false);
+          setPickerInitialTask(undefined);
+        }}
         onComplete={() => {
           setOverlay(null);
+          setIsTyping(false);
+          setPickerInitialTask(undefined);
           setEditGeneration(g => g + 1);
         }}
         compactTime={config.compactTime}
         setIsTyping={setIsTyping}
         initialDate={pickerInitialDate}
         initialMode={pickerMode}
+        initialTask={pickerInitialTask}
       />
     );
   }
@@ -453,13 +461,13 @@ export function App({ config: initialConfig, initialView, initialProject, initia
               onFocusConsumed={() => setTaskFocusId(null)}
               keymap={keymap}
               compactTime={config.compactTime}
-              onOpenPicker={(mode) => { setPickerMode(mode); setPickerInitialDate(undefined); setOverlay('taskPicker'); }}
+              onOpenPicker={(mode, date, task) => { setPickerMode(mode); setPickerInitialDate(date); setPickerInitialTask(task); setOverlay('taskPicker'); }}
             />
           )}
           {view === 'web' && <WebView keymap={keymap} />}
           {view === 'tracker' && <TrackerView key={editGeneration} keymap={keymap} />}
           {view === 'graphs' && <GraphsView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} />}
-          {view === 'dayplanner' && <DayPlannerView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} compactTime={config.compactTime} onOpenPicker={(mode, date) => { setPickerMode(mode); setPickerInitialDate(date); setOverlay('taskPicker'); }} />}
+          {view === 'dayplanner' && <DayPlannerView key={editGeneration} setIsTyping={setIsTyping} keymap={keymap} compactTime={config.compactTime} onOpenPicker={(mode, date, task) => { setPickerMode(mode); setPickerInitialDate(date); setPickerInitialTask(task); setOverlay('taskPicker'); }} />}
         </>
       )}
     </Layout>
