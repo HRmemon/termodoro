@@ -17,9 +17,14 @@ interface TaskPickerModalProps {
   setIsTyping: (v: boolean) => void;
 }
 
-type Step = 'select' | 'text' | 'date' | 'time' | 'desc';
+type Step = 'select' | 'text' | 'date' | 'startTime' | 'endTime' | 'desc';
 
 export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDate, initialMode, setIsTyping }: TaskPickerModalProps) {
+  useEffect(() => {
+    // By default, the modal is in a typing mode if it's text entry or searching
+    return () => setIsTyping(false);
+  }, [setIsTyping]);
+
   const [step, setStep] = useState<Step>(initialMode);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,12 +37,19 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [desc, setDesc] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Determine if typing mode based on step and searching status
-    const isTyping = step !== 'select' || isSearching;
-    setIsTyping(isTyping);
+    // modal steps 'text', 'date', 'startTime', 'endTime', 'desc' should all set isTyping
+    // 'select' only if isSearching
+    const typing = step !== 'select' || isSearching;
+    setIsTyping(typing);
   }, [step, isSearching, setIsTyping]);
+
+  useEffect(() => {
+    setError(null);
+  }, [step, textInput, dateValue, startTime, endTime]);
+
 
   // Step: select
   const allTasks = useMemo(() => loadTasks().filter(t => !t.completed), []);
@@ -68,22 +80,90 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
         setSelectedIdx(0);
       }
     } else if (step === 'text') {
-      if (!textInput.trim()) return;
-      const parsed = parseTaskInput(textInput);
+      const trimmed = textInput.trim();
+      if (!trimmed) return;
+      const parsed = parseTaskInput(trimmed);
       setPendingTask({ text: parsed.text, project: parsed.project });
+      
+      // If inline tags were found, populate and skip their steps?
+      // Actually, user wants the 4 questions to be ASKED (confirmed).
+      // So we populate the next steps' inputs but still show the screens.
       if (parsed.time) setStartTime(parsed.time);
       if (parsed.endTime) setEndTime(parsed.endTime);
       if (parsed.date) setDateValue(parsed.date);
+      
       setStep('date');
       setSelectedIdx(0);
     } else if (step === 'date') {
-      // If dateValue is empty but hints exist, we can pick the highlighted hint
-      // But typically user just confirms what's in the input.
-      setStep('time');
-    } else if (step === 'time') {
-      setStep('desc');
+      const trimmedDate = dateValue.trim();
+      
+      // If user clears the date field, skip date and time completely
+      if (!trimmedDate) {
+        setDateValue('');
+        setStartTime('');
+        setEndTime('');
+        setStep('desc');
+        return;
+      }
+
+      // Robust date selection:
+      // If user has typed a valid-looking date, use it.
+      // Otherwise, if they haven't typed anything or it's partial, use the highlighted hint.
+      let finalDate = trimmedDate;
+      const isFullFormat = /^\d{4}-\d{2}-\d{2}$/.test(trimmedDate);
+      
+      if (!isFullFormat && dateHints[selectedIdx]) {
+        finalDate = dateHints[selectedIdx]!.date;
+      } else if (!isFullFormat) {
+        setError('Invalid format. Use YYYY-MM-DD');
+        return;
+      }
+
+      // Final semantic check: is it a real date?
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(finalDate)) {
+        setError('Invalid format. Use YYYY-MM-DD');
+        return;
+      }
+      
+      const [y, m, d] = finalDate.split('-').map(Number);
+      const dObj = new Date(y!, m! - 1, d!);
+      if (isNaN(dObj.getTime()) || dObj.getFullYear() !== y || dObj.getMonth() !== m! - 1 || dObj.getDate() !== d) {
+        setError('Invalid calendar date');
+        return;
+      }
+
+      setDateValue(finalDate);
+      setStep('startTime');
+    } else if (step === 'startTime') {
+      if (!startTime.trim()) {
+        setEndTime(''); // Clear end time if start is skipped
+        setStep('desc');
+      } else {
+        const parsed = parseTimeInput(startTime, compactTime);
+        if (!parsed) {
+          setError('Invalid time format');
+          return;
+        }
+        setStartTime(parsed);
+        setStep('endTime');
+      }
+    } else if (step === 'endTime') {
+      if (!endTime.trim()) {
+        setStep('desc');
+      } else {
+        const parsed = parseTimeInput(endTime, compactTime);
+        if (!parsed) {
+          setError('Invalid time format');
+          return;
+        }
+        setEndTime(parsed);
+        setStep('desc');
+      }
     } else if (step === 'desc') {
       if (pendingTask) {
+        // Validation: if we somehow got here with empty text (should be blocked by step === 'text' above)
+        if (!('id' in pendingTask) && !pendingTask.text.trim()) return;
+
         const finalStart = parseTimeInput(startTime, compactTime) || undefined;
         const finalEnd = parseTimeInput(endTime, compactTime) || undefined;
         
@@ -100,7 +180,8 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
       }
       onComplete();
     }
-  }, [step, filteredTasks, selectedIdx, textInput, dateValue, startTime, endTime, desc, pendingTask, compactTime, onComplete]);
+  }, [step, filteredTasks, selectedIdx, textInput, dateValue, startTime, endTime, desc, pendingTask, compactTime, onComplete, dateHints]);
+
 
   useInput((input, key) => {
     if (key.escape) {
@@ -219,7 +300,7 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
     <Box flexDirection="column">
       <Box>
         <Text color="yellow">Date: </Text>
-        <TextInput value={dateValue} onChange={(v) => { setDateValue(v); setSelectedIdx(0); }} placeholder="YYYY-MM-DD" />
+        <TextInput value={dateValue} onChange={(v) => { setDateValue(v); setSelectedIdx(0); }} placeholder="YYYY-MM-DD (Clear to skip)" />
       </Box>
       <Box flexDirection="column" marginTop={1}>
         {dateHints.map((hint, i) => (
@@ -234,18 +315,26 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
     </Box>
   );
 
-  const renderTimePicker = () => (
+  const renderStartTimePicker = () => (
     <Box flexDirection="column">
       <Box>
         <Text color="yellow">Start Time: </Text>
-        <TextInput value={startTime} onChange={setStartTime} placeholder="e.g. 2pm, 14:30" />
-      </Box>
-      <Box marginTop={1}>
-        <Text color="yellow">End Time:   </Text>
-        <TextInput value={endTime} onChange={setEndTime} placeholder="Optional" />
+        <TextInput value={startTime} onChange={setStartTime} placeholder="e.g. 2pm, 14:30 (Enter to skip)" />
       </Box>
       <Box marginTop={1}>
         <Text dimColor>Format: 2pm, 14:30, 0900</Text>
+      </Box>
+    </Box>
+  );
+
+  const renderEndTimePicker = () => (
+    <Box flexDirection="column">
+      <Box>
+        <Text color="yellow">End Time:   </Text>
+        <TextInput value={endTime} onChange={setEndTime} placeholder="e.g. 4pm, 16:30 (Enter to skip)" />
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>Format: 4pm, 16:30, 1000</Text>
       </Box>
     </Box>
   );
@@ -259,13 +348,16 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
     </Box>
   );
 
-  const stepMeta = {
-    select: { current: 1, total: 4, title: 'Attach Task to Plan', footer: 'j/k: move  /: search  a: add new  Enter: select' },
-    text: { current: 1, total: 4, title: 'Create New Task', footer: 'Enter: next  Tab: select project  Esc: cancel' },
-    date: { current: 2, total: 4, title: 'Set Date', footer: 'Ctrl+j/k: hints  Enter: next  Esc: cancel' },
-    time: { current: 3, total: 4, title: 'Set Time', footer: 'Enter: next  Esc: cancel' },
-    desc: { current: 4, total: 4, title: 'Add Description', footer: 'Enter: finish  Esc: cancel' },
-  }[step];
+  const stepMetaMap: Record<Step, { current: number; total: number; title: string; footer: string }> = {
+    select: { current: 1, total: 5, title: 'Attach Task to Plan', footer: 'j/k: move  /: search  a: add new  Enter: select' },
+    text: { current: 1, total: 5, title: 'Create New Task', footer: 'Enter: next  Tab: select project  Esc: cancel' },
+    date: { current: 2, total: 5, title: 'Set Date', footer: 'Ctrl+j/k: hints  Enter: next  Esc: cancel' },
+    startTime: { current: 3, total: 5, title: 'Set Start Time', footer: 'Enter: next  Esc: cancel' },
+    endTime: { current: 4, total: 5, title: 'Set End Time', footer: 'Enter: next  Esc: cancel' },
+    desc: { current: 5, total: 5, title: 'Add Description', footer: 'Enter: finish  Esc: cancel' },
+  };
+
+  const stepMeta = stepMetaMap[step];
 
   return (
     <Modal
@@ -273,10 +365,16 @@ export function TaskPickerModal({ onDismiss, onComplete, compactTime, initialDat
       step={{ current: stepMeta.current, total: stepMeta.total }}
       footer={stepMeta.footer}
     >
+      {error && (
+        <Box marginBottom={1}>
+          <Text color="red" bold>Error: {error}</Text>
+        </Box>
+      )}
       {step === 'select' && renderSelect()}
       {step === 'text' && renderText()}
       {step === 'date' && renderDatePicker()}
-      {step === 'time' && renderTimePicker()}
+      {step === 'startTime' && renderStartTimePicker()}
+      {step === 'endTime' && renderEndTimePicker()}
       {step === 'desc' && renderDescPicker()}
     </Modal>
   );

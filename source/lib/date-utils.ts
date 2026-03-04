@@ -64,14 +64,18 @@ export function getConsecutiveDates(prefix: string, count: number): { label: str
   
   // Try to parse partial date
   const parts = prefix.split('-');
-  const year = parseInt(parts[0]!) || new Date().getFullYear();
+  const parsedYear = parseInt(parts[0]!);
+  const year = isNaN(parsedYear) ? new Date().getFullYear() : parsedYear;
   const month = parseInt(parts[1]!) || (new Date().getMonth() + 1);
   const day = parseInt(parts[2]!) || 1;
 
-  // Start from the parsed date and generate count consecutive days
-  let currentStr = formatDateStr(year, month, day);
+  // Use a fallback to current date if the parsed year is invalid or incomplete (e.g., less than 4 digits can cause Invalid Date parsing later)
+  let currentStr = formatDateStr(year < 1000 ? new Date().getFullYear() : year, month, day);
   for (let i = 0; i < count; i++) {
     const d = new Date(currentStr + 'T00:00:00');
+    if (isNaN(d.getTime())) {
+      break; // Stop if we generated an invalid date
+    }
     const label = d.toLocaleDateString('en-US', { weekday: 'long' });
     hints.push({ label, date: currentStr });
     currentStr = addDays(currentStr, 1);
