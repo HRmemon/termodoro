@@ -28,6 +28,61 @@ const DEFAULT_CONFIG: Config = {
   sidebarWidth: 20,
   theme: { preset: 'default' },
   layout: { sidebar: 'visible', showKeysBar: true, compact: false },
+  browserRules: [
+    {
+      id: 'focus_wasted_active',
+      type: 'focus',
+      sessionType: 'work',
+      categories: ['W', 'SF'],
+      state: 'active',
+      minContinuousMinutes: 0,
+      message: 'Focus! Close ${domain}.',
+      throttleMinutes: 1
+    },
+    {
+      id: 'focus_wasted_audible',
+      type: 'focus',
+      sessionType: 'work',
+      categories: ['W', 'SF'],
+      state: 'audible',
+      minContinuousMinutes: 0,
+      message: 'Focus! Pause audio on ${domain}.',
+      throttleMinutes: 1
+    },
+    {
+      id: 'doomscroll_wasted',
+      type: 'tracking',
+      sessionType: 'any',
+      categories: ['W', 'SF'],
+      state: 'active',
+      minContinuousMinutes: 15,
+      message: 'You have been on ${domain} for 15m. Time for a break?',
+      throttleMinutes: 15
+    },
+    {
+      id: 'daily_limit_wasted',
+      type: 'tracking',
+      sessionType: 'any',
+      categories: ['W', 'SF'],
+      state: 'active',
+      minTodayMinutes: 60,
+      message: 'Daily limit reached! You have spent ${time_today} on ${domain} today.',
+      throttleMinutes: 60
+    }
+  ],
+  domainRules: [
+    { pattern: 'youtube.com', category: 'W' },
+    { pattern: 'reddit.com', category: 'W' },
+    { pattern: 'twitter.com', category: 'W' },
+    { pattern: 'facebook.com', category: 'W' },
+    { pattern: 'instagram.com', category: 'W' },
+    { pattern: 'netflix.com', category: 'W' },
+    { pattern: 'tiktok.com', category: 'W' },
+    { pattern: 'twitch.tv', category: 'W' },
+    { pattern: 'news.ycombinator.com', category: 'SF' },
+    { pattern: 'github.com', category: 'O' },
+    { pattern: 'stackoverflow.com', category: 'O' }
+  ]
 };
 
 function deepMerge<T extends object>(base: T, override: Partial<T>): T {

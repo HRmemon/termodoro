@@ -354,4 +354,12 @@ await ensureDaemon();
 
 const initialView = viewMap[command]!;
 
+if (!process.stdout.isTTY) {
+  console.error('Cannot render TUI without a TTY. Running in background mode.');
+  // Keep process alive if needed, but usually this shouldn't be reached for pure daemon.
+  // Wait, if it's auto-started daemon, it's not starting a view, it exits.
+  // But just in case:
+  process.exit(0);
+}
+
 render(<App config={config} initialView={initialView} initialProject={cli.flags.project} initialSequence={cli.flags.sequence} />);

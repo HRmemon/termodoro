@@ -27,6 +27,114 @@ export interface BrowserStats {
 
 const DB_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'browser.db');
 
+let sharedDb: InstanceType<typeof Database> | null = null;
+
+export function getBrowserDb(): InstanceType<typeof Database> {
+  if (!sharedDb) {
+    // Ensure dir exists
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+    sharedDb = new Database(DB_PATH);
+    sharedDb.pragma('journal_mode = WAL');
+    
+    // Legacy table
+    sharedDb.exec(`
+      CREATE TABLE IF NOT EXISTS page_visits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        path TEXT NOT NULL DEFAULT '/',
+        title TEXT NOT NULL DEFAULT '',
+        is_active INTEGER NOT NULL DEFAULT 0,
+        is_audible INTEGER NOT NULL DEFAULT 0,
+        duration_sec INTEGER NOT NULL DEFAULT 60,
+        recorded_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_page_visits_domain ON page_visits(domain);
+      CREATE INDEX IF NOT EXISTS idx_page_visits_recorded_at ON page_visits(recorded_at);
+      
+      -- New tables for event-based tracking
+      CREATE TABLE IF NOT EXISTS browser_daily_usage (
+        date TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        active_seconds INTEGER NOT NULL DEFAULT 0,
+        audible_seconds INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (date, domain)
+      );
+      CREATE INDEX IF NOT EXISTS idx_browser_daily_usage_date ON browser_daily_usage(date);
+      
+      CREATE TABLE IF NOT EXISTS browser_events_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        payload TEXT NOT NULL
+      );
+    `);
+  }
+  return sharedDb;
+}
+
+export function closeBrowserDb() {
+  if (sharedDb) {
+    sharedDb.close();
+    sharedDb = null;
+  }
+}
+
+export function logBrowserEvent(eventType: string, payload: any) {
+  try {
+    const db = getBrowserDb();
+    db.prepare(`INSERT INTO browser_events_log (timestamp, event_type, payload) VALUES (?, ?, ?)`).run(
+      Date.now(), eventType, JSON.stringify(payload)
+    );
+  } catch (err) {
+    console.error("Failed to log browser event", err);
+  }
+}
+
+export function upsertDomainUsage(domain: string, activeDeltaSec: number, audibleDeltaSec: number) {
+  try {
+    if (activeDeltaSec <= 0 && audibleDeltaSec <= 0) return;
+    const db = getBrowserDb();
+    const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    
+    db.prepare(`
+      INSERT INTO browser_daily_usage (date, domain, active_seconds, audible_seconds)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(date, domain) DO UPDATE SET
+        active_seconds = active_seconds + excluded.active_seconds,
+        audible_seconds = audible_seconds + excluded.audible_seconds
+    `).run(date, domain, activeDeltaSec, audibleDeltaSec);
+
+    // Also insert into legacy table for now so existing stats functions work
+    if (activeDeltaSec > 0) {
+      db.prepare(`
+        INSERT INTO page_visits (url, domain, path, title, is_active, is_audible, duration_sec, recorded_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(`https://${domain}`, domain, '/', '', 1, 0, activeDeltaSec, new Date().toISOString());
+    }
+    if (audibleDeltaSec > 0 && activeDeltaSec === 0) {
+      db.prepare(`
+        INSERT INTO page_visits (url, domain, path, title, is_active, is_audible, duration_sec, recorded_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(`https://${domain}`, domain, '/', '', 0, 1, audibleDeltaSec, new Date().toISOString());
+    }
+  } catch (err) {
+    console.error("Failed to upsert domain usage", err);
+  }
+}
+
+export function getTodayDomainUsage(domain: string): { active_seconds: number, audible_seconds: number } {
+  try {
+    const db = getBrowserDb();
+    const date = new Date().toISOString().slice(0, 10);
+    const row = db.prepare(`SELECT active_seconds, audible_seconds FROM browser_daily_usage WHERE date = ? AND domain = ?`).get(date, domain) as any;
+    if (row) {
+      return { active_seconds: row.active_seconds, audible_seconds: row.audible_seconds };
+    }
+  } catch {}
+  return { active_seconds: 0, audible_seconds: 0 };
+}
+
 export function getBrowserStatsForDate(date: string): BrowserStats | null {
   if (!fs.existsSync(DB_PATH)) return null;
 

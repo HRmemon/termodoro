@@ -12,11 +12,14 @@ import { validateCommand } from './validate-command.js';
 import { writeStatusFile, clearStatusFile, invalidateTodayStats, initStatusFile } from './status-writer.js';
 import { executeHook } from './hooks.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
+import { BrowserTracker } from './browser-tracker.js';
 
 // Set of subscribed client sockets
 const subscribers = new Set<net.Socket>();
 const MAX_SUBSCRIBERS = 64;
 const SOCKET_HIGHWATER_BYTES = 256 * 1024; // 256 KB
+
+const tracker = new BrowserTracker();
 
 function send(socket: net.Socket, msg: DaemonResponse | DaemonEvent): void {
   if (socket.destroyed) {
@@ -148,6 +151,7 @@ export function startDaemon(): void {
   });
   engine.on('state:change', (state: EngineFullState) => {
     writeStatusFile(state);
+    tracker.handlePomodoroStateChange(state);
   });
 
   // Execute hooks on lifecycle events
@@ -184,6 +188,7 @@ export function startDaemon(): void {
 
   // Write initial status
   writeStatusFile(engine.getState());
+  tracker.handlePomodoroStateChange(engine.getState());
 
   // Handle commands
   function handleCommand(cmd: DaemonCommand): DaemonResponse {
@@ -308,6 +313,12 @@ export function startDaemon(): void {
 
         try {
           const parsed = JSON.parse(line);
+          
+          if (parsed && parsed.cmd === 'browser-event') {
+            tracker.handleEvent(parsed);
+            continue;
+          }
+          
           const validated = validateCommand(parsed);
 
           if (typeof validated === 'string') {
