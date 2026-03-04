@@ -47,7 +47,27 @@ export function formatHours(h: number): string {
 }
 
 export function parseTimeInput(input: string, compact: boolean): string | null {
-  const trimmed = input.trim().toLowerCase();
+  let trimmed = input.trim().toLowerCase();
+  
+  // Strip leading "remind " if user typed it
+  if (trimmed.startsWith('remind ')) {
+    trimmed = trimmed.replace(/^remind\s+/, '').trim();
+  }
+
+  // Try relative time format (e.g. "30m", "1h", "1h30m", "1h 30m", "+30m")
+  const relMatch = trimmed.match(/^(?:\+)?(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?$/);
+  if (relMatch && (relMatch[1] || relMatch[2])) {
+    const hours = relMatch[1] ? parseInt(relMatch[1], 10) : 0;
+    const minutes = relMatch[2] ? parseInt(relMatch[2], 10) : 0;
+    
+    const now = new Date();
+    now.setHours(now.getHours() + hours);
+    now.setMinutes(now.getMinutes() + minutes);
+    
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }
   
   // Try 12-hour format with AM/PM (e.g., "2:30 pm", "2:30pm", "2pm")
   const ampmMatch = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
