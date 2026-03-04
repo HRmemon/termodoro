@@ -125,7 +125,7 @@ export function ConfigFieldList({
   const [soundPickerEvent, setSoundPickerEvent] = useState<SoundEvent | null>(null);
 
   const { rows: termRows } = useFullScreen();
-  const WINDOW_SIZE = Math.max(5, termRows - 12);
+  const WINDOW_SIZE = Math.max(4, termRows - 16);
   const [scrollTop, setScrollTop] = useState(0);
 
   const allRows = useMemo(() => {
@@ -343,7 +343,7 @@ export function ConfigFieldList({
   return (
     <Box flexDirection="column" flexGrow={1}>
       {hasMoreAbove && (
-        <Box paddingLeft={2}>
+        <Box paddingLeft={2} flexShrink={0}>
           <Text dimColor>↑ more above</Text>
         </Box>
       )}
@@ -351,7 +351,7 @@ export function ConfigFieldList({
       {visibleRows.map((row, i) => {
         if (row.type === 'header') {
           return (
-            <Box key={`header-${row.data}`} marginTop={i === 0 && !hasMoreAbove ? 0 : 1} marginBottom={1}>
+            <Box key={`header-${row.data}`} marginTop={0} marginBottom={0} flexShrink={0}>
               <Text color="blue" bold>--- {row.data} ---</Text>
             </Box>
           );
@@ -359,7 +359,7 @@ export function ConfigFieldList({
 
         if (row.type === 'manager-header') {
           return (
-            <Box key="manager-header" marginTop={1} marginBottom={1}>
+            <Box key="manager-header" marginTop={0} marginBottom={0} flexShrink={0}>
               <Text color="blue" bold>--- {row.data} ---</Text>
             </Box>
           );
@@ -368,13 +368,14 @@ export function ConfigFieldList({
         if (row.type === 'manager') {
           const isSelected = row.selectableIdx === selectedIdx;
           return (
-            <ConfigNavEntry
-              key={row.data.label}
-              label={row.data.label}
-              detail={row.data.detail}
-              isSelected={isSelected}
-              hint="Enter to manage"
-            />
+            <Box key={row.data.label} flexShrink={0}>
+              <ConfigNavEntry
+                label={row.data.label}
+                detail={row.data.detail}
+                isSelected={isSelected}
+                hint="Enter to manage"
+              />
+            </Box>
           );
         }
 

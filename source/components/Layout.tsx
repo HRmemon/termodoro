@@ -86,7 +86,7 @@ export function Layout({ activeView, statusLine, keysBar, children, sidebarWidth
               <Text bold color={colors.text}>{viewTitle}</Text>
             </Box>
           )}
-          <Box flexDirection="column" flexGrow={1}>
+          <Box flexDirection="column" flexGrow={1} overflow="hidden">
             {children}
           </Box>
         </Box>
