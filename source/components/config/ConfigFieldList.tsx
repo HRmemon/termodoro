@@ -413,16 +413,8 @@ export function ConfigFieldList({
                 <Box width={26}>
                   <Text color={isSelected ? 'white' : 'gray'}>{field.label}</Text>
                 </Box>
-                {isEditing && isSelected ? (
-                  <TextInput
-                    value={editValue}
-                    onChange={setEditValue}
-                    onSubmit={handleEditSubmit}
-                  />
-                ) : (
-                  <Text color={valueColor} bold={isSelected}>
-                    {displayValue}
-                  </Text>
+                {isSelected && field.type === 'sound-event' && (
+                  <Text dimColor>  Enter: cycle  p: preview</Text>
                 )}
                 {isSelected && field.type === 'sound-event' && (
                   <Text dimColor>  Enter: cycle  p: preview</Text>
