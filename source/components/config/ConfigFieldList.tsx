@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Config } from '../../types.js';
@@ -8,6 +8,7 @@ import type { SoundEvent, SoundChoice } from '../../lib/sounds.js';
 import { SoundPicker } from './SoundPicker.js';
 import { ConfigNavEntry } from './ConfigNavEntry.js';
 import { type Keymap, kmMatches } from '../../lib/keymap.js';
+import { useFullScreen } from '../../hooks/useFullScreen.js';
 
 type FieldType = 'number' | 'boolean' | 'cycle' | 'sound-event' | 'sound-duration' | 'sound-volume';
 
@@ -18,38 +19,51 @@ interface ConfigField {
   unit?: string;
   values?: string[];
   soundEvent?: SoundEvent;
+  category: string;
+  description: string;
 }
 
 export const FIELDS: ConfigField[] = [
-  { key: 'workDuration', label: 'Work Duration', type: 'number', unit: 'min' },
-  { key: 'shortBreakDuration', label: 'Short Break', type: 'number', unit: 'min' },
-  { key: 'longBreakDuration', label: 'Long Break', type: 'number', unit: 'min' },
-  { key: 'longBreakInterval', label: 'Long Break After', type: 'number', unit: 'sessions' },
-  { key: 'autoStartBreaks', label: 'Auto-start Breaks', type: 'boolean' },
-  { key: 'autoStartWork', label: 'Auto-start Work', type: 'boolean' },
-  { key: 'strictMode', label: 'Strict Mode', type: 'boolean' },
-  { key: 'sound', label: 'Sound', type: 'boolean' },
-  { key: 'sound:work-end', label: '  Work End Sound', type: 'sound-event', soundEvent: 'work-end' },
-  { key: 'sound:break-end', label: '  Break End Sound', type: 'sound-event', soundEvent: 'break-end' },
-  { key: 'sound:reminder', label: '  Reminder Sound', type: 'sound-event', soundEvent: 'reminder' },
-  { key: 'sound:alarmDuration', label: '  Alarm Duration', type: 'sound-duration', unit: 'sec' },
-  { key: 'sound:volume', label: '  Volume', type: 'sound-volume', unit: '%' },
-  { key: 'notifications', label: 'Notifications', type: 'boolean' },
-  { key: 'notificationDuration', label: 'Notif Duration', type: 'number', unit: 'sec' },
-  { key: 'compactTime', label: 'Compact Time', type: 'boolean' },
-  { key: 'vimKeys', label: 'Vim Keys', type: 'boolean' },
-  { key: 'timerFormat', label: 'Timer Format', type: 'cycle', values: ['mm:ss', 'hh:mm:ss', 'minutes'] },
-  { key: 'browserTracking', label: 'Browser Tracking', type: 'boolean' },
-  { key: 'webDomainLimit', label: 'Web Domain Limit', type: 'number', unit: 'domains' },
-  { key: 'sidebarWidth', label: 'Sidebar Width', type: 'number', unit: 'chars' },
-  { key: 'layout.sidebar', label: 'Sidebar', type: 'cycle', values: ['visible', 'hidden'] },
-  { key: 'layout.showKeysBar', label: 'Keys Bar', type: 'boolean' },
-  { key: 'layout.compact', label: 'Compact Mode', type: 'boolean' },
-  { key: 'calendar.showSessionHeatmap', label: 'Cal: Heatmap', type: 'boolean' },
-  { key: 'calendar.weekStartsOn', label: 'Cal: Week Start', type: 'cycle', values: ['1', '0'] },
-  { key: 'calendar.showWeekNumbers', label: 'Cal: Week Numbers', type: 'boolean' },
-  { key: 'calendar.defaultView', label: 'Cal: Default View', type: 'cycle', values: ['monthly', 'daily'] },
-  { key: 'calendar.privacyMode', label: 'Cal: Privacy Mode', type: 'boolean' },
+  // Pomodoro
+  { key: 'workDuration', label: 'Work Duration', type: 'number', unit: 'min', category: 'Pomodoro', description: 'Length of a work session' },
+  { key: 'shortBreakDuration', label: 'Short Break', type: 'number', unit: 'min', category: 'Pomodoro', description: 'Length of a short break' },
+  { key: 'longBreakDuration', label: 'Long Break', type: 'number', unit: 'min', category: 'Pomodoro', description: 'Length of a long break' },
+  { key: 'longBreakInterval', label: 'Long Break After', type: 'number', unit: 'sessions', category: 'Pomodoro', description: 'Number of work sessions before a long break' },
+  { key: 'autoStartBreaks', label: 'Auto-start Breaks', type: 'boolean', category: 'Pomodoro', description: 'Automatically start breaks when work finishes' },
+  { key: 'autoStartWork', label: 'Auto-start Work', type: 'boolean', category: 'Pomodoro', description: 'Automatically start work when break finishes' },
+  { key: 'strictMode', label: 'Strict Mode', type: 'boolean', category: 'Pomodoro', description: 'Disable pausing and skipping sessions' },
+
+  // Sound & Notifications
+  { key: 'sound', label: 'Sound', type: 'boolean', category: 'Sound & Notifications', description: 'Enable or disable all sounds' },
+  { key: 'sound:work-end', label: '  Work End Sound', type: 'sound-event', soundEvent: 'work-end', category: 'Sound & Notifications', description: 'Sound to play when work ends' },
+  { key: 'sound:break-end', label: '  Break End Sound', type: 'sound-event', soundEvent: 'break-end', category: 'Sound & Notifications', description: 'Sound to play when a break ends' },
+  { key: 'sound:reminder', label: '  Reminder Sound', type: 'sound-event', soundEvent: 'reminder', category: 'Sound & Notifications', description: 'Sound to play for scheduled reminders' },
+  { key: 'sound:alarmDuration', label: '  Alarm Duration', type: 'sound-duration', unit: 'sec', category: 'Sound & Notifications', description: 'How long sounds play before stopping' },
+  { key: 'sound:volume', label: '  Volume', type: 'sound-volume', unit: '%', category: 'Sound & Notifications', description: 'Sound volume level' },
+  { key: 'notifications', label: 'Notifications', type: 'boolean', category: 'Sound & Notifications', description: 'Enable OS-level desktop notifications' },
+  { key: 'notificationDuration', label: 'Notif Duration', type: 'number', unit: 'sec', category: 'Sound & Notifications', description: 'How long OS notifications stay on screen' },
+
+  // UI & Layout
+  { key: 'timerFormat', label: 'Timer Format', type: 'cycle', values: ['mm:ss', 'hh:mm:ss', 'minutes'], category: 'UI & Layout', description: 'How the main timer is displayed' },
+  { key: 'layout.sidebar', label: 'Sidebar', type: 'cycle', values: ['visible', 'hidden', 'auto'], category: 'UI & Layout', description: 'Sidebar visibility mode' },
+  { key: 'sidebarWidth', label: 'Sidebar Width', type: 'number', unit: 'chars', category: 'UI & Layout', description: 'Width of the sidebar in characters' },
+  { key: 'layout.showKeysBar', label: 'Keys Bar', type: 'boolean', category: 'UI & Layout', description: 'Show the keyboard shortcuts bar at the bottom' },
+  { key: 'layout.compact', label: 'Compact Mode', type: 'boolean', category: 'UI & Layout', description: 'Reduce UI padding and spacing' },
+  { key: 'compactTime', label: 'Compact Time Entry', type: 'boolean', category: 'UI & Layout', description: 'Allow typing "930" instead of "09:30" for times' },
+  { key: 'vimKeys', label: 'Vim Keys', type: 'boolean', category: 'UI & Layout', description: 'Use hjkl for navigation' },
+
+  // Calendar
+  { key: 'calendar.showSessionHeatmap', label: 'Heatmap', type: 'boolean', category: 'Calendar', description: 'Show session activity heatmap in calendar' },
+  { key: 'calendar.weekStartsOn', label: 'Week Start', type: 'cycle', values: ['1', '0'], category: 'Calendar', description: '0 for Sunday, 1 for Monday' },
+  { key: 'calendar.showWeekNumbers', label: 'Week Numbers', type: 'boolean', category: 'Calendar', description: 'Show week numbers in month view' },
+  { key: 'calendar.defaultView', label: 'Default View', type: 'cycle', values: ['monthly', 'daily'], category: 'Calendar', description: 'Initial calendar view' },
+  { key: 'calendar.privacyMode', label: 'Privacy Mode', type: 'boolean', category: 'Calendar', description: 'Hide event titles by default' },
+  { key: 'calendar.showTaskDeadlines', label: 'Task Deadlines', type: 'boolean', category: 'Calendar', description: 'Show tasks with deadlines in calendar' },
+  { key: 'calendar.showReminders', label: 'Reminders', type: 'boolean', category: 'Calendar', description: 'Show scheduled reminders in calendar' },
+
+  // Browser Tracking
+  { key: 'browserTracking', label: 'Browser Tracking', type: 'boolean', category: 'Browser Tracking', description: 'Track active browser tabs during sessions' },
+  { key: 'webDomainLimit', label: 'Web Domain Limit', type: 'number', unit: 'domains', category: 'Browser Tracking', description: 'Max number of domains to track' },
 ];
 
 interface ConfigFieldListProps {
@@ -110,6 +124,40 @@ export function ConfigFieldList({
   const [saved, setSaved] = useState(false);
   const [soundPickerEvent, setSoundPickerEvent] = useState<SoundEvent | null>(null);
 
+  const { rows: termRows } = useFullScreen();
+  const WINDOW_SIZE = Math.max(5, termRows - 12);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  const allRows = useMemo(() => {
+    const r: Array<{ type: 'header' | 'field' | 'manager-header' | 'manager'; data: any; selectableIdx?: number }> = [];
+    let lastCat = '';
+    FIELDS.forEach((field, i) => {
+      if (field.category !== lastCat) {
+        r.push({ type: 'header', data: field.category });
+        lastCat = field.category;
+      }
+      r.push({ type: 'field', data: field, selectableIdx: i });
+    });
+
+    r.push({ type: 'manager-header', data: 'Data Managers' });
+    r.push({ type: 'manager', data: { label: 'Tracker Categories', detail: `${catCount} categories` }, selectableIdx: FIELDS.length });
+    r.push({ type: 'manager', data: { label: 'Domain Rules', detail: `${ruleCount} rules` }, selectableIdx: FIELDS.length + 1 });
+    r.push({ type: 'manager', data: { label: 'Sequences', detail: `${seqCount} sequences` }, selectableIdx: FIELDS.length + 2 });
+    r.push({ type: 'manager', data: { label: 'Keybindings', detail: keybindingCount > 0 ? `${keybindingCount} custom` : 'defaults' }, selectableIdx: FIELDS.length + 3 });
+    r.push({ type: 'manager', data: { label: 'Themes', detail: themeCount > 0 ? `${themeCount} custom` : 'built-in only' }, selectableIdx: FIELDS.length + 4 });
+    return r;
+  }, [catCount, ruleCount, seqCount, keybindingCount, themeCount]);
+
+  const selectedRowIdx = allRows.findIndex(row => row.selectableIdx === selectedIdx);
+
+  useEffect(() => {
+    if (selectedRowIdx < scrollTop) {
+      setScrollTop(selectedRowIdx);
+    } else if (selectedRowIdx >= scrollTop + WINDOW_SIZE) {
+      setScrollTop(selectedRowIdx - WINDOW_SIZE + 1);
+    }
+  }, [selectedRowIdx, scrollTop, WINDOW_SIZE]);
+
   const getFieldValue = (field: ConfigField): string => {
     if (field.type === 'sound-event' && field.soundEvent) {
       const choice = config.sounds[field.soundEvent];
@@ -164,7 +212,7 @@ export function ConfigFieldList({
         let clamped = num;
         if (field.key === 'sidebarWidth') clamped = Math.min(Math.max(num, 8), 30);
         else if (field.key === 'webDomainLimit') clamped = Math.min(Math.max(num, 10), 500);
-        const newConfig = setNestedValue(cfg, field.key, clamped) as unknown as Config;
+        const newConfig = setNestedValue(config as unknown as Record<string, unknown>, field.key, clamped) as unknown as Config;
         onConfigChange(newConfig);
         saveConfig(newConfig);
       }
@@ -288,12 +336,54 @@ export function ConfigFieldList({
     );
   }
 
+  const visibleRows = allRows.slice(scrollTop, scrollTop + WINDOW_SIZE);
+  const hasMoreAbove = scrollTop > 0;
+  const hasMoreBelow = scrollTop + WINDOW_SIZE < allRows.length;
+
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {FIELDS.map((field, i) => {
-        const isSelected = i === selectedIdx;
+      {hasMoreAbove && (
+        <Box paddingLeft={2}>
+          <Text dimColor>↑ more above</Text>
+        </Box>
+      )}
+
+      {visibleRows.map((row, i) => {
+        if (row.type === 'header') {
+          return (
+            <Box key={`header-${row.data}`} marginTop={i === 0 && !hasMoreAbove ? 0 : 1} marginBottom={1}>
+              <Text color="blue" bold>--- {row.data} ---</Text>
+            </Box>
+          );
+        }
+
+        if (row.type === 'manager-header') {
+          return (
+            <Box key="manager-header" marginTop={1} marginBottom={1}>
+              <Text color="blue" bold>--- {row.data} ---</Text>
+            </Box>
+          );
+        }
+
+        if (row.type === 'manager') {
+          const isSelected = row.selectableIdx === selectedIdx;
+          return (
+            <ConfigNavEntry
+              key={row.data.label}
+              label={row.data.label}
+              detail={row.data.detail}
+              isSelected={isSelected}
+              hint="Enter to manage"
+            />
+          );
+        }
+
+        const field = row.data as ConfigField;
+        const iInFields = row.selectableIdx!;
+        const isSelected = iInFields === selectedIdx;
         let displayValue: string;
         let valueColor: string;
+
         if (field.type === 'boolean') {
           const val = getNestedValue(cfg, field.key);
           displayValue = val ? 'ON' : 'OFF';
@@ -314,34 +404,47 @@ export function ConfigFieldList({
         }
 
         return (
-          <Box key={field.key}>
-            <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>
-              {isSelected ? '> ' : '  '}
-            </Text>
-            <Box width={22}>
-              <Text color={isSelected ? 'white' : 'gray'}>{field.label}</Text>
+          <Box key={field.key} flexDirection="column" flexShrink={0}>
+            <Box flexDirection="column">
+              <Box flexDirection="row">
+                <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>
+                  {isSelected ? '> ' : '  '}
+                </Text>
+                <Box width={26}>
+                  <Text color={isSelected ? 'white' : 'gray'}>{field.label}</Text>
+                </Box>
+                {isEditing && isSelected ? (
+                  <TextInput
+                    value={editValue}
+                    onChange={setEditValue}
+                    onSubmit={handleEditSubmit}
+                  />
+                ) : (
+                  <Text color={valueColor} bold={isSelected}>
+                    {displayValue}
+                  </Text>
+                )}
+                {isSelected && field.type === 'sound-event' && (
+                  <Text dimColor>  Enter: cycle  p: preview</Text>
+                )}
+              </Box>
+              {isSelected && (
+                <Box paddingLeft={4}>
+                  <Text dimColor italic>
+                    └ {field.description}
+                  </Text>
+                </Box>
+              )}
             </Box>
-            {isEditing && isSelected ? (
-              <TextInput
-                value={editValue}
-                onChange={setEditValue}
-                onSubmit={handleEditSubmit}
-              />
-            ) : (
-              <Text color={valueColor} bold={isSelected}>{displayValue}</Text>
-            )}
-            {isSelected && field.type === 'sound-event' && (
-              <Text dimColor>  Enter: cycle  p: preview</Text>
-            )}
           </Box>
         );
       })}
 
-      <ConfigNavEntry label="Tracker Categories" detail={`${catCount} categories`} isSelected={selectedIdx === FIELDS.length} hint="Enter to manage" />
-      <ConfigNavEntry label="Domain Rules" detail={`${ruleCount} rules`} isSelected={selectedIdx === FIELDS.length + 1} hint="Enter to manage" />
-      <ConfigNavEntry label="Sequences" detail={`${seqCount} sequences`} isSelected={selectedIdx === FIELDS.length + 2} hint="Enter to manage" />
-      <ConfigNavEntry label="Keybindings" detail={keybindingCount > 0 ? `${keybindingCount} custom` : 'defaults'} isSelected={selectedIdx === FIELDS.length + 3} hint="Enter to manage" />
-      <ConfigNavEntry label="Themes" detail={themeCount > 0 ? `${themeCount} custom` : 'built-in only'} isSelected={selectedIdx === FIELDS.length + 4} hint="Enter to manage" />
+      {hasMoreBelow && (
+        <Box paddingLeft={2}>
+          <Text dimColor>↓ more below</Text>
+        </Box>
+      )}
 
       {saved && (
         <Box marginTop={1}>

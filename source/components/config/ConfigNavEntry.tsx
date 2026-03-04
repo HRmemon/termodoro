@@ -13,7 +13,7 @@ export function ConfigNavEntry({ label, detail, isSelected, hint }: ConfigNavEnt
       <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>
         {isSelected ? '> ' : '  '}
       </Text>
-      <Box width={22}>
+      <Box width={26}>
         <Text color={isSelected ? 'white' : 'gray'}>{label}</Text>
       </Box>
       <Text color="cyan" bold={isSelected}>{detail}</Text>

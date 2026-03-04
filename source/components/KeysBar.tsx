@@ -171,7 +171,7 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
 const HintRow = React.memo(function HintRow({ hints, dim }: { hints: KeyHint[]; dim?: boolean }) {
   return (
     <Box>
-      {hints.map((h, i) => (
+      {hints.filter(h => h.key && h.label).map((h, i) => (
         <Box key={`${h.key}-${i}`} marginRight={2}>
           <Text color={dim ? colors.dim : colors.highlight}>{h.key}</Text>
           <Text color={colors.dim}>:{h.label}</Text>
