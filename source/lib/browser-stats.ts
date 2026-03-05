@@ -213,7 +213,7 @@ export function getBrowserStatsForDate(date: string): BrowserStats | null {
         ROUND(SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as activeMinutes,
         ROUND(SUM(CASE WHEN is_audible = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as audibleMinutes
       FROM page_visits
-      WHERE recorded_at LIKE ? || '%'
+      WHERE DATE(recorded_at) = ?
       GROUP BY domain
       ORDER BY totalMinutes DESC
       LIMIT 15
@@ -226,7 +226,7 @@ export function getBrowserStatsForDate(date: string): BrowserStats | null {
         title,
         ROUND(SUM(duration_sec) / 60.0, 1) as totalMinutes
       FROM page_visits
-      WHERE recorded_at LIKE ? || '%'
+      WHERE DATE(recorded_at) = ?
       GROUP BY domain, path
       ORDER BY totalMinutes DESC
       LIMIT 10
@@ -238,7 +238,7 @@ export function getBrowserStatsForDate(date: string): BrowserStats | null {
         ROUND(SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as activeMinutes,
         ROUND(SUM(CASE WHEN is_audible = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as audibleMinutes
       FROM page_visits
-      WHERE recorded_at LIKE ? || '%'
+      WHERE DATE(recorded_at) = ?
     `).get(date) as { totalMinutes: number; activeMinutes: number; audibleMinutes: number } | undefined;
 
     return {
@@ -298,7 +298,7 @@ export function getSlotDomainBreakdown(date: string): SlotDomainBreakdown[] {
         path,
         ROUND(SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as activeMinutes
       FROM page_visits
-      WHERE recorded_at LIKE ? || '%'
+      WHERE DATE(recorded_at) = ?
       GROUP BY time_slot, domain, path
       ORDER BY time_slot, activeMinutes DESC
     `).all(date) as { time_slot: string; domain: string; path: string; activeMinutes: number }[];
