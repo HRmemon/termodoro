@@ -140,7 +140,9 @@ export function getTodayDomainUsage(baseDomain: string): { active_seconds: numbe
       active_seconds: row?.active_seconds || 0, 
       audible_seconds: row?.audible_seconds || 0 
     };
-  } catch {}
+  } catch (err) {
+    console.error("getTodayDomainUsage error:", err);
+  }
   return { active_seconds: 0, audible_seconds: 0 };
 }
 
@@ -157,7 +159,9 @@ export function getYesterdayDomainUsage(baseDomain: string): { active_seconds: n
     `).get(date, baseDomain, '%.' + baseDomain) as any;
     
     return { active_seconds: row?.active_seconds || 0 };
-  } catch {}
+  } catch (err) {
+    console.error("getYesterdayDomainUsage error:", err);
+  }
   return { active_seconds: 0 };
 }
 
@@ -178,7 +182,9 @@ export function getThisWeekDomainUsage(baseDomain: string): { active_seconds: nu
     `).get(mondayStr, baseDomain, '%.' + baseDomain) as any;
     
     return { active_seconds: row?.active_seconds || 0 };
-  } catch {}
+  } catch (err) {
+    console.error("getThisWeekDomainUsage error:", err);
+  }
   return { active_seconds: 0 };
 }
 
