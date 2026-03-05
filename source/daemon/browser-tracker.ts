@@ -130,7 +130,10 @@ export class BrowserTracker {
     const formatMins = (sec: number) => {
       if (sec < 60) return `${sec}s`;
       const m = Math.floor(sec / 60);
-      return `${m}m ${sec % 60}s`;
+      if (m < 60) return `${m}m ${sec % 60}s`;
+      const h = Math.floor(m / 60);
+      const remainingM = m % 60;
+      return `${h}h ${remainingM}m`;
     };
 
     let title = `${domain} Usage`;
