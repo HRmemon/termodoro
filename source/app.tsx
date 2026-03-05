@@ -35,6 +35,8 @@ import { initTheme } from './lib/theme.js';
 import { getShortcutMap } from './lib/views.js';
 import { createKeymap } from './lib/keymap.js';
 
+import { getTodayStr } from './lib/date-utils.js';
+
 import { DaemonContext } from './contexts/DaemonContext.js';
 import { ConfigContext } from './contexts/ConfigContext.js';
 import { UIContext } from './contexts/UIContext.js';
@@ -111,7 +113,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   }, [editGeneration]);
 
   const statusBarData = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayStr();
     const allSessions = loadSessions();
     const todaySessions = allSessions.filter(
       s => s.startedAt.startsWith(today) && s.type === 'work' && s.status === 'completed'

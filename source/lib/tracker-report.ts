@@ -1,10 +1,11 @@
 import { listWeeks, loadWeek, getCategories, computeDayStats, type WeekData, ALL_SLOTS } from './tracker.js';
+import { getTodayStr } from './date-utils.js';
 
 export function generateTrackerHtmlReport(): string {
   const weekList = listWeeks(); // sorted newest to oldest
   const weeks = weekList.map(ws => loadWeek(ws)).filter((w): w is WeekData => w !== null);
   const categories = getCategories();
-  const today = new Date().toISOString().split('T')[0]!;
+  const today = getTodayStr();
   
   // 1. Calculate Dashboard Stats
   const overallStats: Record<string, number> = {};

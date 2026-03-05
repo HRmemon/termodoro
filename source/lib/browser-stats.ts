@@ -80,6 +80,16 @@ export function closeBrowserDb() {
   }
 }
 
+function getLocalDateString(date: Date = new Date()): string {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function getLocalISOString(date: Date = new Date()): string {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString();
+}
+
 export function logBrowserEvent(eventType: string, payload: any) {
   try {
     const db = getBrowserDb();
@@ -95,7 +105,7 @@ export function upsertDomainUsage(tabInfo: { domain: string, url?: string, path?
   try {
     if (activeDeltaSec <= 0 && audibleDeltaSec <= 0) return;
     const db = getBrowserDb();
-    const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const date = getLocalDateString();
     const domain = tabInfo.domain;
     
     db.prepare(`
@@ -118,7 +128,7 @@ export function upsertDomainUsage(tabInfo: { domain: string, url?: string, path?
     db.prepare(`
       INSERT INTO page_visits (url, domain, path, title, is_active, is_audible, duration_sec, recorded_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(url, domain, path, title, is_active, is_audible, duration, new Date().toISOString());
+    `).run(url, domain, path, title, is_active, is_audible, duration, getLocalISOString());
   } catch (err) {
     console.error("Failed to upsert domain usage", err);
   }
@@ -127,7 +137,7 @@ export function upsertDomainUsage(tabInfo: { domain: string, url?: string, path?
 export function getTodayDomainUsage(baseDomain: string): { active_seconds: number, audible_seconds: number } {
   try {
     const db = getBrowserDb();
-    const date = new Date().toISOString().slice(0, 10);
+    const date = getLocalDateString();
     const row = db.prepare(`
       SELECT 
         SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) as active_seconds,
@@ -151,7 +161,7 @@ export function getYesterdayDomainUsage(baseDomain: string): { active_seconds: n
     const db = getBrowserDb();
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    const date = d.toISOString().slice(0, 10);
+    const date = getLocalDateString(d);
     const row = db.prepare(`
       SELECT SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) as active_seconds 
       FROM page_visits 
@@ -173,13 +183,14 @@ export function getThisWeekDomainUsage(baseDomain: string): { active_seconds: nu
     const distanceToMonday = (dayOfWeek + 6) % 7;
     const monday = new Date(now);
     monday.setDate(now.getDate() - distanceToMonday);
-    const mondayStr = monday.toISOString().slice(0, 10);
+    const mondayStr = getLocalDateString(monday);
     
     const row = db.prepare(`
       SELECT SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) as active_seconds 
       FROM page_visits 
       WHERE DATE(recorded_at) >= ? AND (domain = ? OR domain LIKE ?)
     `).get(mondayStr, baseDomain, '%.' + baseDomain) as any;
+
     
     return { active_seconds: row?.active_seconds || 0 };
   } catch (err) {

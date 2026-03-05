@@ -3,6 +3,7 @@ import type { Config } from '../types.js';
 import { loadReminders, updateReminder } from '../lib/reminders.js';
 import { loadTasks } from '../lib/tasks.js';
 import { notifyReminder } from '../lib/notify.js';
+import { localDateStr } from '../lib/date-utils.js';
 
 export function useReminderChecker(config: Config): void {
   const firedRemindersRef = useRef<Set<string>>(new Set());
@@ -12,7 +13,7 @@ export function useReminderChecker(config: Config): void {
       if (!config.notifications) return;
       const now = new Date();
       const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const today = now.toISOString().slice(0, 10);
+      const today = localDateStr(now);
       const firedKey = `${today}:${currentTime}`;
 
       const reminders = loadReminders();

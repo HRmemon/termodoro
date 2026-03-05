@@ -1,9 +1,10 @@
 import { nanoid } from 'nanoid';
 import type { TimeBlock } from '../../types.js';
 import { getPlanForDate, savePlanForDate } from '../store.js';
+import { getTodayStr } from '../date-utils.js';
 
 export function formatPlan(): string {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayStr();
   const plan = getPlanForDate(today);
   const lines: string[] = [];
 
@@ -28,7 +29,7 @@ export function formatPlan(): string {
 }
 
 export function parsePlan(text: string): void {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayStr();
   const lines = text.split('\n').filter(l => l.trim());
   let theme: string | undefined;
   const blocks: TimeBlock[] = [];

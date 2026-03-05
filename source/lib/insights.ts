@@ -1,4 +1,5 @@
 import type { Session } from '../types.js';
+import { localDateStr } from './date-utils.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,7 +84,7 @@ export function calculateFocusScore(sessions: Session[]): number {
       // Walk backwards from today
       cursor = latestDate;
       const dateSet = new Set(dates);
-      while (dateSet.has(cursor.toISOString().slice(0, 10))) {
+      while (dateSet.has(localDateStr(cursor))) {
         streak++;
         cursor = new Date(cursor.getTime() - 86400000);
       }

@@ -1,11 +1,12 @@
 import { loadGoals, getRecentWeeks, isGoalComplete, getRating, type TrackedGoal, computeStreak, type GoalsData } from './goals.js';
+import { getTodayStr } from './date-utils.js';
 
 export function generateGoalsHtmlReport(): string {
   const data = loadGoals();
   const numWeeks = 12; // Show 12 weeks for a better dashboard feel
   const weeks = getRecentWeeks(numWeeks); // oldest first, each is 7 days (Mon-Sun)
   const allDates = weeks.flat();
-  const today = new Date().toISOString().split('T')[0]!;
+  const today = getTodayStr();
 
   // 1. Calculate Dashboard Stats
   let totalPossible = data.goals.length * allDates.length;

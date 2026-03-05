@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import { execFile } from 'node:child_process';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { loadSessions } from '../lib/store.js';
+import { getTodayStr } from '../lib/date-utils.js';
 
 const STATUS_PATH = path.join(os.tmpdir(), 'pomodorocli-status.json');
 
@@ -12,7 +13,7 @@ let cachedTodayStats = { count: 0, focusMinutes: 0 };
 let cachedStatsDate = '';
 
 function recomputeTodayStats(): void {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayStr();
   cachedStatsDate = today;
   try {
     const sessions = loadSessions().filter(s =>
@@ -34,7 +35,7 @@ export function invalidateTodayStats(): void {
 
 function getTodayStats() {
   // Recompute if date changed (midnight rollover)
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayStr();
   if (cachedStatsDate !== today) {
     recomputeTodayStats();
   }
