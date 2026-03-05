@@ -124,16 +124,62 @@ export function upsertDomainUsage(tabInfo: { domain: string, url?: string, path?
   }
 }
 
-export function getTodayDomainUsage(domain: string): { active_seconds: number, audible_seconds: number } {
+export function getTodayDomainUsage(baseDomain: string): { active_seconds: number, audible_seconds: number } {
   try {
     const db = getBrowserDb();
     const date = new Date().toISOString().slice(0, 10);
-    const row = db.prepare(`SELECT active_seconds, audible_seconds FROM browser_daily_usage WHERE date = ? AND domain = ?`).get(date, domain) as any;
-    if (row) {
-      return { active_seconds: row.active_seconds, audible_seconds: row.audible_seconds };
-    }
+    const row = db.prepare(`
+      SELECT 
+        SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) as active_seconds,
+        SUM(CASE WHEN is_audible = 1 THEN duration_sec ELSE 0 END) as audible_seconds
+      FROM page_visits 
+      WHERE DATE(recorded_at) = ? AND (domain = ? OR domain LIKE ?)
+    `).get(date, baseDomain, '%.' + baseDomain) as any;
+    
+    return { 
+      active_seconds: row?.active_seconds || 0, 
+      audible_seconds: row?.audible_seconds || 0 
+    };
   } catch {}
   return { active_seconds: 0, audible_seconds: 0 };
+}
+
+export function getYesterdayDomainUsage(baseDomain: string): { active_seconds: number } {
+  try {
+    const db = getBrowserDb();
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const date = d.toISOString().slice(0, 10);
+    const row = db.prepare(`
+      SELECT SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) as active_seconds 
+      FROM page_visits 
+      WHERE DATE(recorded_at) = ? AND (domain = ? OR domain LIKE ?)
+    `).get(date, baseDomain, '%.' + baseDomain) as any;
+    
+    return { active_seconds: row?.active_seconds || 0 };
+  } catch {}
+  return { active_seconds: 0 };
+}
+
+export function getThisWeekDomainUsage(baseDomain: string): { active_seconds: number } {
+  try {
+    const db = getBrowserDb();
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 is Sunday
+    const distanceToMonday = (dayOfWeek + 6) % 7;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - distanceToMonday);
+    const mondayStr = monday.toISOString().slice(0, 10);
+    
+    const row = db.prepare(`
+      SELECT SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) as active_seconds 
+      FROM page_visits 
+      WHERE DATE(recorded_at) >= ? AND (domain = ? OR domain LIKE ?)
+    `).get(mondayStr, baseDomain, '%.' + baseDomain) as any;
+    
+    return { active_seconds: row?.active_seconds || 0 };
+  } catch {}
+  return { active_seconds: 0 };
 }
 
 export function getBrowserStatsForDate(date: string): BrowserStats | null {
