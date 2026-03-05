@@ -7,10 +7,17 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
+interface TabInfo {
+  url: string;
+  domain: string;
+  path?: string;
+  title?: string;
+}
+
 interface BrowserState {
   windowFocused: boolean;
-  activeTab: { url: string; domain: string; path?: string } | null;
-  audibleTabs: { domain: string }[];
+  activeTab: TabInfo | null;
+  audibleTabs: TabInfo[];
 }
 
 export class BrowserTracker {
@@ -68,16 +75,19 @@ export class BrowserTracker {
 
   private attributeTime(state: BrowserState, deltaSec: number) {
     if (state.windowFocused && state.activeTab?.domain) {
-      upsertDomainUsage(state.activeTab.domain, deltaSec, 0);
+      upsertDomainUsage(state.activeTab, deltaSec, 0);
     }
     
     // Dedup domains for audible tracking
-    const audibleDomains = new Set(state.audibleTabs.map(t => t.domain));
-    for (const domain of audibleDomains) {
-      if (state.windowFocused && state.activeTab?.domain === domain) {
+    const handledDomains = new Set<string>();
+    for (const tab of state.audibleTabs) {
+      if (state.windowFocused && state.activeTab?.domain === tab.domain) {
         // already counted as active
-      } else {
-        upsertDomainUsage(domain, 0, deltaSec);
+        continue;
+      }
+      if (!handledDomains.has(tab.domain)) {
+        handledDomains.add(tab.domain);
+        upsertDomainUsage(tab, 0, deltaSec);
       }
     }
   }

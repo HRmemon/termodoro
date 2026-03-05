@@ -91,11 +91,12 @@ export function logBrowserEvent(eventType: string, payload: any) {
   }
 }
 
-export function upsertDomainUsage(domain: string, activeDeltaSec: number, audibleDeltaSec: number) {
+export function upsertDomainUsage(tabInfo: { domain: string, url?: string, path?: string, title?: string }, activeDeltaSec: number, audibleDeltaSec: number) {
   try {
     if (activeDeltaSec <= 0 && audibleDeltaSec <= 0) return;
     const db = getBrowserDb();
     const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const domain = tabInfo.domain;
     
     db.prepare(`
       INSERT INTO browser_daily_usage (date, domain, active_seconds, audible_seconds)
@@ -105,18 +106,22 @@ export function upsertDomainUsage(domain: string, activeDeltaSec: number, audibl
         audible_seconds = audible_seconds + excluded.audible_seconds
     `).run(date, domain, activeDeltaSec, audibleDeltaSec);
 
-    // Also insert into legacy table for now so existing stats functions work
+    // Also insert into legacy table for page-level stats
+    const url = tabInfo.url || `https://${domain}`;
+    const path = tabInfo.path || '/';
+    const title = tabInfo.title || '';
+
     if (activeDeltaSec > 0) {
       db.prepare(`
         INSERT INTO page_visits (url, domain, path, title, is_active, is_audible, duration_sec, recorded_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(`https://${domain}`, domain, '/', '', 1, 0, activeDeltaSec, new Date().toISOString());
+      `).run(url, domain, path, title, 1, 0, activeDeltaSec, new Date().toISOString());
     }
     if (audibleDeltaSec > 0 && activeDeltaSec === 0) {
       db.prepare(`
         INSERT INTO page_visits (url, domain, path, title, is_active, is_audible, duration_sec, recorded_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(`https://${domain}`, domain, '/', '', 0, 1, audibleDeltaSec, new Date().toISOString());
+      `).run(url, domain, path, title, 0, 1, audibleDeltaSec, new Date().toISOString());
     }
   } catch (err) {
     console.error("Failed to upsert domain usage", err);
