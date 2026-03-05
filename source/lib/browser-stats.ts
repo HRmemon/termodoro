@@ -111,18 +111,14 @@ export function upsertDomainUsage(tabInfo: { domain: string, url?: string, path?
     const path = tabInfo.path || '/';
     const title = tabInfo.title || '';
 
-    if (activeDeltaSec > 0) {
-      db.prepare(`
-        INSERT INTO page_visits (url, domain, path, title, is_active, is_audible, duration_sec, recorded_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(url, domain, path, title, 1, 0, activeDeltaSec, new Date().toISOString());
-    }
-    if (audibleDeltaSec > 0 && activeDeltaSec === 0) {
-      db.prepare(`
-        INSERT INTO page_visits (url, domain, path, title, is_active, is_audible, duration_sec, recorded_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(url, domain, path, title, 0, 1, audibleDeltaSec, new Date().toISOString());
-    }
+    const is_active = activeDeltaSec > 0 ? 1 : 0;
+    const is_audible = audibleDeltaSec > 0 ? 1 : 0;
+    const duration = Math.max(activeDeltaSec, audibleDeltaSec);
+
+    db.prepare(`
+      INSERT INTO page_visits (url, domain, path, title, is_active, is_audible, duration_sec, recorded_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(url, domain, path, title, is_active, is_audible, duration, new Date().toISOString());
   } catch (err) {
     console.error("Failed to upsert domain usage", err);
   }

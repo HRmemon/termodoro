@@ -74,19 +74,21 @@ export class BrowserTracker {
   }
 
   private attributeTime(state: BrowserState, deltaSec: number) {
-    if (state.windowFocused && state.activeTab?.domain) {
-      upsertDomainUsage(state.activeTab, deltaSec, 0);
+    const activeUrl = (state.windowFocused && state.activeTab) ? state.activeTab.url : null;
+    let activeTabIsAudible = false;
+
+    if (activeUrl) {
+      activeTabIsAudible = state.audibleTabs.some(t => t.url === activeUrl);
+      upsertDomainUsage(state.activeTab!, deltaSec, activeTabIsAudible ? deltaSec : 0);
     }
     
-    // Dedup domains for audible tracking
-    const handledDomains = new Set<string>();
+    // Dedup by exact URL so we track every distinct page
+    const handledUrls = new Set<string>();
+    if (activeUrl) handledUrls.add(activeUrl);
+
     for (const tab of state.audibleTabs) {
-      if (state.windowFocused && state.activeTab?.domain === tab.domain) {
-        // already counted as active
-        continue;
-      }
-      if (!handledDomains.has(tab.domain)) {
-        handledDomains.add(tab.domain);
+      if (!handledUrls.has(tab.url)) {
+        handledUrls.add(tab.url);
         upsertDomainUsage(tab, 0, deltaSec);
       }
     }
