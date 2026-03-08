@@ -20,6 +20,7 @@ import { COL_WIDTH } from './tracker/SlotCell.js';
 import { TrackerGridView } from './tracker/TrackerGridView.js';
 import { TrackerPickerOverlay } from './tracker/TrackerPickerOverlay.js';
 import { DaySummaryPanel, WeekSummaryPanel } from './tracker/TrackerSummaryPanel.js';
+import { setTrackerWeekContext } from '../lib/nvim-edit/index.js';
 
 function getTodayStr() {
   return dateToString(new Date());
@@ -121,6 +122,10 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   }, [week]);
 
   const [reviewIdx, setReviewIdx] = useState(0);
+
+  useEffect(() => {
+    setTrackerWeekContext(weekStr);
+  }, [weekStr]);
 
   const currentDate = weekDates[cursorCol] ?? null;
   const currentTime = ALL_SLOTS[cursorRow] ?? null;

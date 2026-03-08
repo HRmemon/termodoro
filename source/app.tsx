@@ -81,7 +81,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
   const { exit } = useApp();
 
   // Connect to daemon
-  const { state, timer, engine, sequence, actions, connectionStatus } = useDaemonConnection();
+  const { state, timer, engine, sequence, actions, connectionStatus } = useDaemonConnection(view === 'timer');
 
   // Reminder checker — runs every 30s
   useReminderChecker(config);

@@ -21,9 +21,14 @@ const SKIPPED_VIEWS: View[] = ['timer', 'web', 'clock'];
 
 // Shared state: ConfigView sets this so Ctrl+G knows which sub-view is active
 let configSubMode: string = 'main';
+let trackerWeekContext: string | null = null;
 
 export function setConfigSubMode(mode: string): void {
   configSubMode = mode;
+}
+
+export function setTrackerWeekContext(weekStr: string | null): void {
+  trackerWeekContext = weekStr;
 }
 
 // ─── Main Entry ──────────────────────────────────────────────────────────────
@@ -82,7 +87,7 @@ function formatView(view: View): { content: string; tmpPath: string; cursorLine?
   switch (view) {
     case 'tasks': return { content: formatTasks(), tmpPath: tmpFile('tasks') };
     case 'reminders': return { content: formatReminders(), tmpPath: tmpFile('reminders') };
-    case 'tracker': return { content: formatTracker(), tmpPath: tmpFile('tracker') };
+    case 'tracker': return { content: formatTracker(trackerWeekContext ?? undefined), tmpPath: tmpFile('tracker') };
     case 'graphs': return { content: formatGoals(), tmpPath: tmpFile('goals') };
     case 'stats': return { content: formatStats(), tmpPath: tmpFile('stats') };
     default: return { content: '', tmpPath: tmpFile(view) };

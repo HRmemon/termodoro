@@ -4,10 +4,11 @@ import {
 } from '../tracker.js';
 import { clampStr, LIMITS } from '../sanitize.js';
 
-export function formatTracker(): string {
+export function formatTracker(weekOverride?: string): string {
   const now = new Date();
   const monday = getMondayOfWeek(now);
-  const weekStr = getISOWeekStr(monday);
+  const defaultWeekStr = getISOWeekStr(monday);
+  const weekStr = weekOverride && weekOverride.trim() ? weekOverride : defaultWeekStr;
   const weekData = loadWeek(weekStr) ?? createWeek(now);
   const dates = getWeekDates(weekData.start);
 

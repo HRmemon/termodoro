@@ -79,7 +79,7 @@ export interface DaemonActions {
   updateConfig: () => void;
 }
 
-export function useDaemonConnection(): {
+export function useDaemonConnection(highFrequency = true): {
   state: EngineFullState;
   timer: DaemonTimerState;
   engine: DaemonEngineState;
@@ -91,11 +91,42 @@ export function useDaemonConnection(): {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const subscriptionRef = useRef<DaemonSubscription | null>(null);
   const hadErrorRef = useRef(false);
+  const latestStateRef = useRef<EngineFullState>(DEFAULT_STATE);
+  const highFrequencyRef = useRef(highFrequency);
+
+  useEffect(() => {
+    highFrequencyRef.current = highFrequency;
+  }, [highFrequency]);
 
   useEffect(() => {
     const sub = new DaemonSubscription({
       onState: (newState) => {
-        setState(newState);
+        latestStateRef.current = newState;
+        setState((prev) => {
+          if (highFrequencyRef.current) return newState;
+
+          // Outside timer-heavy views, ignore pure tick updates to reduce full-screen redraw flicker.
+          const nonTickUnchanged =
+            prev.isRunning === newState.isRunning &&
+            prev.isPaused === newState.isPaused &&
+            prev.timerMode === newState.timerMode &&
+            prev.sessionType === newState.sessionType &&
+            prev.sessionNumber === newState.sessionNumber &&
+            prev.totalWorkSessions === newState.totalWorkSessions &&
+            prev.isStrictMode === newState.isStrictMode &&
+            prev.currentLabel === newState.currentLabel &&
+            prev.currentProject === newState.currentProject &&
+            prev.durationSeconds === newState.durationSeconds &&
+            prev.sequenceName === newState.sequenceName &&
+            prev.sequenceBlockIndex === newState.sequenceBlockIndex &&
+            prev.sequenceIsActive === newState.sequenceIsActive &&
+            prev.sequenceIsComplete === newState.sequenceIsComplete;
+
+          if (nonTickUnchanged) {
+            return prev;
+          }
+          return newState;
+        });
         setConnectionStatus('connected');
         hadErrorRef.current = false;
       },
@@ -123,6 +154,12 @@ export function useDaemonConnection(): {
       subscriptionRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (highFrequency) {
+      setState(latestStateRef.current);
+    }
+  }, [highFrequency]);
 
   // Send command through existing subscription socket, fall back to new connection
   const send = useCallback((cmd: DaemonCommand) => {
