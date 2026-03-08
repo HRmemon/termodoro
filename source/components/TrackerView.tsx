@@ -9,7 +9,7 @@ import {
   ALL_SLOTS, DAY_NAMES, WeekData,
   getCategoryByCode, getCategories, getISOWeekStr, getMondayOfWeek, getWeekDates,
   dateToString, loadWeek, createWeek, listWeeks, setSlot, computeDayStats,
-  expirePending, getPendingCount, acceptPending, rejectPending, acceptAllPending,
+  getPendingCount, acceptPending, rejectPending, acceptAllPending,
   PendingSuggestion, loadTrackerConfigFull, addPendingSuggestions, generateWebSuggestions,
 } from '../lib/tracker.js';
 import { generateTrackerHtmlReport } from '../lib/tracker-report.js';
@@ -73,25 +73,30 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   const [browseList] = useState<string[]>(() => listWeeks());
   const [browseCursor, setBrowseCursor] = useState(0);
 
-  // Expire stale pending suggestions on mount, then generate web suggestions
+  // Generate web suggestions on mount for all days up to today
   useEffect(() => {
     let current = week;
-    if (current && getPendingCount(current) > 0) {
-      current = expirePending(current);
-      if (current !== week) setWeek(current);
-    }
 
     // Generate web domain suggestions if rules exist
     try {
       const fullConfig = loadTrackerConfigFull();
       if (fullConfig.domainRules.length > 0 && current) {
-        const breakdown = getSlotDomainBreakdown(todayStr);
-        if (breakdown.length > 0) {
-          const webSugs = generateWebSuggestions(breakdown, fullConfig.domainRules);
-          if (webSugs.length > 0) {
-            const withDate = webSugs.map(s => ({ ...s, date: todayStr }));
-            current = addPendingSuggestions(current, withDate, 'web');
+        let anyChanges = false;
+        // Check all days in the current week up to today
+        for (const dateStr of weekDates) {
+          if (dateStr > todayStr) continue; // skip future days in week
+          const breakdown = getSlotDomainBreakdown(dateStr);
+          if (breakdown.length > 0) {
+            const webSugs = generateWebSuggestions(breakdown, fullConfig.domainRules);
+            if (webSugs.length > 0) {
+              const withDate = webSugs.map(s => ({ ...s, date: dateStr }));
+              current = addPendingSuggestions(current, withDate, 'web');
+              anyChanges = true;
+            }
           }
+        }
+        if (anyChanges) {
+          // ensure 'current' refers to the updated week obj returned from addPendingSuggestions
         }
       }
     } catch { /* browser DB may not exist */ }
@@ -99,7 +104,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
     if (current !== week) {
       setWeek(current);
     }
-  }, [week, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [week, todayStr, weekDates]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pendingCount = week ? getPendingCount(week) : 0;
 
@@ -224,6 +229,13 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
       if (week) { setPickerCursor(0); setMode('pick'); }
     } else if (kmMatches(km, 'tracker.clear', input, key)) {
       handleSetSlot(null);
+    } else if (kmMatches(km, 'tracker.review', input, key)) {
+      if (pendingCount > 0) {
+        setMode('review');
+        setReviewIdx(0);
+      }
+    } else if (input === 'A' && pendingCount > 0) {
+      if (week) setWeek(acceptAllPending(week));
     } else if (input === 'R') {
       const html = generateTrackerHtmlReport();
       const tmpPath = path.join(os.tmpdir(), `pomodorocli-tracker-report-${Date.now()}.html`);

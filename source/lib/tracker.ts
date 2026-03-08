@@ -315,29 +315,6 @@ export function getPendingCount(weekData: WeekData, date?: string): number {
   return count;
 }
 
-export function expirePending(weekData: WeekData): WeekData {
-  const now = Date.now();
-  const maxAge = 24 * 60 * 60 * 1000; // 24h
-  let changed = false;
-  const updated = { ...weekData, pending: { ...weekData.pending } };
-
-  for (const date of Object.keys(updated.pending)) {
-    updated.pending[date] = { ...updated.pending[date] };
-    for (const time of Object.keys(updated.pending[date]!)) {
-      const p = updated.pending[date]![time]!;
-      if (now - new Date(p.createdAt).getTime() > maxAge) {
-        delete updated.pending[date]![time];
-        changed = true;
-      }
-    }
-    if (Object.keys(updated.pending[date]!).length === 0) {
-      delete updated.pending[date];
-    }
-  }
-
-  if (changed) saveWeek(updated);
-  return changed ? updated : weekData;
-}
 
 export function generateAndStoreSuggestions(intervals: import('../types.js').WorkInterval[]): void {
   const allSuggestions: { date: string; time: string; code: string }[] = [];
