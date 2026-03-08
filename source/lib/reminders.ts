@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import type { ScheduledNotification } from '../types.js';
 import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
-const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
+import { DATA_DIR } from './paths.js';
 const REMINDERS_PATH = path.join(DATA_DIR, 'reminders.json');
 
 export function loadReminders(): ScheduledNotification[] {

@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { promises as fsPromises } from 'node:fs';
 import * as path from 'node:path';
 
 /**
@@ -18,6 +19,13 @@ export function atomicWriteJSON(filePath: string, data: unknown): void {
   const tmp = filePath + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf-8');
   fs.renameSync(tmp, filePath);
+}
+
+export async function atomicWriteJSONAsync(filePath: string, data: unknown): Promise<void> {
+  await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+  const tmp = filePath + '.tmp';
+  await fsPromises.writeFile(tmp, JSON.stringify(data, null, 2) + '\n', 'utf-8');
+  await fsPromises.rename(tmp, filePath);
 }
 
 /**

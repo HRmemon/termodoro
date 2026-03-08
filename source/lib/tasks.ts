@@ -2,9 +2,9 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { nanoid } from 'nanoid';
 import type { Task } from '../types.js';
-import { atomicWriteJSON, readJSON } from './fs-utils.js';
+import { atomicWriteJSON, readJSON, atomicWriteJSONAsync } from './fs-utils.js';
 
-const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
+import { DATA_DIR } from './paths.js';
 const TASKS_PATH = path.join(DATA_DIR, 'tasks.json');
 const PROJECTS_PATH = path.join(DATA_DIR, 'projects.json');
 
@@ -13,7 +13,7 @@ export function loadTasks(): Task[] {
 }
 
 export function saveTasks(tasks: Task[]): void {
-  atomicWriteJSON(TASKS_PATH, tasks);
+  atomicWriteJSONAsync(TASKS_PATH, tasks).catch(() => {});
 }
 
 export function addTask(text: string, project?: string, description?: string, date?: string, time?: string, endTime?: string): Task {

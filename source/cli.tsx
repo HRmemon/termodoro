@@ -4,6 +4,7 @@ import { render } from 'ink';
 import meow from 'meow';
 import { loadConfig, validateConfig } from './lib/config.js';
 import { App } from './app.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
 import type { View } from './types.js';
 import { isDaemonRunning, sendCommand } from './daemon/client.js';
 import { startDaemon } from './daemon/server.js';
@@ -90,16 +91,15 @@ async function ensureDaemon(): Promise<void> {
   const thisScript = path.resolve(process.argv[1]!);
   const isTsx = thisScript.endsWith('.tsx') || thisScript.endsWith('.ts');
 
-  let child;
+  let child: ReturnType<typeof spawn>;
   if (isTsx) {
-    // Dev mode: find tsx binary in node_modules and use it directly
-    const tsxBin = path.resolve(path.dirname(thisScript), '..', 'node_modules', '.bin', 'tsx');
-    child = spawn(process.execPath, [tsxBin, thisScript, 'daemon', 'start'], {
+    // In development, rely on npx to find tsx
+    child = spawn('npx', ['tsx', thisScript, 'daemon', 'start'], {
       detached: true,
       stdio: 'ignore',
     });
   } else {
-    // Production: use node directly
+    // In production, execute the compiled JS directly via node
     child = spawn(process.execPath, [thisScript, 'daemon', 'start'], {
       detached: true,
       stdio: 'ignore',
@@ -362,4 +362,8 @@ if (!process.stdout.isTTY) {
   process.exit(0);
 }
 
-render(<App config={config} initialView={initialView} initialProject={cli.flags.project} initialSequence={cli.flags.sequence} />);
+render(
+  <ErrorBoundary>
+    <App config={config} initialView={initialView} initialProject={cli.flags.project} initialSequence={cli.flags.sequence} />
+  </ErrorBoundary>
+);

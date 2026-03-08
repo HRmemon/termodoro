@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import Database from 'better-sqlite3';
 import type { Session, WorkInterval } from '../types.js';
 
-const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
+import { DATA_DIR } from './paths.js';
 const DB_PATH = path.join(DATA_DIR, 'sessions.db');
 const JSON_PATH = path.join(DATA_DIR, 'sessions.json');
 

@@ -2,9 +2,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { spawn } from 'node:child_process';
+import { CONFIG_DIR, DATA_DIR } from '../lib/paths.js';
 
-const HOOKS_DIR = path.join(os.homedir(), '.config', 'pomodorocli', 'hooks');
-const LOG_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'hooks.log');
+const HOOKS_DIR = path.join(CONFIG_DIR, 'hooks');
+const LOG_PATH = path.join(DATA_DIR, 'hooks.log');
 
 function appendLog(message: string): void {
   try {

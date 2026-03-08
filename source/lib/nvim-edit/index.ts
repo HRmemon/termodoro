@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import type { View } from '../../types.js';
-import { tmpFile } from './utils.js';
+import { tmpFile, spawnEditorSafe } from './utils.js';
 import { LIMITS } from '../sanitize.js';
 import { formatTasks, parseTasks } from './tasks.js';
 import { formatReminders, parseReminders } from './reminders.js';
@@ -11,11 +11,12 @@ import { formatTracker, parseTracker } from './tracker.js';
 import { formatGoals, parseGoals } from './goals.js';
 import { formatStats } from './stats.js';
 import { formatKeybindings, parseKeybindings } from './keybindings.js';
+import { CONFIG_DIR } from '../paths.js';
 
 export { openSessionsInNvim } from './sessions.js';
 export { openSequencesInNvim } from './sequences.js';
 
-const CONFIG_PATH = path.join(os.homedir(), '.config', 'pomodorocli', 'config.json');
+const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const SKIPPED_VIEWS: View[] = ['timer', 'web', 'clock'];
 
 // Shared state: ConfigView sets this so Ctrl+G knows which sub-view is active
@@ -36,8 +37,7 @@ export function openInNvim(view: View): boolean {
       const { content, tmpPath } = formatKeybindings();
       fs.writeFileSync(tmpPath, content);
 
-      const editor = process.env.EDITOR || 'nvim';
-      spawnSync(editor, [tmpPath], { stdio: 'inherit' });
+      spawnEditorSafe([tmpPath]);
 
       const edited = fs.readFileSync(tmpPath, 'utf8');
       try {
@@ -55,17 +55,15 @@ export function openInNvim(view: View): boolean {
     if (!fs.existsSync(CONFIG_PATH)) {
       fs.writeFileSync(CONFIG_PATH, '{}');
     }
-    const editor = process.env.EDITOR || 'nvim';
-    spawnSync(editor, [CONFIG_PATH], { stdio: 'inherit' });
+    spawnEditorSafe([CONFIG_PATH]);
     return true;
   }
 
   const { content, tmpPath, cursorLine } = formatView(view);
   fs.writeFileSync(tmpPath, content);
 
-  const editor = process.env.EDITOR || 'nvim';
   const args = cursorLine ? [`+${cursorLine}`, tmpPath] : [tmpPath];
-  spawnSync(editor, args, { stdio: 'inherit' });
+  spawnEditorSafe(args);
 
   const edited = fs.readFileSync(tmpPath, 'utf8');
   try {

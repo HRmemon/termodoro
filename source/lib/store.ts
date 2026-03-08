@@ -5,7 +5,7 @@ import type { Session, DayPlan, SessionType, SequenceBlock, WorkInterval } from 
 import { getAllSessions, insertSession, replaceAllSessions, migrateFromJson, getDbPath } from './session-db.js';
 import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
-const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
+import { DATA_DIR } from './paths.js';
 const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
 const PLANS_PATH = path.join(DATA_DIR, 'plans.json');
 const ACHIEVEMENTS_PATH = path.join(DATA_DIR, 'achievements.json');

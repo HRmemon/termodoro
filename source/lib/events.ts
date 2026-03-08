@@ -5,7 +5,7 @@ import type { CalendarEvent } from '../types.js';
 import { localDateStr, addDays, dateToNum, getMonthDays } from './date-utils.js';
 import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
-const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
+import { DATA_DIR } from './paths.js';
 const EVENTS_PATH = path.join(DATA_DIR, 'events.json');
 
 export function loadEvents(): CalendarEvent[] {

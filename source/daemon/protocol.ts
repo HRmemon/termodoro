@@ -83,8 +83,7 @@ export function isDaemonEvent(v: unknown): v is DaemonEvent {
 }
 
 // Socket and PID paths
-export const DAEMON_SOCKET_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'daemon.sock');
-export const DAEMON_PID_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'daemon.pid');
+export { DAEMON_SOCKET_PATH, DAEMON_PID_PATH } from '../lib/paths.js';
 
 /**
  * Returns true if a daemon is actively accepting connections on the given socket.

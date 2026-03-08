@@ -2,7 +2,7 @@ import path from 'path';
 import os from 'os';
 import { loadSessions } from './store.js';
 import { getProjects } from './tasks.js';
-import { atomicWriteJSON, readJSON } from './fs-utils.js';
+import { atomicWriteJSON, readJSON, atomicWriteJSONAsync } from './fs-utils.js';
 import { localDateStr } from './date-utils.js';
 
 export interface TrackedGoal {
@@ -22,7 +22,9 @@ export interface GoalsData {
   notes: Record<string, Record<string, string>>;    // goalId -> date -> text (for note type)
 }
 
-const GOALS_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'goals.json');
+import { DATA_DIR } from './paths.js';
+
+const GOALS_PATH = path.join(DATA_DIR, 'goals.json');
 
 export function loadGoals(): GoalsData {
   const raw = readJSON<GoalsData | null>(GOALS_PATH, null);
@@ -34,7 +36,7 @@ export function loadGoals(): GoalsData {
 }
 
 export function saveGoals(data: GoalsData): void {
-  atomicWriteJSON(GOALS_PATH, data);
+  atomicWriteJSONAsync(GOALS_PATH, data).catch(() => {});
 }
 
 export function addGoal(goal: TrackedGoal): GoalsData {

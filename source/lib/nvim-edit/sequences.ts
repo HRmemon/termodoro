@@ -2,7 +2,7 @@ import fs from 'fs';
 import { spawnSync } from 'child_process';
 import type { SessionSequence, SequenceBlock } from '../../types.js';
 import { loadSequences, saveSequences } from '../sequences.js';
-import { tmpFile } from './utils.js';
+import { tmpFile, spawnEditorSafe } from './utils.js';
 import { clampStr, clampInt, LIMITS } from '../sanitize.js';
 
 function formatSequences(): string {
@@ -68,8 +68,7 @@ export function openSequencesInNvim(): void {
   const tmpPath = tmpFile('sequences');
   fs.writeFileSync(tmpPath, content);
 
-  const editor = process.env.EDITOR || 'nvim';
-  spawnSync(editor, [tmpPath], { stdio: 'inherit' });
+  spawnEditorSafe([tmpPath]);
 
   const edited = fs.readFileSync(tmpPath, 'utf8');
   try {

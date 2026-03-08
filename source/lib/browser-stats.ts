@@ -25,7 +25,9 @@ export interface BrowserStats {
   audibleMinutes: number;
 }
 
-const DB_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'browser.db');
+import { DATA_DIR } from './paths.js';
+
+const DB_PATH = path.join(DATA_DIR, 'browser.db');
 
 let sharedDb: InstanceType<typeof Database> | null = null;
 

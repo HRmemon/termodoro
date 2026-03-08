@@ -118,8 +118,19 @@ export class BrowserTracker {
     return null;
   }
 
+  private pruneOldWarnings(now: number) {
+    if (Object.keys(this.lastWarningTimes).length > 1000) {
+      for (const [domain, timestamp] of Object.entries(this.lastWarningTimes)) {
+        if (now - timestamp > 24 * 60 * 60 * 1000) {
+          delete this.lastWarningTimes[domain];
+        }
+      }
+    }
+  }
+
   private triggerNotification(domain: string, stats: { today: number, yesterday: number, week: number }) {
     const now = Date.now();
+    this.pruneOldWarnings(now);
     const lastWarn = this.lastWarningTimes[domain] || 0;
     
     // Throttle temporarily disabled for testing, but typically we want to avoid spamming on every tiny rapid tab switch.

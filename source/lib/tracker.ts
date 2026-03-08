@@ -28,7 +28,9 @@ export interface TrackerConfig {
   categories: SlotCategory[];
 }
 
-const TRACKER_CONFIG_PATH = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'tracker-config.json');
+import { DATA_DIR } from './paths.js';
+
+const TRACKER_CONFIG_PATH = path.join(DATA_DIR, 'tracker-config.json');
 
 export function loadTrackerConfig(): TrackerConfig {
   return readJSON<TrackerConfig>(TRACKER_CONFIG_PATH, { categories: CATEGORIES });
@@ -75,7 +77,7 @@ export interface WeekData {
 }
 
 function getWeeksDir(): string {
-  const dir = path.join(os.homedir(), '.local', 'share', 'pomodorocli', 'weeks');
+  const dir = path.join(DATA_DIR, 'weeks');
   ensureDir(dir);
   return dir;
 }

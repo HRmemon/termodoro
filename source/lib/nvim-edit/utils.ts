@@ -1,4 +1,18 @@
 import { nanoid } from 'nanoid';
+import { spawnSync } from 'child_process';
+
+export function spawnEditorSafe(args: string[]) {
+  const editor = process.env.EDITOR || 'nvim';
+  const wasRaw = process.stdin.isRaw;
+  
+  if (wasRaw) process.stdin.setRawMode(false);
+  process.stdin.pause();
+  
+  spawnSync(editor, args, { stdio: 'inherit' });
+  
+  process.stdin.resume();
+  if (wasRaw) process.stdin.setRawMode(true);
+}
 
 export function tmpFile(view: string): string {
   const rand = nanoid(8);

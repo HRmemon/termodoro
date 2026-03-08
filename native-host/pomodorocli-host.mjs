@@ -1,9 +1,9 @@
 #!/usr/bin/node
 import net from 'node:net';
-import { homedir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const DAEMON_SOCKET_PATH = join(homedir(), '.local', 'share', 'pomodorocli', 'daemon.sock');
+const DAEMON_SOCKET_PATH = join(tmpdir(), 'pomodorocli-daemon.sock');
 
 let sock = null;
 

@@ -4,8 +4,8 @@ import * as os from 'node:os';
 import type { Config } from '../types.js';
 import { ALL_SOUND_CHOICES, DEFAULT_SOUND_CONFIG } from './sounds.js';
 import { atomicWriteJSON } from './fs-utils.js';
+import { CONFIG_DIR } from './paths.js';
 
-const CONFIG_DIR = path.join(os.homedir(), '.config', 'pomodorocli');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 
 const DEFAULT_CONFIG: Config = {

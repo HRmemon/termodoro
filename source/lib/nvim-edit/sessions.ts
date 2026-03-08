@@ -4,7 +4,7 @@ import type { Session } from '../../types.js';
 import { loadSessions } from '../store.js';
 import { updateSession } from '../session-db.js';
 import { getSessionsForDateRange } from '../stats.js';
-import { tmpFile } from './utils.js';
+import { tmpFile, spawnEditorSafe } from './utils.js';
 import { clampStr, clampInt, isValidId, LIMITS } from '../sanitize.js';
 
 function formatSessions(): string {
@@ -83,8 +83,7 @@ export function openSessionsInNvim(): void {
   const tmpPath = tmpFile('sessions');
   fs.writeFileSync(tmpPath, content);
 
-  const editor = process.env.EDITOR || 'nvim';
-  spawnSync(editor, [tmpPath], { stdio: 'inherit' });
+  spawnEditorSafe([tmpPath]);
 
   const edited = fs.readFileSync(tmpPath, 'utf8');
   try {

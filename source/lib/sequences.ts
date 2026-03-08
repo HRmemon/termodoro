@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import type { SequenceBlock, SessionSequence } from '../types.js';
 import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
-const DATA_DIR = path.join(os.homedir(), '.local', 'share', 'pomodorocli');
+import { DATA_DIR } from './paths.js';
 const SEQUENCES_PATH = path.join(DATA_DIR, 'sequences.json');
 
 export const DEFAULT_SEQUENCES: SessionSequence[] = [
