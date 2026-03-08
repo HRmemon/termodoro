@@ -103,6 +103,7 @@ function buildSections(km: Keymap): HelpSection[] {
         ['Tab', 'Domains / Pages'],
         [km.label('nav.down') + '/' + km.label('nav.up'), 'Scroll'],
         ['R', 'HTML report'],
+        ['D', 'Date picker'],
       ],
     },
     {

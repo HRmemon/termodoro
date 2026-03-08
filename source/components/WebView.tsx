@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useContext } from 'react';
 import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { spawnSync, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -12,6 +12,9 @@ import { loadConfig } from '../lib/config.js';
 import { useFullScreen } from '../hooks/useFullScreen.js';
 import { formatMinutes } from '../lib/format.js';
 import { sendReminderNotification } from '../lib/notify.js';
+import { UIContext } from '../contexts/UIContext.js';
+import { WebDatePickerModal } from './WebDatePickerModal.js';
+import { getTodayStr } from '../lib/date-utils.js';
 
 function getTodayString(): string {
   const d = new Date();
@@ -26,10 +29,10 @@ const ACTIVE_COLOR = 'magenta';
 const AUDIBLE_COLOR = 'blue';
 
 type Tab = 'domains' | 'pages';
-type Range = 'day' | 'week' | 'month' | 'all';
+type Range = 'day' | 'week' | 'month' | 'all' | 'custom';
 const RANGES: Range[] = ['day', 'week', 'month', 'all'];
 
-function getRangeDates(range: Range): { start: string; end: string; label: string } {
+function getRangeDates(range: Range, customDate?: string): { start: string; end: string; label: string } {
   const today = new Date();
   const end = dateStr(today);
   switch (range) {
@@ -48,6 +51,8 @@ function getRangeDates(range: Range): { start: string; end: string; label: strin
     }
     case 'all':
       return { start: '2000-01-01', end, label: 'All Time' };
+    case 'custom':
+      return { start: customDate || end, end: customDate || end, label: customDate || end };
   }
 }
 
@@ -55,20 +60,25 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
   const [tab, setTab] = useState<Tab>('domains');
   const [scrollOffset, setScrollOffset] = useState(0);
   const [range, setRange] = useState<Range>('day');
+  const [customDate, setCustomDate] = useState<string | undefined>();
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const { rows } = useFullScreen();
+  const { setIsTyping } = useContext(UIContext)!;
 
   const appConfig = useMemo(() => loadConfig(), []);
   const domainLimit = Math.max(10, appConfig.webDomainLimit ?? 50);
 
-  const { start, end } = useMemo(() => getRangeDates(range), [range]);
+  const { start, end } = useMemo(() => getRangeDates(range, customDate), [range, customDate]);
 
   const stats: BrowserStats | null = useMemo(() => {
     if (range === 'day') {
       return getBrowserStatsForDate(getTodayString());
+    } else if (range === 'custom' && customDate) {
+      return getBrowserStatsForDate(customDate);
     }
     return getBrowserStatsForRange(start, end);
-  }, [range, start, end]);
+  }, [range, start, end, customDate]);
 
   // Merge path-pattern entries into domains for non-day ranges
   const mergedStats: BrowserStats | null = useMemo(() => {
@@ -106,7 +116,13 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
   }, [mergedStats, domainLimit]);
 
   useInput((input, key) => {
+    if (showDatePicker) return;
+
     const km = keymap;
+    if (input === 'D') {
+      setShowDatePicker(true);
+      return;
+    }
     if (key.tab || input === '\t') {
       setTab(prev => prev === 'domains' ? 'pages' : 'domains');
       setScrollOffset(0);
@@ -165,7 +181,7 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
   if (!displayStats || displayStats.totalMinutes === 0) {
     return (
       <Box flexDirection="column" flexGrow={1}>
-        <RangeBar range={range} />
+        <RangeBar range={range} customDate={customDate} />
         <Box marginBottom={1}>
           <Text dimColor>No browser data for this period.</Text>
         </Box>
@@ -176,6 +192,18 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
             <Text color="cyan">{reportError}</Text>
           </Box>
         )}
+        {showDatePicker && (
+          <WebDatePickerModal
+            onDismiss={() => setShowDatePicker(false)}
+            onSelect={(date) => {
+              setCustomDate(date);
+              setRange('custom');
+              setShowDatePicker(false);
+            }}
+            setIsTyping={setIsTyping}
+            initialDate={customDate || dateStr(new Date())}
+          />
+        )}
       </Box>
     );
   }
@@ -185,7 +213,7 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
   return (
     <Box flexDirection="column" flexGrow={1}>
       {/* Range selector */}
-      <RangeBar range={range} />
+      <RangeBar range={range} customDate={customDate} />
 
       {/* Summary bar */}
       <Box marginBottom={1}>
@@ -214,7 +242,7 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
         >
           Top Pages
         </Text>
-        <Text dimColor>    Tab:switch  R:report</Text>
+        <Text dimColor>    Tab:switch  R:report  D:date picker</Text>
       </Box>
 
       {tab === 'domains' && (
@@ -228,17 +256,32 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
           <Text color="cyan">{reportError}</Text>
         </Box>
       )}
+      {showDatePicker && (
+        <WebDatePickerModal
+          onDismiss={() => setShowDatePicker(false)}
+          onSelect={(date) => {
+            setCustomDate(date);
+            setRange('custom');
+            setShowDatePicker(false);
+          }}
+          setIsTyping={setIsTyping}
+          initialDate={customDate || dateStr(new Date())}
+        />
+      )}
     </Box>
   );
 }
 
-function RangeBar({ range }: { range: Range }) {
+function RangeBar({ range, customDate }: { range: Range, customDate?: string }) {
   const labels: { key: Range; label: string }[] = [
     { key: 'day', label: 'Today' },
     { key: 'week', label: 'Week' },
     { key: 'month', label: 'Month' },
     { key: 'all', label: 'All' },
   ];
+  if (range === 'custom' && customDate) {
+    labels.push({ key: 'custom', label: customDate });
+  }
   return (
     <Box marginBottom={1}>
       {labels.map((item, i) => (

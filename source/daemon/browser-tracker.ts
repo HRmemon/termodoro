@@ -3,6 +3,7 @@ import type { NotificationRule } from '../types.js';
 import { loadConfig } from '../lib/config.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { sendReminderNotification } from '../lib/notify.js';
+import jexl from 'jexl';
 
 interface TabInfo {
   url: string;
@@ -23,13 +24,15 @@ export class BrowserTracker {
   private lastWarningTimes: Record<string, number> = {};
   private currentPomodoroState: EngineFullState | null = null;
   
+  // Track continuous time per domain
+  private continuousTimes: Record<string, { start: number, active: boolean, audible: boolean }> = {};
+  
   constructor() {}
 
   public handlePomodoroStateChange(state: EngineFullState) {
     this.currentPomodoroState = state;
-    // We can evaluate immediately when pomodoro state changes (e.g. from pause to work)
     if (this.lastEventState?.windowFocused && this.lastEventState.activeTab?.domain) {
-      this.shouldSendTrackingNotification(this.lastEventState.activeTab.domain);
+      this.evaluateRules(this.lastEventState.activeTab.domain, this.lastEventState);
     }
   }
 
@@ -55,8 +58,28 @@ export class BrowserTracker {
     const becameActive = newState.windowFocused && (!this.lastEventState || !this.lastEventState.windowFocused);
     const domainChanged = currentDomain !== prevDomain;
 
-    if (newState.windowFocused && currentDomain && (domainChanged || becameActive)) {
-      this.shouldSendTrackingNotification(currentDomain);
+    if (domainChanged && prevDomain) {
+      // Domain changed, reset continuous time for previous
+      delete this.continuousTimes[prevDomain];
+    }
+
+    if (newState.windowFocused && currentDomain) {
+      // Initialize continuous time tracking
+      if (!this.continuousTimes[currentDomain]) {
+        this.continuousTimes[currentDomain] = {
+          start: now,
+          active: true,
+          audible: newState.audibleTabs.some(t => t.url === newState.activeTab?.url)
+        };
+      } else {
+        this.continuousTimes[currentDomain].active = true;
+        this.continuousTimes[currentDomain].audible = newState.audibleTabs.some(t => t.url === newState.activeTab?.url);
+      }
+      
+      this.evaluateRules(currentDomain, newState);
+    } else if (currentDomain && this.continuousTimes[currentDomain]) {
+      // Not focused anymore, pause continuous? Let's just track strictly continuous active time for now.
+      delete this.continuousTimes[currentDomain];
     }
 
     this.lastEventState = newState;
@@ -84,21 +107,78 @@ export class BrowserTracker {
     }
   }
 
-  private shouldSendTrackingNotification(domain: string) {
-    // Extract base domain to properly group subdomains like www.youtube.com
+  private async evaluateRules(domain: string, state: BrowserState) {
+    const config = loadConfig();
+    const rules = config.browserRules;
+    if (!rules || rules.length === 0) return;
+
+    // Extract base domain
     const baseDomain = domain.replace(/^www\./, '');
+    const category = this.getDomainCategory(domain, config.domainRules || []) || 'Unknown';
+    
+    let currentMode = 'idle';
+    if (this.currentPomodoroState && this.currentPomodoroState.isRunning) {
+      currentMode = this.currentPomodoroState.sessionType === 'work' ? 'work' : 'break';
+    }
 
     const todayUsage = getTodayDomainUsage(baseDomain);
-    const yesterdayUsage = getYesterdayDomainUsage(baseDomain);
-    const weekUsage = getThisWeekDomainUsage(baseDomain);
+    const continuousMs = this.continuousTimes[domain] ? Date.now() - this.continuousTimes[domain]!.start : 0;
+    
+    const is_active = state.windowFocused && state.activeTab?.domain === domain;
+    const is_audible = state.audibleTabs.some(t => t.domain === domain);
 
-    const stats = {
-      today: todayUsage.active_seconds || 0,
-      yesterday: yesterdayUsage.active_seconds || 0,
-      week: weekUsage.active_seconds || 0,
+    const context = {
+      mode: currentMode,
+      domain_flagged: category,
+      domain: baseDomain,
+      past_time_today: Math.round(todayUsage.active_seconds / 60), // in minutes
+      past_time_continuous: Math.round(continuousMs / 60000), // in minutes
+      is_active,
+      is_audible
     };
 
-    this.triggerNotification(baseDomain, stats);
+    const formatMins = (mins: number) => {
+      if (mins < 60) return `${mins}m`;
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return `${h}h ${m}m`;
+    };
+
+    for (const rule of rules) {
+      try {
+        const result = await jexl.eval(rule.condition, context);
+        if (result) {
+          // Rule triggered
+          const now = Date.now();
+          const throttleKey = `${rule.id}_${baseDomain}`;
+          const lastWarn = this.lastWarningTimes[throttleKey] || 0;
+          
+          if (now - lastWarn < rule.throttleMinutes * 60 * 1000) {
+            continue; // Throttled
+          }
+
+          this.lastWarningTimes[throttleKey] = now;
+
+          // Replace variables in message
+          let msg = rule.message;
+          msg = msg.replace(/\$\{domain\}/g, baseDomain);
+          msg = msg.replace(/\$\{past_time_today\}/g, context.past_time_today.toString());
+          msg = msg.replace(/\$\{past_time_today_formatted\}/g, formatMins(context.past_time_today));
+          msg = msg.replace(/\$\{past_time_continuous\}/g, context.past_time_continuous.toString());
+          msg = msg.replace(/\$\{mode\}/g, currentMode);
+
+          try {
+            sendReminderNotification('Web Tracker', msg, 5);
+          } catch (e) {
+            console.error('Failed to send notification', e);
+          }
+        }
+      } catch (e) {
+        console.error(`Failed to evaluate rule ${rule.id}:`, e);
+      }
+    }
+    
+    this.pruneOldWarnings(Date.now());
   }
 
   private getDomainCategory(domain: string, domainRules: any[]): string | null {
@@ -120,40 +200,11 @@ export class BrowserTracker {
 
   private pruneOldWarnings(now: number) {
     if (Object.keys(this.lastWarningTimes).length > 1000) {
-      for (const [domain, timestamp] of Object.entries(this.lastWarningTimes)) {
+      for (const [key, timestamp] of Object.entries(this.lastWarningTimes)) {
         if (now - timestamp > 24 * 60 * 60 * 1000) {
-          delete this.lastWarningTimes[domain];
+          delete this.lastWarningTimes[key];
         }
       }
-    }
-  }
-
-  private triggerNotification(domain: string, stats: { today: number, yesterday: number, week: number }) {
-    const now = Date.now();
-    this.pruneOldWarnings(now);
-    const lastWarn = this.lastWarningTimes[domain] || 0;
-    
-    // Throttle temporarily disabled for testing, but typically we want to avoid spamming on every tiny rapid tab switch.
-    // if (now - lastWarn < 5000) return; 
-
-    this.lastWarningTimes[domain] = now;
-
-    const formatMins = (sec: number) => {
-      if (sec < 60) return `${sec}s`;
-      const m = Math.floor(sec / 60);
-      if (m < 60) return `${m}m ${sec % 60}s`;
-      const h = Math.floor(m / 60);
-      const remainingM = m % 60;
-      return `${h}h ${remainingM}m`;
-    };
-
-    let title = `${domain} Usage`;
-    let msg = `Today: ${formatMins(stats.today)}\nYesterday: ${formatMins(stats.yesterday)}\nThis week (Mon- ): ${formatMins(stats.week)}`;
-
-    try {
-      sendReminderNotification(title, msg, 5);
-    } catch (e) {
-      console.error('Failed to send notification', e);
     }
   }
 }

@@ -32,41 +32,29 @@ const DEFAULT_CONFIG: Config = {
     {
       id: 'focus_wasted_active',
       type: 'focus',
-      sessionType: 'work',
-      categories: ['W', 'SF'],
-      state: 'active',
-      minContinuousMinutes: 0,
+      condition: 'mode == "work" && domain_flagged in ["W", "SF"] && is_active',
       message: 'Focus! Close ${domain}.',
       throttleMinutes: 1
     },
     {
       id: 'focus_wasted_audible',
       type: 'focus',
-      sessionType: 'work',
-      categories: ['W', 'SF'],
-      state: 'audible',
-      minContinuousMinutes: 0,
+      condition: 'mode == "work" && domain_flagged in ["W", "SF"] && is_audible',
       message: 'Focus! Pause audio on ${domain}.',
       throttleMinutes: 1
     },
     {
       id: 'doomscroll_wasted',
       type: 'tracking',
-      sessionType: 'any',
-      categories: ['W', 'SF'],
-      state: 'active',
-      minContinuousMinutes: 15,
+      condition: 'domain_flagged in ["W", "SF"] && is_active && past_time_continuous > 15',
       message: 'You have been on ${domain} for 15m. Time for a break?',
       throttleMinutes: 15
     },
     {
       id: 'daily_limit_wasted',
       type: 'tracking',
-      sessionType: 'any',
-      categories: ['W', 'SF'],
-      state: 'active',
-      minTodayMinutes: 60,
-      message: 'Daily limit reached! You have spent ${time_today} on ${domain} today.',
+      condition: 'domain_flagged in ["W", "SF"] && is_active && past_time_today > 60',
+      message: 'Daily limit reached! You have spent ${past_time_today_formatted} on ${domain} today.',
       throttleMinutes: 60
     }
   ],

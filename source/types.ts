@@ -25,11 +25,7 @@ export interface Session {
 export interface NotificationRule {
   id: string;
   type: 'focus' | 'tracking';           // Categorization
-  sessionType?: 'work' | 'break' | 'any'; // Does Pomodoro state matter?
-  categories?: string[];                // e.g., ['W', 'SF'] (Wasted)
-  state?: 'active' | 'audible' | 'both'; // Which interaction type?
-  minContinuousMinutes?: number;        // e.g., Staring at a page for 20m
-  minTodayMinutes?: number;             // e.g., Used Reddit for 15m total today
+  condition: string;                    // e.g. mode == 'focus' && domain_flagged == 'W'
   message: string;                      // Dynamic template string
   throttleMinutes: number;              // Prevent spam
 }

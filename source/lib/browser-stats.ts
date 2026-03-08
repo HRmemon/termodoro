@@ -201,6 +201,28 @@ export function getThisWeekDomainUsage(baseDomain: string): { active_seconds: nu
   return { active_seconds: 0 };
 }
 
+export function getAvailableBrowserDates(): string[] {
+  if (!fs.existsSync(DB_PATH)) return [];
+
+  let db: InstanceType<typeof Database> | null = null;
+  try {
+    db = new Database(DB_PATH, { readonly: true });
+    // Get distinct dates from both tables
+    const rows = db.prepare(`
+      SELECT DISTINCT date FROM (
+        SELECT date(recorded_at) as date FROM page_visits
+        UNION
+        SELECT date FROM browser_daily_usage
+      ) WHERE date IS NOT NULL ORDER BY date ASC
+    `).all() as { date: string }[];
+    return rows.map(r => r.date);
+  } catch {
+    return [];
+  } finally {
+    db?.close();
+  }
+}
+
 export function getBrowserStatsForDate(date: string): BrowserStats | null {
   if (!fs.existsSync(DB_PATH)) return null;
 
