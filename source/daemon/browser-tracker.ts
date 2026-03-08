@@ -127,14 +127,17 @@ export class BrowserTracker {
     const is_active = state.windowFocused && state.activeTab?.domain === domain;
     const is_audible = state.audibleTabs.some(t => t.domain === domain);
 
+    const is_paused = this.currentPomodoroState ? this.currentPomodoroState.isPaused : false;
+
     const context = {
       mode: currentMode,
       domain_flagged: category,
       domain: baseDomain,
-      past_time_today: Math.round(todayUsage.active_seconds / 60), // in minutes
-      past_time_continuous: Math.round(continuousMs / 60000), // in minutes
+      past_time_today: Math.floor(todayUsage.active_seconds / 60), // in minutes
+      past_time_continuous: Math.floor(continuousMs / 60000), // in minutes
       is_active,
-      is_audible
+      is_audible,
+      is_paused
     };
 
     const formatMins = (mins: number) => {
