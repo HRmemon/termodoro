@@ -13,6 +13,7 @@ import { writeStatusFile, clearStatusFile, invalidateTodayStats, initStatusFile 
 import { executeHook } from './hooks.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { BrowserTracker } from './browser-tracker.js';
+import { CONFIG_DIR } from '../lib/paths.js';
 
 // Set of subscribed client sockets
 const subscribers = new Set<net.Socket>();
@@ -131,6 +132,40 @@ export function startDaemon(): void {
   }
 
   const engine = new PomodoroEngine(config, initialState);
+  let configReloadTimer: NodeJS.Timeout | null = null;
+  let configWatcher: fs.FSWatcher | null = null;
+
+  const applyUpdatedConfig = (reason: string): void => {
+    try {
+      const newConfig = loadConfig();
+      engine.updateConfig(newConfig);
+      const state = engine.getState();
+      writeStatusFile(state);
+      tracker.handlePomodoroStateChange(state);
+      broadcast('state:change', state);
+      console.log(`[daemon] Reloaded config (${reason})`);
+    } catch (err) {
+      console.error('[daemon] Failed to reload config:', err);
+    }
+  };
+
+  const scheduleConfigReload = (reason: string): void => {
+    if (configReloadTimer) clearTimeout(configReloadTimer);
+    configReloadTimer = setTimeout(() => {
+      configReloadTimer = null;
+      applyUpdatedConfig(reason);
+    }, 150);
+  };
+
+  try {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    configWatcher = fs.watch(CONFIG_DIR, (_eventType, filename) => {
+      if (filename && filename.toString() !== 'config.json') return;
+      scheduleConfigReload('file change');
+    });
+  } catch (err) {
+    console.error('[daemon] Config watcher disabled:', err);
+  }
 
   // Wire engine events to broadcasting + hooks + status file
   const engineEvents: DaemonEventType[] = [
@@ -415,6 +450,14 @@ export function startDaemon(): void {
 
   function shutdown(): void {
     console.log('Daemon shutting down...');
+    if (configReloadTimer) {
+      clearTimeout(configReloadTimer);
+      configReloadTimer = null;
+    }
+    if (configWatcher) {
+      configWatcher.close();
+      configWatcher = null;
+    }
     engine.dispose();
     server.close();
     clearStatusFile();

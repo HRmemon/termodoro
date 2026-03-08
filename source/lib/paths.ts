@@ -2,7 +2,7 @@ import envPaths from 'env-paths';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
-const paths = envPaths('pomodorocli');
+const paths = envPaths('pomodorocli', { suffix: '' });
 
 export const DATA_DIR = paths.data;
 export const CONFIG_DIR = paths.config;

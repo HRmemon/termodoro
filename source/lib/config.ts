@@ -7,6 +7,7 @@ import { atomicWriteJSON } from './fs-utils.js';
 import { CONFIG_DIR } from './paths.js';
 
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
+let didWarnConfigReadError = false;
 
 const DEFAULT_CONFIG: Config = {
   workDuration: 25,
@@ -245,10 +246,17 @@ export function loadConfig(): Config {
       const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
       const userConfig = JSON.parse(raw) as Partial<Config>;
       const merged = deepMerge(DEFAULT_CONFIG, userConfig);
+      didWarnConfigReadError = false;
       return validateConfig(merged);
     }
-  } catch {
-    // Fall through to defaults
+  } catch (err) {
+    if (!didWarnConfigReadError) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[pomodorocli] Failed to load config: ${CONFIG_PATH}\n`);
+      process.stderr.write(`[pomodorocli] ${msg}\n`);
+      process.stderr.write('[pomodorocli] Falling back to default config for this process.\n');
+      didWarnConfigReadError = true;
+    }
   }
   return { ...DEFAULT_CONFIG };
 }

@@ -18,7 +18,6 @@ export function TrackerGridView({
   return (
     <>
       {/* Column headers + divider */}
-      <Text>{' '}</Text>
       <Text dimColor>{'Time  ' + DAY_NAMES.map(n => n.padEnd(COL_WIDTH)).join('')}</Text>
       <Text dimColor>{'      ' + DAY_NAMES.map(() => '\u2500'.repeat(COL_WIDTH)).join('')}</Text>
 

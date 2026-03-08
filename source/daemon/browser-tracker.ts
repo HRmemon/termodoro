@@ -1,6 +1,7 @@
 import { logBrowserEvent, upsertDomainUsage, getTodayDomainUsage, getYesterdayDomainUsage, getThisWeekDomainUsage } from '../lib/browser-stats.js';
 import type { NotificationRule } from '../types.js';
 import { loadConfig } from '../lib/config.js';
+import { loadTrackerConfigFull } from '../lib/tracker.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { sendReminderNotification } from '../lib/notify.js';
 import jexl from 'jexl';
@@ -111,10 +112,14 @@ export class BrowserTracker {
     const config = loadConfig();
     const rules = config.browserRules;
     if (!rules || rules.length === 0) return;
+    const trackerConfig = loadTrackerConfigFull();
 
     // Extract base domain
     const baseDomain = domain.replace(/^www\./, '');
-    const category = this.getDomainCategory(domain, config.domainRules || []) || 'Unknown';
+    const domainRules = trackerConfig.domainRules.length > 0
+      ? trackerConfig.domainRules
+      : (config.domainRules || []);
+    const category = this.getDomainCategory(domain, domainRules) || 'Unknown';
     
     let currentMode = 'idle';
     if (this.currentPomodoroState && this.currentPomodoroState.isRunning) {
