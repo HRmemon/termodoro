@@ -10,8 +10,6 @@ export function formatTracker(): string {
   const weekStr = getISOWeekStr(monday);
   const weekData = loadWeek(weekStr) ?? createWeek(now);
   const dates = getWeekDates(weekData.start);
-  const categories = getCategories();
-  const codeSet = new Set(categories.map(c => c.code));
 
   const lines: string[] = [];
   lines.push(`Week: ${weekStr}`);
@@ -26,7 +24,7 @@ export function formatTracker(): string {
     let row = slot.padEnd(10);
     for (const date of dates) {
       const code = weekData.slots[date]?.[slot];
-      if (code && codeSet.has(code)) {
+      if (code) {
         row += code.padStart(6);
       } else {
         const pending = weekData.pending[date]?.[slot];
@@ -69,11 +67,13 @@ export function parseTracker(text: string): void {
   const now = new Date();
   const weekData = loadWeek(weekStr) ?? createWeek(now);
   const dates = getWeekDates(weekData.start);
+  const existingSlotCount = Object.values(weekData.slots).reduce((sum, day) => sum + Object.keys(day).length, 0);
 
   // Parse grid
   const newSlots: Record<string, Record<string, string>> = {};
   const notes: Record<string, string> = {};
   let inNotes = false;
+  let parsedSlotRows = 0;
 
   for (const line of lines) {
     if (line.startsWith('--- Notes ---')) {
@@ -94,18 +94,25 @@ export function parseTracker(text: string): void {
     if (!slotMatch) continue;
     const slot = slotMatch[1]!;
     if (!ALL_SLOTS.includes(slot)) continue;
+    parsedSlotRows++;
 
     const values = slotMatch[2]!.trim().split(/\s+/);
     for (let i = 0; i < dates.length && i < values.length; i++) {
       const val = values[i]!;
       const date = dates[i]!;
       if (val === '-' || val.startsWith('?')) continue; // skip empty and pending suggestions
-      if (codeSet.has(val)) {
-        if (!newSlots[date]) newSlots[date] = {};
-        newSlots[date]![slot] = val;
-      }
+      const normalized = clampStr(val, 8);
+      // Accept known category codes and preserve unknown legacy/custom codes.
+      if (!/^[A-Za-z0-9_-]+$/.test(normalized)) continue;
+      if (!newSlots[date]) newSlots[date] = {};
+      newSlots[date]![slot] = normalized;
     }
   }
+
+  const newSlotCount = Object.values(newSlots).reduce((sum, day) => sum + Object.keys(day).length, 0);
+  // Safety: avoid destructive wipe when an editor save strips/changes content unexpectedly.
+  if (parsedSlotRows === 0) return;
+  if (newSlotCount === 0 && existingSlotCount > 0) return;
 
   // Merge: replace slots but preserve pending
   weekData.slots = {};

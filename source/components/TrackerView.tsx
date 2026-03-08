@@ -53,7 +53,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   const [week, setWeek] = useState<WeekData | null>(() =>
     weekStr ? loadWeek(weekStr) : null
   );
-  const weekDates = week ? getWeekDates(week.start) : [];
+  const weekDates = useMemo(() => (week ? getWeekDates(week.start) : []), [week?.start]);
   const todayCol = weekDates.length > 0 ? getTodayColIndex(weekDates) : -1;
 
   const defaultRow = (() => {
