@@ -4,6 +4,7 @@ import type { Config, View, Overlay, LayoutConfig } from './types.js';
 import { loadSessions } from './lib/store.js';
 import { parseSequenceString, loadSequences } from './lib/sequences.js';
 import { useDaemonConnection } from './hooks/useDaemonConnection.js';
+import { useReminderChecker } from './hooks/useReminderChecker.js';
 import { useCommandDispatch } from './hooks/useCommandDispatch.js';
 import { Layout } from './components/Layout.js';
 import { StatusLine } from './components/StatusLine.js';
@@ -81,6 +82,8 @@ export function App({ config: initialConfig, initialView, initialProject, initia
 
   // Connect to daemon
   const { state, timer, engine, sequence, actions, connectionStatus } = useDaemonConnection(view === 'timer');
+  // Fallback checker in UI process; notify layer dedupes across processes.
+  useReminderChecker(config);
 
   // Apply CLI initial flags on mount
   const appliedInitRef = useRef(false);
