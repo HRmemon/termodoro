@@ -18,7 +18,7 @@ export type KeyAction =
   | 'tracker.day_summary' | 'tracker.week_summary'
   | 'tracker.new_week' | 'tracker.browse' | 'tracker.prev_week'
   // Stats
-  | 'stats.prev_tab' | 'stats.next_tab'
+  | 'stats.prev_tab' | 'stats.next_tab' | 'stats.next_week' | 'stats.prev_week'
   // Config
   | 'config.save'
   // Calendar
@@ -65,6 +65,8 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, string> = {
   'tracker.prev_week': 'p',
   'stats.prev_tab': 'h',
   'stats.next_tab': 'l',
+  'stats.next_week': 'n',
+  'stats.prev_week': 'p',
   'config.save': 's',
   'calendar.toggle_view': 'v',
   'calendar.goto_today': 't',

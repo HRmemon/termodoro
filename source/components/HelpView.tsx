@@ -84,7 +84,9 @@ function buildSections(km: Keymap): HelpSection[] {
       title: '[5] Stats',
       hints: [
         [km.label('stats.prev_tab') + '/' + km.label('stats.next_tab'), 'Switch tab'],
+        [km.label('stats.next_week') + '/' + km.label('stats.prev_week'), 'Next / Prev week'],
         [km.label('nav.down') + '/' + km.label('nav.up'), 'Navigate'],
+        ['R', 'HTML report'],
       ],
     },
     {

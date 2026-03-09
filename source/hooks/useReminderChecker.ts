@@ -27,7 +27,7 @@ export function useReminderChecker(config: Config): void {
             const task = tasks.find(t => t.id === r.taskId);
             if (task) message = `${r.title}\nTask: ${task.text}`;
           }
-          notifyReminder(r.title, message, config.sound, config.notificationDuration, config.sounds);
+          notifyReminder(r.title, message, config.sound, config.notificationDuration, config.sounds, config.notifications);
           if (!r.recurring) {
             updateReminder(r.id, { enabled: false });
           }
@@ -39,7 +39,7 @@ export function useReminderChecker(config: Config): void {
         if (t.completed || !t.date || !t.time) continue;
         if (t.date === today && t.time === currentTime && !firedRemindersRef.current.has(firedKey + t.id)) {
           firedRemindersRef.current.add(firedKey + t.id);
-          notifyReminder('Task Reminder', t.text, config.sound, config.notificationDuration, config.sounds);
+          notifyReminder('Task Reminder', t.text, config.sound, config.notificationDuration, config.sounds, config.notifications);
         }
       }
     };

@@ -1,5 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
+import { spawnSync, spawn } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { openSessionsInNvim } from '../lib/nvim-edit/index.js';
 import { Heatmap } from './Heatmap.js';
@@ -17,13 +21,17 @@ import {
 import { loadSessions } from '../lib/store.js';
 import { loadTasks } from '../lib/tasks.js';
 import { formatMinutes } from '../lib/format.js';
+import { sendReminderNotification } from '../lib/notify.js';
+import { generateStatsHtmlReport } from '../lib/stats-report.js';
 
-function getWeekStartDate(): string {
+const HIDDEN_SEEDED_PROJECTS = new Set(['backend', 'frontend', 'devops']);
+
+function getWeekStartDate(offsetWeeks = 0): string {
   const today = new Date();
   const dayOfWeek = today.getDay();
   const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - daysFromMonday);
+  weekStart.setDate(today.getDate() - daysFromMonday - (offsetWeeks * 7));
   const y = weekStart.getFullYear();
   const m = String(weekStart.getMonth() + 1).padStart(2, '0');
   const d = String(weekStart.getDate()).padStart(2, '0');
@@ -48,19 +56,22 @@ const SECTION_NAMES = ['Today', 'Week', 'Projects', 'Tasks', 'Recent'];
 
 export function ReportsView({ keymap }: { keymap?: Keymap }) {
   const [selectedSection, setSelectedSection] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(0);
   const [dataVersion, setDataVersion] = useState(0);
+  const [reportError, setReportError] = useState<string | null>(null);
   const totalSections = SECTION_NAMES.length;
   const { stdout } = useStdout();
   const termWidth = stdout?.columns ?? 80;
 
   const data = useMemo(() => {
     const today = getTodayString();
-    const weekStart = getWeekStartDate();
+    const weekStart = getWeekStartDate(weekOffset);
     const allSessions = loadSessions();
     const tasks = loadTasks();
 
     const projectMap = new Map<string, { total: number; completed: number }>();
     for (const task of tasks) {
+      if (task.project && HIDDEN_SEEDED_PROJECTS.has(task.project.toLowerCase())) continue;
       const proj = task.project ?? '(none)';
       const entry = projectMap.get(proj) ?? { total: 0, completed: 0 };
       entry.total++;
@@ -72,6 +83,7 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
     const projectActivity = new Map<string, number[]>();
     for (const task of tasks) {
       if (!task.project) continue;
+      if (HIDDEN_SEEDED_PROJECTS.has(task.project.toLowerCase())) continue;
       if (!projectActivity.has(task.project)) {
         const vals: number[] = [];
         for (let i = 6; i >= 0; i--) {
@@ -87,13 +99,26 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
     }
 
     const todaySessions = getSessionsForDateRange(today, today, allSessions);
+    const recentWeeks = Array.from({ length: 10 }, (_, offset) => {
+      const ws = getWeekStartDate(offset);
+      const weekly = getWeeklyStats(ws, allSessions);
+      return {
+        offset,
+        start: ws,
+        total: weekly.totalFocusMinutes,
+      };
+    });
 
     return {
       daily: getDailyStats(today, allSessions),
       weekly: getWeeklyStats(weekStart, allSessions),
+      weekStart,
+      weekOffset,
+      recentWeeks,
       breakdown: getTaskBreakdown(allSessions),
       recentSessions: allSessions
         .filter(s => s.type === 'work' && s.status === 'completed')
+        .filter(s => !s.project || !HIDDEN_SEEDED_PROJECTS.has(s.project.toLowerCase()))
         .slice(-10)
         .reverse(),
       taskProjects: [...projectMap.entries()]
@@ -104,10 +129,18 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
       todaySessions,
       projectActivity,
     };
-  }, [dataVersion]);
+  }, [dataVersion, weekOffset]);
 
   useInput((input, key) => {
     const km = keymap;
+    if (selectedSection === 1 && kmMatches(km, 'stats.next_week', input, key)) {
+      setWeekOffset(prev => Math.min(prev + 1, 260));
+      return;
+    }
+    if (selectedSection === 1 && kmMatches(km, 'stats.prev_week', input, key)) {
+      setWeekOffset(prev => Math.max(0, prev - 1));
+      return;
+    }
     if ((kmMatches(km, 'stats.next_tab', input, key)) || key.rightArrow) {
       setSelectedSection(prev => Math.min(prev + 1, totalSections - 1));
     }
@@ -123,10 +156,32 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
     if (input === 'e') {
       openSessionsInNvim();
       setDataVersion(v => v + 1);
+      return;
+    }
+    if (input === 'R') {
+      const html = generateStatsHtmlReport(weekOffset);
+      const tmpPath = path.join(os.tmpdir(), `pomodorocli-stats-report-${Date.now()}.html`);
+      fs.writeFileSync(tmpPath, html);
+      const openers = ['xdg-open', 'open', 'sensible-browser'];
+      let opened = false;
+      for (const opener of openers) {
+        const which = spawnSync('which', [opener], { stdio: 'ignore' });
+        if (which.status === 0) {
+          spawn(opener, [tmpPath], { detached: true, stdio: 'ignore' }).unref();
+          opened = true;
+          break;
+        }
+      }
+      if (!opened) {
+        setReportError(`Report saved to: ${tmpPath} (no browser opener found)`);
+        setTimeout(() => setReportError(null), 5000);
+      } else {
+        sendReminderNotification('Stats Report', 'Opening report in browser...');
+      }
     }
   });
 
-  const { daily, weekly, breakdown, recentSessions, taskProjects, deepWork, streaks, todaySessions, projectActivity } = data;
+  const { daily, weekly, breakdown, recentSessions, taskProjects, deepWork, streaks, todaySessions, projectActivity, weekStart, recentWeeks } = data;
 
   // Side-by-side layout requires at least ~72 content columns (80 - 20 sidebar - 8 padding/borders)
   const wideLayout = termWidth >= 80;
@@ -146,6 +201,11 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
         <WeekSection
           weekly={weekly}
           streaks={streaks}
+          weekStart={weekStart}
+          weekOffset={weekOffset}
+          recentWeeks={recentWeeks}
+          nextWeekKey={keymap ? keymap.label('stats.next_week') : 'n'}
+          prevWeekKey={keymap ? keymap.label('stats.prev_week') : 'p'}
           wide={wideLayout}
         />
       );
@@ -182,6 +242,11 @@ export function ReportsView({ keymap }: { keymap?: Keymap }) {
       {/* Active section content */}
       <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
         {renderSection()}
+        {reportError && (
+          <Box marginTop={1}>
+            <Text color="cyan">{reportError}</Text>
+          </Box>
+        )}
       </Box>
     </Box>
   );
@@ -335,10 +400,20 @@ function TodaySection({
 function WeekSection({
   weekly,
   streaks,
+  weekStart,
+  weekOffset,
+  recentWeeks,
+  nextWeekKey,
+  prevWeekKey,
   wide,
 }: {
   weekly: WeeklyStats;
   streaks: StreakInfo;
+  weekStart: string;
+  weekOffset: number;
+  recentWeeks: Array<{ offset: number; start: string; total: number }>;
+  nextWeekKey: string;
+  prevWeekKey: string;
   wide: boolean;
 }) {
   const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -357,6 +432,10 @@ function WeekSection({
 
   const summaryPanel = (
     <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text dimColor>Week of </Text>
+        <Text color="cyan">{weekStart}</Text>
+      </Box>
       <Box>
         <Box width={10}><Text dimColor>Total</Text></Box>
         <Text bold>{formatMinutes(weekly.totalFocusMinutes)}</Text>
@@ -378,6 +457,20 @@ function WeekSection({
       <Box>
         <Box width={10}><Text dimColor>Streak</Text></Box>
         <Text color={streaks.currentStreak > 0 ? 'green' : 'gray'}>{streaks.currentStreak}d</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>Week: {nextWeekKey}/{prevWeekKey}</Text>
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text dimColor>Recent weeks</Text>
+        {recentWeeks.map((w) => (
+          <Box key={w.start}>
+            <Text color={w.offset === weekOffset ? 'cyan' : undefined} bold={w.offset === weekOffset}>
+              {w.offset === weekOffset ? '> ' : '  '}
+              {w.start}  {formatMinutes(w.total)}
+            </Text>
+          </Box>
+        ))}
       </Box>
     </Box>
   );
@@ -433,7 +526,7 @@ function WeekSection({
 
 function ProjectsSection({ breakdown }: { breakdown: ReturnType<typeof getTaskBreakdown> }) {
   const projectItems = breakdown.byProject
-    .filter(p => p.label !== '(untagged)')
+    .filter(p => p.label !== '(untagged)' && !HIDDEN_SEEDED_PROJECTS.has(p.label.toLowerCase()))
     .slice(0, 8)
     .map(p => ({ label: p.label, value: p.minutes }));
 

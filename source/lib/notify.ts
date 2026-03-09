@@ -56,7 +56,14 @@ export function notifySessionEnd(type: SessionType, soundEnabled: boolean, notif
   }
 }
 
-export function notifyReminder(title: string, message: string, soundEnabled: boolean, durationSeconds = 5, soundConfig?: SoundConfig): void {
+export function notifyReminder(
+  title: string,
+  message: string,
+  soundEnabled: boolean,
+  durationSeconds = 5,
+  soundConfig?: SoundConfig,
+  notificationsEnabled = true,
+): void {
   if (soundEnabled) {
     if (soundConfig) {
       playSoundForEvent('reminder', soundConfig);
@@ -64,5 +71,7 @@ export function notifyReminder(title: string, message: string, soundEnabled: boo
       ringBell();
     }
   }
-  sendReminderNotification(title, message, durationSeconds);
+  if (notificationsEnabled) {
+    sendReminderNotification(title, message, durationSeconds);
+  }
 }

@@ -1,9 +1,8 @@
 import { useCallback } from 'react';
 import { nanoid } from 'nanoid';
-import type { Config, View, Overlay } from '../types.js';
+import type { View, Overlay } from '../types.js';
 import { addTask } from '../lib/tasks.js';
-import { addReminder, updateReminder } from '../lib/reminders.js';
-import { notifyReminder } from '../lib/notify.js';
+import { addReminder } from '../lib/reminders.js';
 import { parseSequenceString, loadSequences } from '../lib/sequences.js';
 
 interface CommandActions {
@@ -21,7 +20,6 @@ interface CommandCallbacks {
 export function useCommandDispatch(
   actions: CommandActions,
   callbacks: CommandCallbacks,
-  config: Config,
   exit: () => void,
 ): (cmd: string, args: string) => void {
   return useCallback((cmd: string, args: string) => {
@@ -98,19 +96,13 @@ export function useCommandDispatch(
           const label = remindMatch[3]?.trim() || `${amount}${unit} timer`;
           const fireAt = new Date(Date.now() + ms);
           const fireTime = `${String(fireAt.getHours()).padStart(2, '0')}:${String(fireAt.getMinutes()).padStart(2, '0')}`;
-          const reminderId = nanoid();
           addReminder({
-            id: reminderId,
+            id: nanoid(),
             time: fireTime,
             title: label,
             enabled: true,
             recurring: false,
           });
-
-          setTimeout(() => {
-            notifyReminder(label, `Timer: ${label}`, config.sound, config.notificationDuration, config.sounds);
-            updateReminder(reminderId, { enabled: false });
-          }, ms);
 
           callbacks.setView('reminders');
         }
@@ -123,5 +115,5 @@ export function useCommandDispatch(
       default:
         break;
     }
-  }, [actions, callbacks, exit, config]);
+  }, [actions, callbacks, exit]);
 }

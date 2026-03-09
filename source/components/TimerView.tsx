@@ -8,6 +8,7 @@ import { colors } from '../lib/theme.js';
 import { kmMatches } from '../lib/keymap.js';
 import { ModePickerOverlay } from './timer/ModePickerOverlay.js';
 import { SequencePickerOverlay } from './timer/SequencePickerOverlay.js';
+import { Modal } from './Modal.js';
 import { useDaemon } from '../contexts/DaemonContext.js';
 import { useConfig } from '../contexts/ConfigContext.js';
 import { useUI } from '../contexts/UIContext.js';
@@ -251,26 +252,39 @@ export function TimerView({
 
       {/* Project input with dropdown autocomplete */}
       {showProjectInput && (
-        <Box marginBottom={1} flexDirection="column">
-          <Box>
-            <Text color={colors.highlight}>Project: </Text>
-            <TextInput key={projectInputKey} value={projectInput} onChange={setProjectInput} onSubmit={handleProjectSubmit} placeholder="project-name" />
-          </Box>
-          {projectMenu && (
-            <Box flexDirection="column" marginLeft={2}>
-              {projectMenu.matches.map((p, i) => (
-                <Box key={p}>
-                  <Text color={i === suggestionIdx ? colors.highlight : colors.dim}>
-                    {i === suggestionIdx ? '> ' : '  '}
-                  </Text>
-                  <Text color={i === suggestionIdx ? 'cyan' : colors.dim} bold={i === suggestionIdx}>
-                    #{p}
-                  </Text>
+        <Box marginBottom={1}>
+          <Modal
+            title="Project"
+            width={56}
+            footer="Enter:set  Esc:cancel  Tab:fill  ↑↓:navigate"
+          >
+            <Box flexDirection="column">
+              <Box>
+                <Text color="yellow">Project: </Text>
+                <TextInput
+                  key={projectInputKey}
+                  value={projectInput}
+                  onChange={setProjectInput}
+                  onSubmit={handleProjectSubmit}
+                  placeholder="project-name"
+                />
+              </Box>
+              {projectMenu && (
+                <Box flexDirection="column" marginTop={1}>
+                  {projectMenu.matches.map((p, i) => (
+                    <Box key={p}>
+                      <Text color={i === suggestionIdx ? colors.highlight : colors.dim}>
+                        {i === suggestionIdx ? '> ' : '  '}
+                      </Text>
+                      <Text color={i === suggestionIdx ? 'cyan' : colors.dim} bold={i === suggestionIdx}>
+                        #{p}
+                      </Text>
+                    </Box>
+                  ))}
                 </Box>
-              ))}
-              <Text dimColor>  Tab:fill  ↑↓:navigate</Text>
+              )}
             </Box>
-          )}
+          </Modal>
         </Box>
       )}
 

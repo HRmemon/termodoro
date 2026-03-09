@@ -14,6 +14,7 @@ import { executeHook } from './hooks.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { BrowserTracker } from './browser-tracker.js';
 import { CONFIG_DIR } from '../lib/paths.js';
+import { DaemonReminderChecker } from './reminder-checker.js';
 
 // Set of subscribed client sockets
 const subscribers = new Set<net.Socket>();
@@ -55,7 +56,7 @@ function resolveSequence(name: string) {
 // isSocketAlive is imported from protocol.ts (shared with client.ts)
 
 export function startDaemon(): void {
-  const config = loadConfig();
+  let runtimeConfig = loadConfig();
 
   // Build initial state from persisted data
   const snapshot = loadTimerState();
@@ -131,17 +132,19 @@ export function startDaemon(): void {
     initialState = { project: stickyProject };
   }
 
-  const engine = new PomodoroEngine(config, initialState);
+  const engine = new PomodoroEngine(runtimeConfig, initialState);
+  const reminderChecker = new DaemonReminderChecker(() => runtimeConfig);
   let configReloadTimer: NodeJS.Timeout | null = null;
   let configWatcher: fs.FSWatcher | null = null;
 
   const applyUpdatedConfig = (reason: string): void => {
     try {
-      const newConfig = loadConfig();
-      engine.updateConfig(newConfig);
+      runtimeConfig = loadConfig();
+      engine.updateConfig(runtimeConfig);
       const state = engine.getState();
       writeStatusFile(state);
       tracker.handlePomodoroStateChange(state);
+      reminderChecker.handleEngineState(state);
       broadcast('state:change', state);
       console.log(`[daemon] Reloaded config (${reason})`);
     } catch (err) {
@@ -187,6 +190,7 @@ export function startDaemon(): void {
   engine.on('state:change', (state: EngineFullState) => {
     writeStatusFile(state);
     tracker.handlePomodoroStateChange(state);
+    reminderChecker.handleEngineState(state);
   });
 
   // Execute hooks on lifecycle events
@@ -224,6 +228,8 @@ export function startDaemon(): void {
   // Write initial status
   writeStatusFile(engine.getState());
   tracker.handlePomodoroStateChange(engine.getState());
+  reminderChecker.handleEngineState(engine.getState());
+  reminderChecker.start();
 
   // Handle commands
   function handleCommand(cmd: DaemonCommand): DaemonResponse {
@@ -458,6 +464,7 @@ export function startDaemon(): void {
       configWatcher.close();
       configWatcher = null;
     }
+    reminderChecker.stop();
     engine.dispose();
     server.close();
     clearStatusFile();

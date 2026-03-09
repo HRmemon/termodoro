@@ -79,6 +79,9 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
   if (view === 'stats') {
     const hlLabel = km ? `${km.label('stats.prev_tab')}/${km.label('stats.next_tab')}` : 'h/l';
     actionHints.push({ key: hlLabel, label: 'Sections' });
+    const weekLabel = km ? `${km.label('stats.next_week')}/${km.label('stats.prev_week')}` : 'n/p';
+    actionHints.push({ key: weekLabel, label: 'Week' });
+    actionHints.push({ key: 'R', label: 'Report' });
   }
 
   if (view === 'web') {

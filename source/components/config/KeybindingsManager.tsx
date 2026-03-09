@@ -48,6 +48,8 @@ const ACTION_LABELS: Record<KeyAction, string> = {
   'tracker.prev_week': 'Previous Week',
   'stats.prev_tab': 'Previous Tab',
   'stats.next_tab': 'Next Tab',
+  'stats.next_week': 'Next Week',
+  'stats.prev_week': 'Previous Week',
   'config.save': 'Save Config',
   'calendar.toggle_view': 'Toggle Calendar View',
   'calendar.goto_today': 'Go to Today',

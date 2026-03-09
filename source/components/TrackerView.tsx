@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { type Keymap, kmMatches } from '../lib/keymap.js';
 import {
   ALL_SLOTS, DAY_NAMES, WeekData,
-  getCategoryByCode, getCategories, getISOWeekStr, getMondayOfWeek, getWeekDates,
+  getCategories, getISOWeekStr, getMondayOfWeek, getWeekDates,
   dateToString, loadWeek, createWeek, listWeeks, setSlot, computeDayStats,
   getPendingCount, acceptPending, rejectPending, acceptAllPending,
   PendingSuggestion, loadTrackerConfigFull, addPendingSuggestions, generateWebSuggestions,
@@ -358,6 +358,15 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   // Day summary for current cursor day
   const dayStats = computeDayStats(week.slots[currentDate ?? ''] ?? {});
   const dayTotal = Object.values(dayStats).reduce((s, h) => s + h, 0);
+  const dayStatsLine = useMemo(() => {
+    const entries = Object.entries(dayStats).sort(([a], [b]) => a.localeCompare(b));
+    if (entries.length === 0) {
+      return `No data for ${DAY_NAMES[cursorCol]}`;
+    }
+    let line = entries.map(([code, hours]) => `${code}:${formatHours(hours)}`).join('  ');
+    if (pendingCount > 0) line += `  [${pendingCount} pending]`;
+    return line;
+  }, [dayStats, cursorCol, pendingCount]);
 
   // Visible rows
   const visibleRowsCount = VISIBLE_ROWS;
@@ -466,22 +475,8 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
 
       {/* Status bar (only in grid mode) */}
       {mode === 'grid' && (
-        <Box marginTop={1} flexWrap="wrap">
-          {Object.entries(dayStats).map(([code, hours]) => {
-            const cat = getCategoryByCode(code);
-            return (
-              <Box key={code} marginRight={2}>
-                <Text color={cat?.color}>{code}</Text>
-                <Text dimColor>:{formatHours(hours)}  </Text>
-              </Box>
-            );
-          })}
-          {Object.keys(dayStats).length === 0 && <Text dimColor>No data for {DAY_NAMES[cursorCol]}</Text>}
-          {pendingCount > 0 && (
-            <Box marginLeft={2}>
-              <Text dimColor>[{pendingCount} pending]</Text>
-            </Box>
-          )}
+        <Box marginTop={1} minHeight={1}>
+          <Text dimColor wrap="truncate-end">{dayStatsLine}</Text>
         </Box>
       )}
     </Box>

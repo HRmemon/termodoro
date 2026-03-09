@@ -7,6 +7,7 @@ import { atomicWriteJSON, readJSON, atomicWriteJSONAsync } from './fs-utils.js';
 import { DATA_DIR } from './paths.js';
 const TASKS_PATH = path.join(DATA_DIR, 'tasks.json');
 const PROJECTS_PATH = path.join(DATA_DIR, 'projects.json');
+const SEEDED_PROJECTS = new Set(['backend', 'frontend', 'devops']);
 
 export function loadTasks(): Task[] {
   return readJSON<Task[]>(TASKS_PATH, []);
@@ -69,7 +70,9 @@ export function getProjects(): string[] {
   for (const p of loadProjects()) {
     projects.add(p);
   }
-  return [...projects].sort();
+  return [...projects]
+    .filter(p => !SEEDED_PROJECTS.has(p.toLowerCase()))
+    .sort();
 }
 
 export function parseTaskInput(value: string): { text: string; project?: string; unknownProject?: string; date?: string; time?: string; endTime?: string } {
