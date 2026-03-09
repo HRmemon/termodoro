@@ -55,18 +55,18 @@ export const FIELDS: ConfigField[] = [
   { key: 'compactTime', label: 'Compact Time Entry', type: 'boolean', category: 'UI & Layout', description: 'Allow typing "930" instead of "09:30" for times' },
   { key: 'vimKeys', label: 'Vim Keys', type: 'boolean', category: 'UI & Layout', description: 'Use hjkl for navigation' },
 
-  // Calendar
-  { key: 'calendar.showSessionHeatmap', label: 'Heatmap', type: 'boolean', category: 'Calendar', description: 'Show session activity heatmap in calendar' },
-  { key: 'calendar.weekStartsOn', label: 'Week Start', type: 'cycle', values: ['1', '0'], category: 'Calendar', description: '0 for Sunday, 1 for Monday' },
-  { key: 'calendar.showWeekNumbers', label: 'Week Numbers', type: 'boolean', category: 'Calendar', description: 'Show week numbers in month view' },
-  { key: 'calendar.defaultView', label: 'Default View', type: 'cycle', values: ['monthly', 'daily'], category: 'Calendar', description: 'Initial calendar view' },
-  { key: 'calendar.privacyMode', label: 'Privacy Mode', type: 'boolean', category: 'Calendar', description: 'Hide event titles by default' },
-  { key: 'calendar.showTaskDeadlines', label: 'Task Deadlines', type: 'boolean', category: 'Calendar', description: 'Show tasks with deadlines in calendar' },
-  { key: 'calendar.showReminders', label: 'Reminders', type: 'boolean', category: 'Calendar', description: 'Show scheduled reminders in calendar' },
-
   // Browser Tracking
   { key: 'browserTracking', label: 'Browser Tracking', type: 'boolean', category: 'Browser Tracking', description: 'Track active browser tabs during sessions' },
   { key: 'webDomainLimit', label: 'Web Domain Limit', type: 'number', unit: 'domains', category: 'Browser Tracking', description: 'Max number of domains to track' },
+
+  // Calendar (legacy; kept for future use)
+  { key: 'calendar.showSessionHeatmap', label: 'Heatmap', type: 'boolean', category: 'Calendar (Legacy)', description: 'Legacy calendar option (used only when Calendar view is enabled)' },
+  { key: 'calendar.weekStartsOn', label: 'Week Start', type: 'cycle', values: ['1', '0'], category: 'Calendar (Legacy)', description: 'Legacy calendar option: 0 Sunday, 1 Monday' },
+  { key: 'calendar.showWeekNumbers', label: 'Week Numbers', type: 'boolean', category: 'Calendar (Legacy)', description: 'Legacy calendar option (month grid week numbers)' },
+  { key: 'calendar.defaultView', label: 'Default View', type: 'cycle', values: ['monthly', 'daily'], category: 'Calendar (Legacy)', description: 'Legacy calendar option (initial calendar layout)' },
+  { key: 'calendar.privacyMode', label: 'Privacy Mode', type: 'boolean', category: 'Calendar (Legacy)', description: 'Legacy calendar option (hide event titles)' },
+  { key: 'calendar.showTaskDeadlines', label: 'Task Deadlines', type: 'boolean', category: 'Calendar (Legacy)', description: 'Legacy calendar option (show task deadlines)' },
+  { key: 'calendar.showReminders', label: 'Reminders', type: 'boolean', category: 'Calendar (Legacy)', description: 'Legacy calendar option (show reminders)' },
 ];
 
 interface ConfigFieldListProps {
@@ -132,11 +132,14 @@ export function ConfigFieldList({
   const [scrollTop, setScrollTop] = useState(0);
 
   const allRows = useMemo(() => {
-    const r: Array<{ type: 'header' | 'field' | 'manager-header' | 'manager'; data: any; selectableIdx?: number }> = [];
+    const r: Array<{ type: 'header' | 'field' | 'manager-header' | 'manager' | 'note'; data: any; selectableIdx?: number }> = [];
     let lastCat = '';
     FIELDS.forEach((field, i) => {
       if (field.category !== lastCat) {
         r.push({ type: 'header', data: field.category });
+        if (field.category === 'Calendar (Legacy)') {
+          r.push({ type: 'note', data: 'Kept for future use. Safe to ignore if you do not use Calendar view.' });
+        }
         lastCat = field.category;
       }
       r.push({ type: 'field', data: field, selectableIdx: i });
@@ -368,6 +371,14 @@ export function ConfigFieldList({
           );
         }
 
+        if (row.type === 'note') {
+          return (
+            <Box key={`note-${i}`} marginBottom={0} flexShrink={0} paddingLeft={2}>
+              <Text dimColor>{row.data}</Text>
+            </Box>
+          );
+        }
+
         if (row.type === 'manager-header') {
           return (
             <Box key="manager-header" marginTop={0} marginBottom={0} flexShrink={0}>
@@ -425,11 +436,20 @@ export function ConfigFieldList({
                 <Box width={26}>
                   <Text color={isSelected ? 'white' : 'gray'}>{field.label}</Text>
                 </Box>
-                {isSelected && field.type === 'sound-event' && (
-                  <Text dimColor>  Enter: cycle  p: preview</Text>
-                )}
-                {isSelected && field.type === 'sound-event' && (
-                  <Text dimColor>  Enter: cycle  p: preview</Text>
+                {isEditing && isSelected ? (
+                  <TextInput
+                    value={editValue}
+                    onChange={setEditValue}
+                    onSubmit={handleEditSubmit}
+                  />
+                ) : (
+                  <>
+                    <Text color={valueColor} bold={isSelected}>{displayValue}</Text>
+                    {field.type === 'cycle' && <Text dimColor>  (Enter to cycle)</Text>}
+                    {isSelected && field.type === 'sound-event' && (
+                      <Text dimColor>  Enter: picker  p: preview</Text>
+                    )}
+                  </>
                 )}
               </Box>
               {isSelected && (
