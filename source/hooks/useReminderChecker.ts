@@ -5,12 +5,26 @@ import { loadTasks } from '../lib/tasks.js';
 import { notifyReminder } from '../lib/notify.js';
 import { localDateStr } from '../lib/date-utils.js';
 
+function isDueNowOrPreviousMinute(reminderTime: string, now: Date): boolean {
+  const m = reminderTime.match(/^(\d{2}):(\d{2})$/);
+  if (!m) return false;
+  const target = Number(m[1]) * 60 + Number(m[2]);
+  const current = now.getHours() * 60 + now.getMinutes();
+  const diff = current - target;
+  return diff === 0 || diff === 1;
+}
+
 export function useReminderChecker(config: Config): void {
   const firedRemindersRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const checkReminders = () => {
-      if (!config.notifications) return;
+      if (!config.notifications && !config.sound) return;
+      const reminderSoundConfig = {
+        ...config.sounds,
+        alarmDuration: config.reminderSoundDuration,
+        volume: config.reminderVolume,
+      };
       const now = new Date();
       const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const today = localDateStr(now);
@@ -19,7 +33,7 @@ export function useReminderChecker(config: Config): void {
       const reminders = loadReminders();
       for (const r of reminders) {
         if (!r.enabled) continue;
-        if (r.time === currentTime && !firedRemindersRef.current.has(firedKey + r.id)) {
+        if (isDueNowOrPreviousMinute(r.time, now) && !firedRemindersRef.current.has(firedKey + r.id)) {
           firedRemindersRef.current.add(firedKey + r.id);
           let message = r.title;
           if (r.taskId) {
@@ -27,7 +41,14 @@ export function useReminderChecker(config: Config): void {
             const task = tasks.find(t => t.id === r.taskId);
             if (task) message = `${r.title}\nTask: ${task.text}`;
           }
-          notifyReminder(r.title, message, config.sound, config.notificationDuration, config.sounds, config.notifications);
+          notifyReminder(
+            r.title,
+            message,
+            config.sound,
+            config.reminderNotificationDuration,
+            reminderSoundConfig,
+            config.notifications,
+          );
           if (!r.recurring) {
             updateReminder(r.id, { enabled: false });
           }
@@ -37,9 +58,16 @@ export function useReminderChecker(config: Config): void {
       const tasks = loadTasks();
       for (const t of tasks) {
         if (t.completed || !t.date || !t.time) continue;
-        if (t.date === today && t.time === currentTime && !firedRemindersRef.current.has(firedKey + t.id)) {
+        if (t.date === today && isDueNowOrPreviousMinute(t.time, now) && !firedRemindersRef.current.has(firedKey + t.id)) {
           firedRemindersRef.current.add(firedKey + t.id);
-          notifyReminder('Task Reminder', t.text, config.sound, config.notificationDuration, config.sounds, config.notifications);
+          notifyReminder(
+            'Task Reminder',
+            t.text,
+            config.sound,
+            config.reminderNotificationDuration,
+            reminderSoundConfig,
+            config.notifications,
+          );
         }
       }
     };
@@ -47,5 +75,12 @@ export function useReminderChecker(config: Config): void {
     checkReminders();
     const interval = setInterval(checkReminders, 30_000);
     return () => clearInterval(interval);
-  }, [config.notifications, config.notificationDuration, config.sound, config.sounds]);
+  }, [
+    config.notifications,
+    config.reminderNotificationDuration,
+    config.reminderSoundDuration,
+    config.reminderVolume,
+    config.sound,
+    config.sounds,
+  ]);
 }

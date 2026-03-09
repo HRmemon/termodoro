@@ -67,6 +67,7 @@ function buildSections(km: Keymap): HelpSection[] {
         [km.label('nav.down') + '/' + km.label('nav.up'), 'Navigate'],
         [km.label('list.add'), 'Add'],
         [km.label('list.edit'), 'Edit'],
+        ['l', 'Link task'],
         [km.label('list.delete'), 'Delete'],
         ['Enter', 'Toggle on/off'],
         ['r', 'Toggle recurring'],

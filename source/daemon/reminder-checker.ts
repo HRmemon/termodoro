@@ -6,6 +6,14 @@ import { loadReminders, updateReminder } from '../lib/reminders.js';
 import { loadTasks } from '../lib/tasks.js';
 
 const CHECK_INTERVAL_MS = 30_000;
+function isDueNowOrPreviousMinute(reminderTime: string, now: Date): boolean {
+  const m = reminderTime.match(/^(\d{2}):(\d{2})$/);
+  if (!m) return false;
+  const target = Number(m[1]) * 60 + Number(m[2]);
+  const current = now.getHours() * 60 + now.getMinutes();
+  const diff = current - target;
+  return diff === 0 || diff === 1;
+}
 
 export class DaemonReminderChecker {
   private readonly firedKeys = new Set<string>();
@@ -49,9 +57,16 @@ export class DaemonReminderChecker {
       this.firedKeys.clear();
     }
 
+    const reminderSoundConfig = {
+      ...config.sounds,
+      alarmDuration: config.reminderSoundDuration,
+      volume: config.reminderVolume,
+    };
+    const reminderNotifDuration = config.reminderNotificationDuration;
+
     const reminders = loadReminders();
     for (const r of reminders) {
-      if (!r.enabled || r.time !== currentTime) continue;
+      if (!r.enabled || !isDueNowOrPreviousMinute(r.time, now)) continue;
       const key = `${minuteKey}:reminder:${r.id}`;
       if (this.firedKeys.has(key)) continue;
       this.firedKeys.add(key);
@@ -65,8 +80,8 @@ export class DaemonReminderChecker {
         r.title,
         message,
         config.sound,
-        config.notificationDuration,
-        config.sounds,
+        reminderNotifDuration,
+        reminderSoundConfig,
         config.notifications,
       );
       if (!r.recurring) updateReminder(r.id, { enabled: false });
@@ -74,7 +89,7 @@ export class DaemonReminderChecker {
 
     const tasks = loadTasks();
     for (const t of tasks) {
-      if (t.completed || t.date !== today || t.time !== currentTime) continue;
+      if (t.completed || t.date !== today || !t.time || !isDueNowOrPreviousMinute(t.time, now)) continue;
       const key = `${minuteKey}:task:${t.id}`;
       if (this.firedKeys.has(key)) continue;
       this.firedKeys.add(key);
@@ -82,8 +97,8 @@ export class DaemonReminderChecker {
         'Task Reminder',
         t.text,
         config.sound,
-        config.notificationDuration,
-        config.sounds,
+        reminderNotifDuration,
+        reminderSoundConfig,
         config.notifications,
       );
     }

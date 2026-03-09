@@ -7,6 +7,7 @@ import { loadReminders, addReminder, deleteReminder, updateReminder } from '../l
 import { loadTasks } from '../lib/tasks.js';
 import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { parseTimeInput } from '../lib/format.js';
+import { Modal } from './Modal.js';
 
 interface RemindersViewProps {
   setIsTyping: (v: boolean) => void;
@@ -204,75 +205,102 @@ export function RemindersView({ setIsTyping, compactTime, focusId, onFocusConsum
     finalizeReminder(finalTitle);
   }, [pendingTime, finalizeReminder]);
 
+  const enabledCount = reminders.filter(r => r.enabled).length;
+  const recurringCount = reminders.filter(r => r.enabled && r.recurring).length;
+  const oneShotCount = reminders.filter(r => r.enabled && !r.recurring).length;
+
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {reminders.length === 0 && step === 'none' && (
-        <Text dimColor>No reminders. Press 'a' to add one.</Text>
-      )}
+      <Box marginBottom={1}>
+        <Text bold color="cyan">Reminders</Text>
+        <Text dimColor>  active </Text>
+        <Text color="green">{enabledCount}</Text>
+        <Text dimColor> / total {reminders.length}  recurring </Text>
+        <Text color="cyan">{recurringCount}</Text>
+        <Text dimColor>  one-shot </Text>
+        <Text color="yellow">{oneShotCount}</Text>
+      </Box>
 
-      {reminders.map((r, i) => {
-        const isSelected = i === selectedIdx;
-        const linkedTask = tasks.find(t => t.id === r.taskId);
-        const recurringLabel = r.recurring ? '(R)' : '(1)';
-        return (
-          <Box key={r.id}>
-            <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>{isSelected ? '> ' : '  '}</Text>
-            <Box width={7}>
-              <Text color={r.enabled ? (isSelected ? 'white' : 'gray') : 'gray'} dimColor={!r.enabled} bold={isSelected}>
-                {r.time}
-              </Text>
+      <Box borderStyle="round" paddingX={1} paddingY={0} flexDirection="column">
+        {reminders.length === 0 && step === 'none' && (
+          <Text dimColor>No reminders. Press 'a' to add one.</Text>
+        )}
+
+        {reminders.map((r, i) => {
+          const isSelected = i === selectedIdx;
+          const linkedTask = tasks.find(t => t.id === r.taskId);
+          const recurringLabel = r.recurring ? 'daily' : 'one-shot';
+          return (
+            <Box key={r.id}>
+              <Text color={isSelected ? 'yellow' : 'gray'} bold={isSelected}>{isSelected ? '> ' : '  '}</Text>
+              <Box width={7}>
+                <Text color={r.enabled ? (isSelected ? 'white' : 'gray') : 'gray'} dimColor={!r.enabled} bold={isSelected}>
+                  {r.time}
+                </Text>
+              </Box>
+              <Box width={28}>
+                <Text color={r.enabled ? (isSelected ? 'white' : 'gray') : 'gray'} dimColor={!r.enabled}>
+                  {r.title}
+                </Text>
+              </Box>
+              <Box width={11}>
+                <Text dimColor>{recurringLabel}</Text>
+              </Box>
+              {linkedTask && (
+                <Box width={24}>
+                  <Text dimColor>→ {linkedTask.text.slice(0, 21)}{linkedTask.text.length > 21 ? '...' : ''}</Text>
+                </Box>
+              )}
+              {!r.enabled && <Text dimColor>[off]</Text>}
             </Box>
-            <Box width={28}>
-              <Text color={r.enabled ? (isSelected ? 'white' : 'gray') : 'gray'} dimColor={!r.enabled}>
-                {r.title}
-              </Text>
-            </Box>
-            <Text dimColor>{recurringLabel}</Text>
-            {linkedTask && (
-              <Text dimColor> {'→'} {linkedTask.text}</Text>
-            )}
-            {!r.enabled && <Text dimColor>  [off]</Text>}
-          </Box>
-        );
-      })}
+          );
+        })}
+      </Box>
 
       {/* Input steps */}
       {step === 'time' && (
-        <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">{compactTime ? 'Time (e.g. 930 or 2233):' : 'Time (HH:MM):'}</Text>
-          <Box>
-            <Text color="yellow">{'> '}</Text>
-            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleTimeSubmit} placeholder={compactTime ? '930' : '09:30'} />
-          </Box>
+        <Box marginTop={1}>
+          <Modal title={editingId ? 'Edit Reminder Time' : 'New Reminder Time'} width={56} footer="Enter:next  Esc:cancel">
+            <Text color="yellow">{compactTime ? 'Time (e.g. 930 or 2233):' : 'Time (HH:MM):'}</Text>
+            <Box>
+              <Text color="yellow">{'> '}</Text>
+              <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleTimeSubmit} placeholder={compactTime ? '930' : '09:30'} />
+            </Box>
+          </Modal>
         </Box>
       )}
       {step === 'title' && (
-        <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Title (Enter to skip):</Text>
-          <Box>
-            <Text color="yellow">{'> '}</Text>
-            <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleTitleSubmit} placeholder="Meeting reminder..." />
-          </Box>
+        <Box marginTop={1}>
+          <Modal title="Reminder Title" width={56} footer="Enter:save  Esc:cancel">
+            <Text color="yellow">Title (Enter to use time):</Text>
+            <Box>
+              <Text color="yellow">{'> '}</Text>
+              <TextInput value={inputValue} onChange={setInputValue} onSubmit={handleTitleSubmit} placeholder="Meeting reminder..." />
+            </Box>
+          </Modal>
         </Box>
       )}
       {step === 'task' && (
-        <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Link to task (Esc to cancel, Enter to confirm):</Text>
-          <Box key="none">
-            <Text color={taskIdx === 0 ? 'yellow' : 'gray'} bold={taskIdx === 0}>
-              {taskIdx === 0 ? '> ' : '  '}None
-            </Text>
-          </Box>
-          {tasks.map((t, i) => {
-            const actualIdx = i + 1;
-            return (
-              <Box key={t.id}>
-                <Text color={actualIdx === taskIdx ? 'yellow' : 'gray'} bold={actualIdx === taskIdx}>
-                  {actualIdx === taskIdx ? '> ' : '  '}{t.text}
+        <Box marginTop={1}>
+          <Modal title="Link Task" width={64} footer="j/k:move  Enter:confirm  Esc:cancel">
+            <Box flexDirection="column">
+              <Box key="none">
+                <Text color={taskIdx === 0 ? 'yellow' : 'gray'} bold={taskIdx === 0}>
+                  {taskIdx === 0 ? '> ' : '  '}None
                 </Text>
               </Box>
-            );
-          })}
+              {tasks.map((t, i) => {
+                const actualIdx = i + 1;
+                return (
+                  <Box key={t.id}>
+                    <Text color={actualIdx === taskIdx ? 'yellow' : 'gray'} bold={actualIdx === taskIdx}>
+                      {actualIdx === taskIdx ? '> ' : '  '}{t.text}
+                    </Text>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Modal>
         </Box>
       )}
 

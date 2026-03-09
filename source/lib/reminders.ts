@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import * as os from 'node:os';
 import type { ScheduledNotification } from '../types.js';
 import { atomicWriteJSON, readJSON } from './fs-utils.js';
 

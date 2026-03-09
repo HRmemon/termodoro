@@ -67,6 +67,7 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
     actionHints.push({ key: navLabel, label: 'Navigate' });
     actionHints.push({ key: km ? km.label('list.add') : 'a', label: 'Add' });
     actionHints.push({ key: km ? km.label('list.edit') : 'e', label: 'Edit' });
+    actionHints.push({ key: 'l', label: 'Link task' });
     actionHints.push({ key: km ? km.label('list.delete') : 'd', label: 'Delete' });
     actionHints.push({ key: 'Enter', label: 'On/Off' });
     actionHints.push({ key: 'r', label: 'Recurring' });

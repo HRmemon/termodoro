@@ -38,6 +38,9 @@ export const FIELDS: ConfigField[] = [
   { key: 'sound:work-end', label: '  Work End Sound', type: 'sound-event', soundEvent: 'work-end', category: 'Sound & Notifications', description: 'Sound to play when work ends' },
   { key: 'sound:break-end', label: '  Break End Sound', type: 'sound-event', soundEvent: 'break-end', category: 'Sound & Notifications', description: 'Sound to play when a break ends' },
   { key: 'sound:reminder', label: '  Reminder Sound', type: 'sound-event', soundEvent: 'reminder', category: 'Sound & Notifications', description: 'Sound to play for scheduled reminders' },
+  { key: 'reminderNotificationDuration', label: '  Reminder Notif Duration', type: 'number', unit: 'sec', category: 'Sound & Notifications', description: 'How long reminder desktop notifications stay visible' },
+  { key: 'reminderSoundDuration', label: '  Reminder Sound Duration', type: 'number', unit: 'sec', category: 'Sound & Notifications', description: 'How long reminder sound plays before stopping' },
+  { key: 'reminderVolume', label: '  Reminder Volume', type: 'number', unit: '%', category: 'Sound & Notifications', description: 'Reminder sound volume override' },
   { key: 'sound:alarmDuration', label: '  Alarm Duration', type: 'sound-duration', unit: 'sec', category: 'Sound & Notifications', description: 'How long sounds play before stopping' },
   { key: 'sound:volume', label: '  Volume', type: 'sound-volume', unit: '%', category: 'Sound & Notifications', description: 'Sound volume level' },
   { key: 'notifications', label: 'Notifications', type: 'boolean', category: 'Sound & Notifications', description: 'Enable OS-level desktop notifications' },
@@ -194,7 +197,7 @@ export function ConfigFieldList({
   const handleEditSubmit = useCallback((value: string) => {
     const field = FIELDS[selectedIdx]!;
     const num = parseInt(value, 10);
-    if (!isNaN(num) && num > 0) {
+    if (!isNaN(num)) {
       if (field.type === 'sound-duration') {
         const clamped = Math.min(Math.max(num, 1), 60);
         const newSounds = { ...config.sounds, alarmDuration: clamped };
@@ -208,10 +211,18 @@ export function ConfigFieldList({
         onConfigChange(newConfig);
         saveConfig(newConfig);
       } else {
+        if (num <= 0 && field.type === 'number' && field.key !== 'reminderVolume') {
+          setIsEditing(false);
+          setIsTyping(false);
+          return;
+        }
         // Clamp specific fields to valid ranges
         let clamped = num;
         if (field.key === 'sidebarWidth') clamped = Math.min(Math.max(num, 8), 30);
         else if (field.key === 'webDomainLimit') clamped = Math.min(Math.max(num, 10), 500);
+        else if (field.key === 'reminderNotificationDuration') clamped = Math.min(Math.max(num, 1), 60);
+        else if (field.key === 'reminderSoundDuration') clamped = Math.min(Math.max(num, 1), 60);
+        else if (field.key === 'reminderVolume') clamped = Math.min(Math.max(num, 0), 100);
         const newConfig = setNestedValue(config as unknown as Record<string, unknown>, field.key, clamped) as unknown as Config;
         onConfigChange(newConfig);
         saveConfig(newConfig);

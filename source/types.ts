@@ -46,6 +46,9 @@ export interface Config {
   sound: boolean;
   notifications: boolean;
   notificationDuration: number;
+  reminderNotificationDuration: number;
+  reminderSoundDuration: number;
+  reminderVolume: number;
   vimKeys: boolean;
   compactTime: boolean;
   timerFormat: 'mm:ss' | 'hh:mm:ss' | 'minutes';

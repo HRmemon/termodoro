@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import * as os from 'node:os';
 import { nanoid } from 'nanoid';
 import type { Task } from '../types.js';
 import { atomicWriteJSON, readJSON, atomicWriteJSONAsync } from './fs-utils.js';

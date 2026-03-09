@@ -20,6 +20,9 @@ const DEFAULT_CONFIG: Config = {
   sound: true,
   notifications: true,
   notificationDuration: 5,
+  reminderNotificationDuration: 5,
+  reminderSoundDuration: 5,
+  reminderVolume: 80,
   vimKeys: false,
   compactTime: false,
   timerFormat: 'mm:ss',
@@ -142,6 +145,9 @@ export function validateConfig(raw: Config): Config {
   c.longBreakDuration    = clampNum('longBreakDuration',    1,  120, DEFAULT_CONFIG.longBreakDuration);
   c.longBreakInterval    = clampNum('longBreakInterval',    1,  100, DEFAULT_CONFIG.longBreakInterval);
   c.notificationDuration = clampNum('notificationDuration', 1,   60, DEFAULT_CONFIG.notificationDuration);
+  c.reminderNotificationDuration = clampNum('reminderNotificationDuration', 1, 60, DEFAULT_CONFIG.reminderNotificationDuration);
+  c.reminderSoundDuration = clampNum('reminderSoundDuration', 1, 60, DEFAULT_CONFIG.reminderSoundDuration);
+  c.reminderVolume = clampNum('reminderVolume', 0, 100, DEFAULT_CONFIG.reminderVolume);
   c.webDomainLimit       = clampNum('webDomainLimit',      10,  500, DEFAULT_CONFIG.webDomainLimit);
   c.sidebarWidth         = clampNum('sidebarWidth',         8,   30, DEFAULT_CONFIG.sidebarWidth);
 
