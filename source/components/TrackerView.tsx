@@ -37,7 +37,7 @@ type Mode = 'grid' | 'pick' | 'day' | 'week' | 'browse' | 'review';
 export function TrackerView({ keymap }: { keymap?: Keymap }) {
   const { stdout } = useStdout();
   const termHeight = stdout?.rows ?? 24;
-  const VISIBLE_ROWS = Math.max(6, termHeight - 16);
+  const BASE_VISIBLE_ROWS = Math.max(6, termHeight - 16);
 
   const categories = useMemo(() => getCategories(), []);
 
@@ -60,7 +60,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   const defaultRow = (() => {
     const h = new Date().getHours();
     const idx = h * 2;
-    return Math.max(0, Math.min(idx - 3, ALL_SLOTS.length - VISIBLE_ROWS));
+    return Math.max(0, Math.min(idx - 3, ALL_SLOTS.length - BASE_VISIBLE_ROWS));
   })();
 
   const [scrollOffset, setScrollOffset] = useState(defaultRow);
@@ -123,6 +123,16 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
 
   const [reviewIdx, setReviewIdx] = useState(0);
 
+  // Reduce visible grid rows when bottom panels are shown to avoid clipping rows.
+  const panelRowCost = useMemo(() => {
+    if (mode === 'review') return 5;
+    if (mode === 'week') return 7;
+    if (mode === 'day') return 4;
+    if (mode === 'grid' && pendingCount > 0) return 1;
+    return 0;
+  }, [mode, pendingCount]);
+  const visibleRowsCount = Math.max(3, BASE_VISIBLE_ROWS - panelRowCost);
+
   useEffect(() => {
     setTrackerWeekContext(weekStr);
   }, [weekStr]);
@@ -136,10 +146,48 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
     // Ensure cursor is visible after picker closes
     setScrollOffset(prev => {
       if (cursorRow < prev) return cursorRow;
-      if (cursorRow >= prev + VISIBLE_ROWS) return cursorRow - VISIBLE_ROWS + 1;
+      if (cursorRow >= prev + visibleRowsCount) return cursorRow - visibleRowsCount + 1;
       return prev;
     });
-  }, [week, currentDate, currentTime, cursorRow, VISIBLE_ROWS]);
+  }, [week, currentDate, currentTime, cursorRow, visibleRowsCount]);
+
+  const focusPendingSlot = useCallback((idx: number) => {
+    const ps = pendingSlots[idx];
+    if (!ps) return;
+    const row = ALL_SLOTS.indexOf(ps.time);
+    const col = weekDates.indexOf(ps.date);
+    if (row >= 0) {
+      setCursorRow(row);
+      setScrollOffset(prev => {
+        if (row < prev) return row;
+        if (row >= prev + visibleRowsCount) return row - visibleRowsCount + 1;
+        return prev;
+      });
+    }
+    if (col >= 0) setCursorCol(col);
+  }, [pendingSlots, weekDates, visibleRowsCount]);
+
+  useEffect(() => {
+    if (mode !== 'review') return;
+    if (pendingSlots.length === 0) {
+      setMode('grid');
+      return;
+    }
+
+    const clampedIdx = Math.min(reviewIdx, pendingSlots.length - 1);
+    if (clampedIdx !== reviewIdx) {
+      setReviewIdx(clampedIdx);
+      return;
+    }
+
+    focusPendingSlot(clampedIdx);
+  }, [mode, pendingSlots, reviewIdx, focusPendingSlot]);
+
+  useEffect(() => {
+    // Keep scroll bounds valid when available grid rows change.
+    const maxOffset = Math.max(0, ALL_SLOTS.length - visibleRowsCount);
+    setScrollOffset(prev => Math.max(0, Math.min(prev, maxOffset)));
+  }, [visibleRowsCount]);
 
   useInput((input, key) => {
     const km = keymap;
@@ -171,7 +219,11 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
         setWeek(prev => prev ? acceptAllPending(prev) : prev);
         setMode('grid');
       } else if (key.tab) {
-        setReviewIdx(i => Math.min(i + 1, pendingSlots.length - 1));
+        setReviewIdx(i => {
+          const next = Math.min(i + 1, pendingSlots.length - 1);
+          focusPendingSlot(next);
+          return next;
+        });
       } else {
         const cat = categories.find(c => c.key && c.key === input);
         if (cat && week) {
@@ -195,7 +247,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
         setMode('grid');
         setScrollOffset(prev => {
           if (cursorRow < prev) return cursorRow;
-          if (cursorRow >= prev + VISIBLE_ROWS) return cursorRow - VISIBLE_ROWS + 1;
+          if (cursorRow >= prev + visibleRowsCount) return cursorRow - visibleRowsCount + 1;
           return prev;
         });
       }
@@ -219,7 +271,7 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
     if ((kmMatches(km, 'nav.down', input, key)) || key.downArrow) {
       const next = Math.min(cursorRow + 1, ALL_SLOTS.length - 1);
       setCursorRow(next);
-      if (next >= scrollOffset + VISIBLE_ROWS) setScrollOffset(next - VISIBLE_ROWS + 1);
+      if (next >= scrollOffset + visibleRowsCount) setScrollOffset(next - visibleRowsCount + 1);
     } else if ((kmMatches(km, 'nav.up', input, key)) || key.upArrow) {
       const next = Math.max(0, cursorRow - 1);
       setCursorRow(next);
@@ -236,8 +288,9 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
       handleSetSlot(null);
     } else if (kmMatches(km, 'tracker.review', input, key)) {
       if (pendingCount > 0) {
-        setMode('review');
         setReviewIdx(0);
+        focusPendingSlot(0);
+        setMode('review');
       }
     } else if (input === 'A' && pendingCount > 0) {
       if (week) setWeek(acceptAllPending(week));
@@ -369,13 +422,12 @@ export function TrackerView({ keymap }: { keymap?: Keymap }) {
   }, [dayStats, cursorCol, pendingCount]);
 
   // Visible rows
-  const visibleRowsCount = VISIBLE_ROWS;
   const visibleSlots = ALL_SLOTS.slice(scrollOffset, scrollOffset + visibleRowsCount);
 
   // When picker is open, show only rows up to cursor then picker below
   if (mode === 'pick') {
     const pickerHeight = categories.length + 3;
-    const maxGridRows = Math.max(3, VISIBLE_ROWS - pickerHeight);
+    const maxGridRows = Math.max(3, visibleRowsCount - pickerHeight);
     const pickScrollEnd = Math.min(cursorRow + 1, ALL_SLOTS.length);
     const pickScrollStart = Math.max(0, pickScrollEnd - maxGridRows);
     const pickVisibleSlots = ALL_SLOTS.slice(pickScrollStart, pickScrollEnd);
