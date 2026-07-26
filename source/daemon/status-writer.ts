@@ -60,7 +60,11 @@ function formatHours(hours: number): string {
 }
 
 function formatTrackerSummary(summary: { deepHours: number; wastedHours: number }): string {
-  return `D ${formatHours(summary.deepHours)} | W ${formatHours(summary.wastedHours)}`;
+  return `${formatHours(summary.deepHours)} | ${formatHours(summary.wastedHours)}`;
+}
+
+function formatWaybarTrackerSummary(summary: { deepHours: number; wastedHours: number }): string {
+  return `${formatHours(summary.deepHours)} | <span foreground="#ef4444">${formatHours(summary.wastedHours)}</span>`;
 }
 
 function getSessionLabel(type: string): string {
@@ -117,7 +121,7 @@ export function writeStatusFile(state: EngineFullState): void {
         : 0);
 
     let text: string;
-    const trackerText = formatTrackerSummary(todayTracker);
+    const trackerText = formatWaybarTrackerSummary(todayTracker);
     if (!state.isRunning && !state.isPaused) {
       text = trackerText;
     } else if (isStopwatch) {
@@ -136,7 +140,7 @@ export function writeStatusFile(state: EngineFullState): void {
       const m = todayStats.focusMinutes % 60;
       tooltipParts.push(h > 0 ? `${h}h ${m}m today` : `${m}m today`);
     }
-    tooltipParts.push(`Today: ${trackerText}`);
+    tooltipParts.push(`Today: ${formatTrackerSummary(todayTracker)}`);
     tooltipParts.push(`Yesterday: ${formatTrackerSummary(yesterdayTracker)}`);
     tooltipParts.push(`This week: ${formatTrackerSummary(weekTracker)}`);
 
