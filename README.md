@@ -351,6 +351,8 @@ Browser usage statistics from the Firefox extension. Shows domain breakdowns, to
 
 A weekly time grid with 30-minute slots for manual activity categorization.
 
+**Web suggestions**: When the Tracker view opens, it scans browser history for domains matching your domain rules (configured in Config view). If the total time across flagged domains for a day reaches 15+ minutes, "W" (Wasted) suggestions are generated for every slot where those domains were the dominant activity. Suggestions appear as `?W` in dim yellow — press `r` to review and accept/reject them.
+
 | Key | Action |
 |-----|--------|
 | `h/j/k/l` | Navigate grid |

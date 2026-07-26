@@ -7,3 +7,4 @@ dist/
 .agent-logs/
 /archive/tmp_reports
 /browser-ext/.amo-upload-uuid
+/__pycache__

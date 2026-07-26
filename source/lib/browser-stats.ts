@@ -313,7 +313,10 @@ export function getSlotDomainBreakdown(date: string): SlotDomainBreakdown[] {
   try {
     db = new Database(DB_PATH, { readonly: true });
 
-    // Group by 30-min time slots, find dominant domain+path per slot
+    // Group by 30-min time slots, find dominant domain per slot.
+    // First aggregate by (time_slot, domain) summing active minutes across
+    // paths so that a domain split across multiple URLs in the same slot is
+    // counted correctly, then pick the dominant domain per slot.
     const rows = db.prepare(`
       SELECT
         PRINTF('%02d:', CAST(strftime('%H', recorded_at) AS INTEGER)) ||
@@ -327,15 +330,29 @@ export function getSlotDomainBreakdown(date: string): SlotDomainBreakdown[] {
       ORDER BY time_slot, activeMinutes DESC
     `).all(date) as { time_slot: string; domain: string; path: string; activeMinutes: number }[];
 
-    // Pick dominant domain+path per slot
-    const slotMap = new Map<string, SlotDomainBreakdown>();
+    // Aggregate by (time_slot, domain), summing across paths
+    const domainAgg = new Map<string, { time_slot: string; domain: string; path: string; activeMinutes: number }>();
     for (const row of rows) {
-      if (!slotMap.has(row.time_slot) || row.activeMinutes > slotMap.get(row.time_slot)!.activeMinutes) {
-        slotMap.set(row.time_slot, {
-          time: row.time_slot,
-          domain: row.domain,
-          path: row.path,
-          activeMinutes: row.activeMinutes,
+      const key = `${row.time_slot}|${row.domain}`;
+      const existing = domainAgg.get(key);
+      if (existing) {
+        existing.activeMinutes += row.activeMinutes;
+        if (row.activeMinutes > existing.activeMinutes) existing.path = row.path;
+      } else {
+        domainAgg.set(key, { time_slot: row.time_slot, domain: row.domain, path: row.path, activeMinutes: row.activeMinutes });
+      }
+    }
+
+    // Pick dominant domain per slot
+    const slotMap = new Map<string, SlotDomainBreakdown>();
+    for (const entry of domainAgg.values()) {
+      const existing = slotMap.get(entry.time_slot);
+      if (!existing || entry.activeMinutes > existing.activeMinutes) {
+        slotMap.set(entry.time_slot, {
+          time: entry.time_slot,
+          domain: entry.domain,
+          path: entry.path,
+          activeMinutes: entry.activeMinutes,
         });
       }
     }

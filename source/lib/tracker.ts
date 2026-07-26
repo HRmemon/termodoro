@@ -428,13 +428,24 @@ export function generateWebSuggestions(
   slotBreakdown: { time: string; domain: string; path?: string; activeMinutes: number }[],
   rules: DomainRule[],
 ): { time: string; code: string }[] {
-  const suggestions: { time: string; code: string }[] = [];
+  // Collect all slots that match a domain rule and sum total minutes.
+  // Generate suggestions for all matching slots when the daily total
+  // exceeds the threshold, avoiding the per-slot cliff where spread-out
+  // browsing never triggers individual slots.
+  const matches: { time: string; code: string }[] = [];
+  let totalMinutes = 0;
+
   for (const slot of slotBreakdown) {
-    if (slot.activeMinutes < 15) continue;
+    if (slot.activeMinutes < 1) continue;
     const cat = slot.path
       ? matchUrl(slot.domain, slot.path, rules)
       : matchDomain(slot.domain, rules);
-    if (cat) suggestions.push({ time: slot.time, code: cat });
+    if (cat) {
+      totalMinutes += slot.activeMinutes;
+      matches.push({ time: slot.time, code: cat });
+    }
   }
-  return suggestions;
+
+  if (totalMinutes < 15) return [];
+  return matches;
 }
