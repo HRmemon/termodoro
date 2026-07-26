@@ -133,8 +133,6 @@ export function writeStatusFile(state: EngineFullState): void {
     }
 
     const tooltipParts: string[] = [];
-    if (state.currentProject) tooltipParts.push(`#${state.currentProject}`);
-    tooltipParts.push(`Session ${state.sessionNumber}`);
     if (todayStats.focusMinutes > 0) {
       const h = Math.floor(todayStats.focusMinutes / 60);
       const m = todayStats.focusMinutes % 60;
