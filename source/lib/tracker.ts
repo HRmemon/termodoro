@@ -170,6 +170,26 @@ export function computeDayStats(slots: Record<string, string> = {}): DayStats {
   return stats;
 }
 
+export interface TrackerTimeSummary {
+  deepHours: number;
+  wastedHours: number;
+}
+
+export function getTrackerTimeSummary(date: Date = new Date()): TrackerTimeSummary {
+  const week = loadWeek(getISOWeekStr(getMondayOfWeek(date)));
+  const slots = week?.slots[dateToString(date)] ?? {};
+  let deepHours = 0;
+  let wastedHours = 0;
+
+  for (const code of Object.values(slots)) {
+    if (code === 'D') deepHours += 0.5;
+    else if (code === 'hD') deepHours += 0.25;
+    else if (code === 'W') wastedHours += 0.5;
+  }
+
+  return { deepHours, wastedHours };
+}
+
 // For GraphsView: build a map of date -> {deepHours, exerciseHours}
 export interface DayEntry {
   date: string;

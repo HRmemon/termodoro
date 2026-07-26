@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { loadSessions } from '../lib/store.js';
 import { getTodayStr } from '../lib/date-utils.js';
+import { getTrackerTimeSummary } from '../lib/tracker.js';
 
 const STATUS_PATH = path.join(os.tmpdir(), 'pomodorocli-status.json');
 
@@ -51,6 +52,17 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+function formatHours(hours: number): string {
+  const minutes = Math.round(hours * 60);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h${m ? ` ${m}m` : ''}` : `${m}m`;
+}
+
+function formatTrackerSummary(summary: { deepHours: number; wastedHours: number }): string {
+  return `D ${formatHours(summary.deepHours)} | W ${formatHours(summary.wastedHours)}`;
+}
+
 function getSessionLabel(type: string): string {
   return type === 'work' ? 'F' : 'B';
 }
@@ -80,6 +92,20 @@ function signalWaybar(): void {
 export function writeStatusFile(state: EngineFullState): void {
   try {
     const todayStats = getTodayStats();
+    const todayTracker = getTrackerTimeSummary();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayTracker = getTrackerTimeSummary(yesterday);
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const weekTracker = Array.from({ length: Math.floor((Date.now() - monday.getTime()) / 86400000) + 1 }, (_, i) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
+      return getTrackerTimeSummary(date);
+    }).reduce((total, day) => ({
+      deepHours: total.deepHours + day.deepHours,
+      wastedHours: total.wastedHours + day.wastedHours,
+    }), { deepHours: 0, wastedHours: 0 });
     const isStopwatch = state.timerMode === 'stopwatch';
     const label = getSessionLabel(state.sessionType);
     const time = isStopwatch
@@ -91,13 +117,14 @@ export function writeStatusFile(state: EngineFullState): void {
         : 0);
 
     let text: string;
+    const trackerText = formatTrackerSummary(todayTracker);
     if (!state.isRunning && !state.isPaused) {
-      text = 'idle';
+      text = trackerText;
     } else if (isStopwatch) {
-      text = `${label} ${time} ⏱`;
+      text = `${label} ${time} ⏱  ${trackerText}`;
       if (state.isPaused) text += ' ||';
     } else {
-      text = `${label} ${time}`;
+      text = `${label} ${time}  ${trackerText}`;
       if (state.isPaused) text += ' ||';
     }
 
@@ -109,6 +136,9 @@ export function writeStatusFile(state: EngineFullState): void {
       const m = todayStats.focusMinutes % 60;
       tooltipParts.push(h > 0 ? `${h}h ${m}m today` : `${m}m today`);
     }
+    tooltipParts.push(`Today: ${trackerText}`);
+    tooltipParts.push(`Yesterday: ${formatTrackerSummary(yesterdayTracker)}`);
+    tooltipParts.push(`This week: ${formatTrackerSummary(weekTracker)}`);
 
     const statusData = {
       sessionType: state.sessionType,
@@ -125,9 +155,14 @@ export function writeStatusFile(state: EngineFullState): void {
       sequenceBlockIndex: state.sequenceBlockIndex,
       todayFocusMinutes: todayStats.focusMinutes,
       todaySessions: todayStats.count,
+      tracker: {
+        today: todayTracker,
+        yesterday: yesterdayTracker,
+        week: weekTracker,
+      },
       waybar: {
         text,
-        tooltip: tooltipParts.join(' \u2022 '),
+        tooltip: tooltipParts.join('\n'),
         class: getWaybarClass(state),
         percentage,
       },
