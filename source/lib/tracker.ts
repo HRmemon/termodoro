@@ -177,7 +177,9 @@ export interface TrackerTimeSummary {
 
 export function getTrackerTimeSummary(date: Date = new Date()): TrackerTimeSummary {
   const week = loadWeek(getISOWeekStr(getMondayOfWeek(date)));
-  const slots = week?.slots[dateToString(date)] ?? {};
+  const dateStr = dateToString(date);
+  const slots = week?.slots[dateStr] ?? {};
+  const pending = week?.pending[dateStr] ?? {};
   let deepHours = 0;
   let wastedHours = 0;
 
@@ -185,6 +187,11 @@ export function getTrackerTimeSummary(date: Date = new Date()): TrackerTimeSumma
     if (code === 'D') deepHours += 0.5;
     else if (code === 'hD') deepHours += 0.25;
     else if (code === 'W') wastedHours += 0.5;
+  }
+  for (const suggestion of Object.values(pending)) {
+    if (suggestion.source !== 'pomodoro') continue;
+    if (suggestion.suggested === 'D') deepHours += 0.5;
+    else if (suggestion.suggested === 'hD') deepHours += 0.25;
   }
 
   return { deepHours, wastedHours };
