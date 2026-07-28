@@ -136,6 +136,7 @@ export function startDaemon(): void {
   const reminderChecker = new DaemonReminderChecker(() => runtimeConfig);
   let configReloadTimer: NodeJS.Timeout | null = null;
   let configWatcher: fs.FSWatcher | null = null;
+  let statusRefreshTimer: NodeJS.Timeout | null = null;
 
   const applyUpdatedConfig = (reason: string): void => {
     try {
@@ -227,6 +228,8 @@ export function startDaemon(): void {
 
   // Write initial status
   writeStatusFile(engine.getState());
+  // Keeps tracker/date data fresh while the timer is paused or idle, and after sleep/wake.
+  statusRefreshTimer = setInterval(() => writeStatusFile(engine.getState()), 30_000);
   tracker.handlePomodoroStateChange(engine.getState());
   reminderChecker.handleEngineState(engine.getState());
   reminderChecker.start();
@@ -463,6 +466,10 @@ export function startDaemon(): void {
     if (configWatcher) {
       configWatcher.close();
       configWatcher = null;
+    }
+    if (statusRefreshTimer) {
+      clearInterval(statusRefreshTimer);
+      statusRefreshTimer = null;
     }
     reminderChecker.stop();
     engine.dispose();

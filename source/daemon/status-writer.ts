@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { loadSessions } from '../lib/store.js';
 import { getTodayStr } from '../lib/date-utils.js';
-import { getTrackerTimeSummary } from '../lib/tracker.js';
+import { dateToString, getMondayOfWeek, getTrackerTimeSummary } from '../lib/tracker.js';
 
 const STATUS_PATH = path.join(os.tmpdir(), 'pomodorocli-status.json');
 
@@ -13,12 +13,13 @@ const STATUS_PATH = path.join(os.tmpdir(), 'pomodorocli-status.json');
 let cachedTodayStats = { count: 0, focusMinutes: 0 };
 let cachedStatsDate = '';
 
-function recomputeTodayStats(): void {
-  const today = getTodayStr();
+function recomputeTodayStats(today: string = getTodayStr()): void {
   cachedStatsDate = today;
   try {
     const sessions = loadSessions().filter(s =>
-      s.startedAt.startsWith(today) && s.type === 'work' && s.status === 'completed'
+      dateToString(new Date(s.startedAt)) === today
+      && s.type === 'work'
+      && s.status === 'completed'
     );
     cachedTodayStats = {
       count: sessions.length,
@@ -34,11 +35,9 @@ export function invalidateTodayStats(): void {
   recomputeTodayStats();
 }
 
-function getTodayStats() {
-  // Recompute if date changed (midnight rollover)
-  const today = getTodayStr();
+function getTodayStats(today: string = getTodayStr()) {
   if (cachedStatsDate !== today) {
-    recomputeTodayStats();
+    recomputeTodayStats(today);
   }
   return cachedTodayStats;
 }
@@ -95,14 +94,17 @@ function signalWaybar(): void {
 
 export function writeStatusFile(state: EngineFullState): void {
   try {
-    const todayStats = getTodayStats();
-    const todayTracker = getTrackerTimeSummary();
-    const yesterday = new Date();
+    // Use one clock snapshot so a write at midnight cannot mix two dates.
+    const now = new Date();
+    const today = dateToString(now);
+    const todayStats = getTodayStats(today);
+    const todayTracker = getTrackerTimeSummary(now);
+    const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayTracker = getTrackerTimeSummary(yesterday);
-    const monday = new Date();
-    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-    const weekTracker = Array.from({ length: Math.floor((Date.now() - monday.getTime()) / 86400000) + 1 }, (_, i) => {
+    const monday = getMondayOfWeek(now);
+    const daysSinceMonday = (now.getDay() + 6) % 7;
+    const weekTracker = Array.from({ length: daysSinceMonday + 1 }, (_, i) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
       return getTrackerTimeSummary(date);
@@ -143,6 +145,8 @@ export function writeStatusFile(state: EngineFullState): void {
     tooltipParts.push(`This week: ${formatTrackerSummary(weekTracker)}`);
 
     const statusData = {
+      updatedAt: now.toISOString(),
+      localDate: today,
       sessionType: state.sessionType,
       secondsLeft: state.secondsLeft,
       totalSeconds: state.totalSeconds,
