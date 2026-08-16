@@ -5,6 +5,7 @@ import { loadTrackerConfigFull } from '../lib/tracker.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { sendReminderNotification } from '../lib/notify.js';
 import jexl from 'jexl';
+import { BROWSER_EVENT_GAP_MS, gapExceeds } from '../lib/time-gaps.js';
 
 interface TabInfo {
   url: string;
@@ -49,8 +50,12 @@ export class BrowserTracker {
 
     if (this.lastEventState && this.lastEventTimestamp > 0) {
       const deltaMs = now - this.lastEventTimestamp;
-      if (deltaMs > 0 && deltaMs <= 5 * 60 * 1000) { // Discard if > 5 minutes (sleep)
+      const discardedGap = gapExceeds(this.lastEventTimestamp, now, BROWSER_EVENT_GAP_MS);
+      if (deltaMs > 0 && !discardedGap) {
         this.attributeTime(this.lastEventState, Math.round(deltaMs / 1000));
+      } else if (discardedGap) {
+        // Do not let suspend time count toward continuous-usage warnings.
+        this.continuousTimes = {};
       }
     }
 

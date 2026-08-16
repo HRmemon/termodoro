@@ -5,6 +5,7 @@ import { appendSession, saveTimerState, clearTimerState, saveStickyProject } fro
 import type { TimerSnapshot } from '../lib/store.js';
 import { notifySessionEnd } from '../lib/notify.js';
 import { generateAndStoreSuggestions } from '../lib/tracker.js';
+import { gapExceeds, TIMER_SUSPEND_GAP_MS } from '../lib/time-gaps.js';
 
 export interface EngineFullState {
   // Timer
@@ -88,6 +89,7 @@ export class PomodoroEngine extends EventEmitter {
   // Wall-clock anchoring (drift correction)
   private anchorTimestamp: number = 0;
   private accumulatedElapsed: number = 0;
+  private lastTickTimestamp: number = 0;
 
   // Session engine state
   private sessionType: SessionType = 'work';
@@ -211,11 +213,17 @@ export class PomodoroEngine extends EventEmitter {
 
   pause(): void {
     if (!this.isRunning || this.isPaused) return;
+    const now = Date.now();
+    if (gapExceeds(this.lastTickTimestamp, now, TIMER_SUSPEND_GAP_MS)) {
+      this.pauseAt(this.lastTickTimestamp);
+      return;
+    }
     if (this.config.strictMode) return;
 
     this.isPaused = true;
-    this.accumulatedElapsed += Math.max(0, Math.floor((Date.now() - this.anchorTimestamp) / 1000));
+    this.accumulatedElapsed += Math.max(0, Math.floor((now - this.anchorTimestamp) / 1000));
     this.anchorTimestamp = 0;
+    this.lastTickTimestamp = 0;
     this.stopTickInterval();
     // Close current work interval
     if (this.workIntervals.length > 0) {
@@ -508,6 +516,7 @@ export class PomodoroEngine extends EventEmitter {
   private startTickInterval(): void {
     this.stopTickInterval();
     this.anchorTimestamp = Date.now();
+    this.lastTickTimestamp = this.anchorTimestamp;
     this.interval = setInterval(() => {
       this.tick();
     }, 1000);
@@ -524,7 +533,14 @@ export class PomodoroEngine extends EventEmitter {
     if (this.disposed) return;
     if (!this.isRunning || this.isPaused) return;
 
-    const segmentElapsed = Math.max(0, Math.floor((Date.now() - this.anchorTimestamp) / 1000));
+    const now = Date.now();
+    if (gapExceeds(this.lastTickTimestamp, now, TIMER_SUSPEND_GAP_MS)) {
+      this.pauseAt(this.lastTickTimestamp);
+      return;
+    }
+    this.lastTickTimestamp = now;
+
+    const segmentElapsed = Math.max(0, Math.floor((now - this.anchorTimestamp) / 1000));
     const wallElapsed = this.accumulatedElapsed + segmentElapsed;
 
     if (this.timerMode === 'stopwatch') {
@@ -542,14 +558,30 @@ export class PomodoroEngine extends EventEmitter {
       this.stopTickInterval();
       this.isRunning = false;
       this.isComplete = true;
-      this.onSessionComplete();
+      const overshootMs = Math.max(0, wallElapsed - this.totalSeconds) * 1000;
+      this.onSessionComplete(new Date(now - overshootMs).toISOString());
       return;
     }
 
     this.emit('tick', this.getState());
   }
 
-  private onSessionComplete(): void {
+  private pauseAt(timestamp: number): void {
+    this.isPaused = true;
+    this.accumulatedElapsed = this.timerMode === 'stopwatch'
+      ? this.stopwatchElapsed
+      : this.totalSeconds - this.secondsLeft;
+    this.anchorTimestamp = 0;
+    this.lastTickTimestamp = 0;
+    this.stopTickInterval();
+    this.closeOpenInterval(new Date(timestamp).toISOString());
+    this.persistState();
+    const state = this.getState();
+    this.emit('timer:pause', state);
+    this.emit('state:change', state);
+  }
+
+  private onSessionComplete(endedAt: string): void {
     // Notify
     notifySessionEnd(
       this.sessionType,
@@ -560,7 +592,7 @@ export class PomodoroEngine extends EventEmitter {
     );
 
     // Save session
-    const session = this.saveSession('completed');
+    const session = this.saveSession('completed', endedAt);
     this.emit('session:complete', { session });
 
     // Generate tracker suggestions for completed work sessions
@@ -696,8 +728,8 @@ export class PomodoroEngine extends EventEmitter {
     return session;
   }
 
-  private saveSession(status: Session['status']): Session {
-    const now = new Date().toISOString();
+  private saveSession(status: Session['status'], endedAt?: string): Session {
+    const now = endedAt ?? new Date().toISOString();
     this.closeOpenInterval(now);
     const intervals = [...this.workIntervals];
     const durationActual = intervals.length > 0

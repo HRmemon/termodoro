@@ -21,7 +21,7 @@
     "daemon": "node dist/cli.js daemon start",
     "report": "python3 daily_report.py",
     "report:send": "python3 daily_report.py --send",
-    "test": "echo \"No test suite yet\" && exit 0"
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
