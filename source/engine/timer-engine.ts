@@ -17,6 +17,7 @@ export interface EngineFullState {
   elapsed: number;
   timerMode: 'countdown' | 'stopwatch';
   stopwatchElapsed: number;
+  lastFocusAt?: string;
   // Engine
   sessionType: SessionType;
   sessionNumber: number;
@@ -442,6 +443,9 @@ export class PomodoroEngine extends EventEmitter {
       elapsed: this.totalSeconds - this.secondsLeft,
       timerMode: this.timerMode,
       stopwatchElapsed: this.stopwatchElapsed,
+      lastFocusAt: this.sessionType === 'work'
+        ? (this.workIntervals[this.workIntervals.length - 1]?.end ?? undefined)
+        : undefined,
       sessionType: this.sessionType,
       sessionNumber: this.sessionNumber,
       totalWorkSessions: this.totalWorkSessions,

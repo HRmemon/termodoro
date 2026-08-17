@@ -101,9 +101,13 @@ export function writeStatusFile(state: EngineFullState): void {
     const now = new Date();
     const today = dateToString(now);
     const todayStats = getTodayStats(today);
-    const lastFocusSecondsAgo = cachedLastFocusEndedAt === null
+    const pausedFocusAt = state.lastFocusAt === undefined ? NaN : Date.parse(state.lastFocusAt);
+    const lastFocusEndedAt = state.sessionType === 'work' && state.isRunning
+      ? (state.isPaused && !Number.isNaN(pausedFocusAt) ? pausedFocusAt : now.getTime())
+      : cachedLastFocusEndedAt;
+    const lastFocusSecondsAgo = lastFocusEndedAt === null
       ? null
-      : Math.max(0, Math.floor((now.getTime() - cachedLastFocusEndedAt) / 1000));
+      : Math.max(0, Math.floor((now.getTime() - lastFocusEndedAt) / 1000));
     const todayTracker = getTrackerTimeSummary(now);
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -173,7 +177,7 @@ export function writeStatusFile(state: EngineFullState): void {
       sequenceBlockIndex: state.sequenceBlockIndex,
       todayFocusMinutes: todayStats.focusMinutes,
       todaySessions: todayStats.count,
-      lastFocusEndedAt: cachedLastFocusEndedAt === null ? null : new Date(cachedLastFocusEndedAt).toISOString(),
+      lastFocusEndedAt: lastFocusEndedAt === null ? null : new Date(lastFocusEndedAt).toISOString(),
       lastFocusSecondsAgo,
       tracker: {
         today: todayTracker,
