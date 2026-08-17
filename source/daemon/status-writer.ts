@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { loadSessions } from '../lib/store.js';
 import { getTodayStr } from '../lib/date-utils.js';
+import { formatSeconds } from '../lib/format.js';
 import { dateToString, getMondayOfWeek, getTrackerTimeSummary } from '../lib/tracker.js';
 
 const STATUS_PATH = path.join(os.tmpdir(), 'pomodorocli-status.json');
@@ -12,19 +13,21 @@ const STATUS_PATH = path.join(os.tmpdir(), 'pomodorocli-status.json');
 // Cached today stats — only recomputed on session events, not every tick
 let cachedTodayStats = { count: 0, focusMinutes: 0 };
 let cachedStatsDate = '';
+let cachedLastFocusEndedAt: number | null = null;
 
 function recomputeTodayStats(today: string = getTodayStr()): void {
   cachedStatsDate = today;
   try {
-    const sessions = loadSessions().filter(s =>
-      dateToString(new Date(s.startedAt)) === today
-      && s.type === 'work'
-      && s.status === 'completed'
-    );
+    const sessions = loadSessions().filter(s => s.type === 'work' && s.status === 'completed');
+    const todaySessions = sessions.filter(s => dateToString(new Date(s.startedAt)) === today);
     cachedTodayStats = {
-      count: sessions.length,
-      focusMinutes: Math.round(sessions.reduce((sum, s) => sum + s.durationActual, 0) / 60),
+      count: todaySessions.length,
+      focusMinutes: Math.round(todaySessions.reduce((sum, s) => sum + s.durationActual, 0) / 60),
     };
+    cachedLastFocusEndedAt = sessions.reduce<number | null>((latest, session) => {
+      const endedAt = Date.parse(session.endedAt);
+      return Number.isNaN(endedAt) || (latest !== null && endedAt <= latest) ? latest : endedAt;
+    }, null);
   } catch {
     // Keep stale cache on error
   }
@@ -98,6 +101,9 @@ export function writeStatusFile(state: EngineFullState): void {
     const now = new Date();
     const today = dateToString(now);
     const todayStats = getTodayStats(today);
+    const lastFocusSecondsAgo = cachedLastFocusEndedAt === null
+      ? null
+      : Math.max(0, Math.floor((now.getTime() - cachedLastFocusEndedAt) / 1000));
     const todayTracker = getTrackerTimeSummary(now);
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -140,6 +146,9 @@ export function writeStatusFile(state: EngineFullState): void {
       const m = todayStats.focusMinutes % 60;
       tooltipParts.push(h > 0 ? `${h}h ${m}m today` : `${m}m today`);
     }
+    tooltipParts.push(lastFocusSecondsAgo === null
+      ? 'Last focus: none yet'
+      : `Last focus: ${formatSeconds(lastFocusSecondsAgo)} ago`);
     tooltipParts.push(`Today: ${formatTrackerSummary(todayTracker)}`);
     tooltipParts.push(`Yesterday: ${formatTrackerSummary(yesterdayTracker)}`);
     tooltipParts.push(`This week: ${formatTrackerSummary(weekTracker)}`);
@@ -161,6 +170,8 @@ export function writeStatusFile(state: EngineFullState): void {
       sequenceBlockIndex: state.sequenceBlockIndex,
       todayFocusMinutes: todayStats.focusMinutes,
       todaySessions: todayStats.count,
+      lastFocusEndedAt: cachedLastFocusEndedAt === null ? null : new Date(cachedLastFocusEndedAt).toISOString(),
+      lastFocusSecondsAgo,
       tracker: {
         today: todayTracker,
         yesterday: yesterdayTracker,
