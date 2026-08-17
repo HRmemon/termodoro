@@ -129,7 +129,10 @@ export function writeStatusFile(state: EngineFullState): void {
         : 0);
 
     let text: string;
-    const trackerText = formatWaybarTrackerSummary(todayTracker);
+    const lastFocusText = lastFocusSecondsAgo === null
+      ? 'no focus yet'
+      : `${formatSeconds(lastFocusSecondsAgo)} ago`;
+    const trackerText = `${formatWaybarTrackerSummary(todayTracker)} · ${lastFocusText}`;
     if (!state.isRunning && !state.isPaused) {
       text = trackerText;
     } else if (isStopwatch) {
@@ -148,7 +151,7 @@ export function writeStatusFile(state: EngineFullState): void {
     }
     tooltipParts.push(lastFocusSecondsAgo === null
       ? 'Last focus: none yet'
-      : `Last focus: ${formatSeconds(lastFocusSecondsAgo)} ago`);
+      : `Last focus: ${lastFocusText}`);
     tooltipParts.push(`Today: ${formatTrackerSummary(todayTracker)}`);
     tooltipParts.push(`Yesterday: ${formatTrackerSummary(yesterdayTracker)}`);
     tooltipParts.push(`This week: ${formatTrackerSummary(weekTracker)}`);
