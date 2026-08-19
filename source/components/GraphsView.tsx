@@ -9,7 +9,6 @@ import type { Keymap } from '../lib/keymap.js';
 import {
   adjustCount,
   aggregateMetric,
-  allMetrics,
   computeDayStreak,
   getMetricTarget,
   getMetricValue,
@@ -34,7 +33,6 @@ const QUALITY: Record<DayQuality, { glyph: string; color: string; label: string 
 };
 
 type DisplayRow =
-  | { key: string; kind: 'area'; name: string }
   | { key: string; kind: 'goal'; name: string }
   | { key: string; kind: 'metric'; metric: GoalMetric };
 
@@ -69,29 +67,33 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
   const [data, setData] = useState<GoalsData>(() => loadGoals());
   const [window, setWindow] = useState<GoalWindow>('today');
   const [anchor, setAnchor] = useState(getTodayStr);
+  const [activeAreaIndex, setActiveAreaIndex] = useState(0);
   const [selected, setSelected] = useState(0);
   const [scroll, setScroll] = useState(0);
   const [editing, setEditing] = useState<GoalMetric | null>(null);
   const [editValue, setEditValue] = useState('');
   const { stdout } = useStdout();
 
-  const metrics = useMemo(() => allMetrics(data), [data]);
+  const areas = useMemo(() => data.areas.filter(area => !area.archivedAt), [data]);
+  const activeArea = areas[activeAreaIndex];
+  const metrics = useMemo(() => activeArea?.goals.filter(goal => !goal.archivedAt).flatMap(goal => goal.metrics) ?? [], [activeArea]);
   const selectedMetric = metrics[selected];
   const dates = useMemo(() => getWindowDates(window, anchor), [window, anchor]);
-  const rows = useMemo<DisplayRow[]>(() => data.areas.filter(area => !area.archivedAt).flatMap(area => [
-    { key: area.id, kind: 'area' as const, name: area.name },
-    ...area.goals.filter(goal => !goal.archivedAt).flatMap(goal => [
+  const rows = useMemo<DisplayRow[]>(() => activeArea?.goals.filter(goal => !goal.archivedAt).flatMap(goal => [
       { key: goal.id, kind: 'goal' as const, name: goal.name },
       ...goal.metrics.map(metric => ({ key: metric.id, kind: 'metric' as const, metric })),
-    ]),
-  ]), [data]);
-  const visibleCount = Math.max(5, (stdout?.rows ?? 24) - 16);
+    ]) ?? [], [activeArea]);
+  const visibleCount = Math.max(5, (stdout?.rows ?? 24) - 17);
   const selectedRow = selectedMetric ? rows.findIndex(row => row.key === selectedMetric.id) : 0;
 
   useEffect(() => {
     if (selectedRow < scroll) setScroll(selectedRow);
-    else if (selectedRow >= scroll + visibleCount) setScroll(selectedRow - visibleCount + 1);
-  }, [selectedRow, scroll, visibleCount]);
+    else if (selectedRow >= scroll + visibleCount) {
+      let next = selectedRow - visibleCount + 1;
+      while (next > 0 && rows[next]?.kind === 'metric') next--;
+      setScroll(next);
+    }
+  }, [selectedRow, scroll, visibleCount, rows]);
 
   const saveValue = (metric: GoalMetric, raw: string) => {
     const value = metric.input === 'note' ? raw.trim() : Number(raw);
@@ -122,7 +124,11 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
       return;
     }
 
-    if (input === 'h' || key.leftArrow) {
+    if (key.tab) {
+      if (areas.length) setActiveAreaIndex(value => (value + 1) % areas.length);
+      setSelected(0);
+      setScroll(0);
+    } else if (input === 'h' || key.leftArrow) {
       const index = WINDOWS.indexOf(window);
       setWindow(WINDOWS[Math.max(0, index - 1)]!);
       setAnchor(getTodayStr());
@@ -169,8 +175,6 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
 
   const streak = computeDayStreak(data);
   const recentDates = getRecentDates(28);
-  const qualityDate = window === 'today' ? anchor : getTodayStr();
-  const shownQuality = data.dayQuality[qualityDate];
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -193,14 +197,21 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
           return <Text key={date} color={quality ? QUALITY[quality].color : 'gray'}>{quality ? QUALITY[quality].glyph : '·'}</Text>;
         })}
       </Box>
-      <Text dimColor>
-        {qualityDate === getTodayStr() ? 'Today' : qualityDate}: {shownQuality ? QUALITY[shownQuality].label : 'unchecked'} · P:Perfect E:Reason M:Missed
-      </Text>
+
+      <Box marginTop={1}>
+        <Text dimColor>AREAS  </Text>
+        {areas.map((area, index) => (
+          <Text key={area.id} bold={index === activeAreaIndex} color={index === activeAreaIndex ? 'cyan' : 'gray'}>
+            {index === activeAreaIndex ? `[${area.name}]` : area.name}{'  '}
+          </Text>
+        ))}
+        <Box flexGrow={1} />
+        <Text dimColor>Tab · {activeAreaIndex + 1}/{areas.length}</Text>
+      </Box>
 
       <Box flexDirection="column" marginTop={1}>
         {rows.slice(scroll, scroll + visibleCount).map(row => {
-          if (row.kind === 'area') return <Text key={row.key} bold color="cyan">{row.name}</Text>;
-          if (row.kind === 'goal') return <Text key={row.key} bold>  {row.name}</Text>;
+          if (row.kind === 'goal') return <Text key={row.key} bold color="white">◆ {row.name}</Text>;
 
           const isSelected = row.metric.id === selectedMetric?.id;
           if (window === 'today') {
@@ -224,7 +235,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
         })}
       </Box>
 
-      {rows.length > visibleCount && <Text dimColor>Showing {scroll + 1}-{Math.min(rows.length, scroll + visibleCount)} of {rows.length}</Text>}
+      {rows.length > visibleCount && <Text dimColor>{activeArea?.name} · rows {scroll + 1}-{Math.min(rows.length, scroll + visibleCount)} of {rows.length}</Text>}
 
       {editing && (
         <Box marginTop={1}>

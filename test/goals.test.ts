@@ -9,6 +9,7 @@ import {
   getWindowDates,
   type GoalMetric,
 } from '../source/lib/goals.js';
+import { renderGoalsHtml } from '../source/lib/goals-report.js';
 
 test('counters increment, decrement, and stop at zero', () => {
   assert.equal(adjustCount(undefined, 1), 1);
@@ -54,4 +55,18 @@ test('only consecutive perfect days count toward the day streak', () => {
   };
 
   assert.deepEqual(computeDayStreak(data, '2026-08-19'), { current: 3, best: 3 });
+});
+
+test('HTML report renders period tabs, hierarchy, and three-state day history', () => {
+  const data = defaultGoalsData();
+  data.areas[0]!.name = 'IELTS <current>';
+  data.dayQuality['2026-08-19'] = 'perfect';
+  const html = renderGoalsHtml(data, '2026-08-19');
+
+  assert.match(html, /Goal ledger/);
+  assert.match(html, /id="tab-week"/);
+  assert.match(html, /id="tab-month"/);
+  assert.match(html, /IELTS &lt;current&gt;/);
+  assert.match(html, /heat-cell perfect/);
+  assert.match(html, /class="metric-grid"/);
 });

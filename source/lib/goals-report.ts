@@ -1,24 +1,153 @@
-import { aggregateMetric, computeDayStreak, getMetricTarget, getWindowDates, loadGoals } from './goals.js';
-import { getTodayStr } from './date-utils.js';
+import {
+  aggregateMetric,
+  computeDayStreak,
+  getMetricTarget,
+  getRecentDates,
+  getWindowDates,
+  loadGoals,
+  type GoalMetric,
+  type GoalsData,
+  type GoalWindow,
+} from './goals.js';
+import { MONTH_NAMES_FULL, getTodayStr } from './date-utils.js';
 
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
+const numberLabel = (value: number): string => Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
+
+function metricValue(metric: GoalMetric, value: number, target?: number): string {
+  if (metric.aggregate === 'any') return value ? 'Done' : 'Open';
+  const suffix = metric.unit === '%' ? '%' : '';
+  return `${numberLabel(value)}${suffix}${target === undefined ? '' : ` <span>/ ${numberLabel(target)}${suffix}</span>`}`;
+}
+
+function renderPeriod(data: GoalsData, window: Exclude<GoalWindow, 'today'>, anchor: string): string {
+  const dates = getWindowDates(window, anchor);
+  return data.areas.filter(area => !area.archivedAt).map((area, areaIndex) => `
+    <section class="area-card">
+      <header class="area-heading">
+        <span>${String(areaIndex + 1).padStart(2, '0')}</span>
+        <div><p>Area · ${window}</p><h2>${escapeHtml(area.name)}</h2></div>
+        <small>${area.goals.filter(goal => !goal.archivedAt).length} goals</small>
+      </header>
+      <div class="goal-list">
+        ${area.goals.filter(goal => !goal.archivedAt).map(goal => `
+          <section class="goal-block">
+            <div class="goal-title"><h3>${escapeHtml(goal.name)}</h3><span>${goal.metrics.length} metrics</span></div>
+            <div class="metric-grid">
+              ${goal.metrics.map(metric => {
+                const value = aggregateMetric(metric, data, dates);
+                const target = getMetricTarget(metric, window, dates.length);
+                const progress = target ? Math.min(100, Math.round(value / target * 100)) : 0;
+                const complete = target !== undefined && value >= target;
+                return `<article class="metric${complete ? ' complete' : ''}">
+                  <div class="metric-heading"><h4>${escapeHtml(metric.name)}</h4><strong>${metricValue(metric, value, target)}</strong></div>
+                  ${target === undefined ? '' : `<div class="progress-track" role="progressbar" aria-label="${escapeHtml(metric.name)}" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${value}"><span style="width:${progress}%"></span></div>`}
+                  <p>${metric.input} · ${metric.aggregate}</p>
+                </article>`;
+              }).join('')}
+            </div>
+          </section>`).join('')}
+      </div>
+    </section>`).join('');
+}
+
+export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string {
+  const streak = computeDayStreak(data, anchor);
+  const history = getRecentDates(365, anchor);
+  const firstDay = new Date(`${history[0]}T00:00:00`).getDay();
+  const blanks = firstDay === 0 ? 6 : firstDay - 1;
+  const heatmap = `${'<span class="heat-blank"></span>'.repeat(blanks)}${history.map(date => {
+    const quality = data.dayQuality[date];
+    const label = quality === 'perfect' ? 'Perfect' : quality === 'excused' ? 'Missed with reason' : quality === 'missed' ? 'Missed without reason' : 'Unchecked';
+    return `<span class="heat-cell ${quality ?? ''}" title="${date} · ${label}" aria-label="${date} · ${label}" role="img"></span>`;
+  }).join('')}`;
+  const qualityCounts = history.reduce((counts, date) => {
+    const quality = data.dayQuality[date];
+    if (quality) counts[quality]++;
+    return counts;
+  }, { perfect: 0, excused: 0, missed: 0 });
+  const [year, month] = anchor.split('-').map(Number);
+  const weekDates = getWindowDates('week', anchor);
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Goal ledger</title>
+  <style>
+    :root { --paper:#f1ede3; --card:#fbf8f0; --ink:#20231f; --muted:#77786f; --line:#d8d2c3; --moss:#426b50; --moss-soft:#c9d8c4; --ember:#e75b2c; --amber:#c69235; --red:#a64b3c; --shadow:0 18px 55px rgba(42,39,31,.09); }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--ink); background:var(--paper); font-family:Georgia, 'Times New Roman', serif; }
+    body::before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.28; background-image:radial-gradient(rgba(32,35,31,.18) .55px, transparent .55px); background-size:5px 5px; mix-blend-mode:multiply; }
+    button { font:inherit; }
+    .shell { width:min(1180px, calc(100% - 32px)); margin:0 auto; padding:56px 0 80px; position:relative; }
+    .masthead { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:24px; }
+    .eyebrow, .area-heading p, .metric p { margin:0 0 7px; color:var(--moss); font:700 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing:.15em; text-transform:uppercase; }
+    h1 { margin:0; font-size:clamp(42px, 7vw, 76px); line-height:.9; font-weight:500; letter-spacing:-.055em; }
+    .stamp { text-align:right; color:var(--muted); font:12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .streak-card { display:grid; grid-template-columns:220px 1fr; gap:30px; padding:28px 30px; overflow:hidden; color:var(--card); background:var(--ink); border-radius:3px 28px 3px 3px; box-shadow:var(--shadow); }
+    .streak-number { display:grid; grid-template-columns:56px 1fr; align-items:center; gap:14px; border-right:1px solid #4a4d47; }
+    .flame { width:56px; height:56px; display:grid; place-items:center; border-radius:50%; background:${streak.current ? '#613524' : '#343730'}; filter:${streak.current ? 'none' : 'grayscale(1)'}; font-size:30px; }
+    .streak-number strong { display:block; font:500 38px/.85 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .streak-number span, .streak-number small { display:block; margin-top:7px; color:#aeb0a9; font:11px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; text-transform:uppercase; letter-spacing:.1em; }
+    .streak-number small { grid-column:1/-1; text-transform:none; letter-spacing:0; }
+    .heat-scroll { overflow-x:auto; padding:2px 0 7px; }
+    .heatmap { display:grid; grid-template-rows:repeat(7, 10px); grid-auto-flow:column; grid-auto-columns:10px; gap:4px; width:max-content; min-width:100%; }
+    .heat-cell { width:10px; height:10px; border-radius:2px; background:#3c4039; }
+    .heat-cell.perfect { background:#71a36f; } .heat-cell.excused { background:var(--amber); } .heat-cell.missed { background:var(--red); }
+    .heat-blank { visibility:hidden; }
+    .heat-legend { display:flex; justify-content:space-between; gap:18px; margin-top:7px; color:#aeb0a9; font:10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; text-transform:uppercase; letter-spacing:.07em; }
+    .legend-items { display:flex; gap:14px; } .legend-items i { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:2px; }
+    .tabs { display:flex; gap:5px; margin:24px 0; border-bottom:1px solid var(--line); }
+    .tabs button { border:0; background:none; color:var(--muted); padding:14px 22px; cursor:pointer; position:relative; font-size:15px; }
+    .tabs button::after { content:""; position:absolute; left:22px; right:22px; bottom:-1px; height:2px; background:var(--ink); transform:scaleX(0); transition:transform .18s ease; }
+    .tabs button[aria-selected="true"] { color:var(--ink); } .tabs button[aria-selected="true"]::after { transform:scaleX(1); }
+    [role="tabpanel"][hidden] { display:none; } [role="tabpanel"] { animation:arrive .3s ease both; }
+    @keyframes arrive { from { opacity:0; transform:translateY(7px); } }
+    .period-heading { display:flex; justify-content:space-between; align-items:end; margin:34px 0 18px; }
+    .period-heading h2 { margin:0; font-size:30px; font-weight:500; letter-spacing:-.025em; } .period-heading span { color:var(--muted); font:12px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .area-card { margin-bottom:24px; background:var(--card); border:1px solid var(--line); box-shadow:var(--shadow); }
+    .area-heading { display:grid; grid-template-columns:58px 1fr auto; align-items:center; min-height:94px; padding:0 26px; border-bottom:1px solid var(--line); }
+    .area-heading>span { color:var(--line); font:26px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .area-heading h2 { margin:0; font-size:26px; font-weight:500; } .area-heading small, .goal-title span { color:var(--muted); font:10px/1 ui-monospace, SFMono-Regular, Consolas, monospace; text-transform:uppercase; letter-spacing:.08em; }
+    .goal-block { padding:24px 26px 26px; border-bottom:1px solid var(--line); } .goal-block:last-child { border-bottom:0; }
+    .goal-title { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:15px; } .goal-title h3 { margin:0; font-size:18px; font-weight:500; }
+    .metric-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); border-top:1px solid var(--line); border-left:1px solid var(--line); }
+    .metric { min-height:128px; padding:20px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); background:rgba(241,237,227,.28); }
+    .metric-heading { display:flex; justify-content:space-between; gap:18px; align-items:baseline; } .metric h4 { margin:0; font-size:15px; font-weight:500; }
+    .metric strong { white-space:nowrap; font:18px/1 ui-monospace, SFMono-Regular, Consolas, monospace; } .metric strong span { color:var(--muted); font-size:11px; }
+    .metric p { margin:13px 0 0; color:var(--muted); font-size:9px; }
+    .progress-track { height:8px; margin-top:27px; overflow:hidden; background:#ded8c9; border-radius:99px; } .progress-track span { display:block; height:100%; background:var(--moss); border-radius:inherit; }
+    .metric.complete { background:rgba(201,216,196,.28); } .metric.complete .progress-track span { background:#527b5c; }
+    footer { display:flex; justify-content:space-between; margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font:10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; text-transform:uppercase; letter-spacing:.08em; }
+    @media (max-width:780px) { .shell { width:min(100% - 20px, 620px); padding-top:28px; } .stamp { display:none; } .streak-card { grid-template-columns:1fr; padding:22px; } .streak-number { border-right:0; border-bottom:1px solid #4a4d47; padding-bottom:18px; } .metric-grid { grid-template-columns:1fr; } .area-heading { grid-template-columns:42px 1fr; padding:0 16px; } .area-heading small { display:none; } }
+    @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead"><div><p class="eyebrow">Pomodoro CLI · Personal field notes</p><h1>Goal ledger</h1></div><div class="stamp">Asia / Karachi<br>${anchor}</div></header>
+    <section class="streak-card" aria-label="Day quality summary">
+      <div class="streak-number"><div class="flame" aria-hidden="true">🔥</div><div><strong>${streak.current}</strong><span>perfect-day streak</span></div><small>Personal best · ${streak.best} days</small></div>
+      <div><div class="heat-scroll"><div class="heatmap" aria-label="365 day quality history">${heatmap}</div></div>
+        <div class="heat-legend"><span>Past year · day quality</span><div class="legend-items"><span><i style="background:#71a36f"></i>${qualityCounts.perfect} perfect</span><span><i style="background:var(--amber)"></i>${qualityCounts.excused} reason</span><span><i style="background:var(--red)"></i>${qualityCounts.missed} missed</span></div></div>
+      </div>
+    </section>
+    <nav class="tabs" role="tablist" aria-label="Goal period"><button id="tab-week" role="tab" aria-controls="panel-week" aria-selected="true">Week</button><button id="tab-month" role="tab" aria-controls="panel-month" aria-selected="false" tabindex="-1">Month</button></nav>
+    <section id="panel-week" role="tabpanel" aria-labelledby="tab-week"><div class="period-heading"><h2>This week</h2><span>${weekDates[0]} → ${weekDates.at(-1)}</span></div>${renderPeriod(data, 'week', anchor)}</section>
+    <section id="panel-month" role="tabpanel" aria-labelledby="tab-month" hidden><div class="period-heading"><h2>${MONTH_NAMES_FULL[month! - 1]} ${year}</h2><span>${getWindowDates('month', anchor).length} days</span></div>${renderPeriod(data, 'month', anchor)}</section>
+    <footer><span>goals.json → read-only report</span><span>Generated ${anchor}</span></footer>
+  </main>
+  <script>
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    const selectTab = tab => tabs.forEach(item => { const active = item === tab; item.setAttribute('aria-selected', String(active)); item.tabIndex = active ? 0 : -1; document.getElementById(item.getAttribute('aria-controls')).hidden = !active; });
+    tabs.forEach((tab, index) => { tab.addEventListener('click', () => selectTab(tab)); tab.addEventListener('keydown', event => { if (!['ArrowLeft','ArrowRight'].includes(event.key)) return; event.preventDefault(); const offset = event.key === 'ArrowRight' ? 1 : -1; const next = tabs[(index + offset + tabs.length) % tabs.length]; selectTab(next); next.focus(); }); });
+  </script>
+</body>
+</html>`;
+}
 
 export function generateGoalsHtmlReport(): string {
-  const data = loadGoals();
-  const dates = getWindowDates('week');
-  const streak = computeDayStreak(data);
-  const areas = data.areas.map(area => `
-    <section><h2>${escapeHtml(area.name)}</h2>
-      ${area.goals.map(goal => `<h3>${escapeHtml(goal.name)}</h3><div class="metrics">${goal.metrics.map(metric => {
-        const value = aggregateMetric(metric, data, dates);
-        const target = getMetricTarget(metric, 'week', dates.length);
-        const progress = target ? Math.min(100, Math.round(value / target * 100)) : 0;
-        return `<div class="metric"><span>${escapeHtml(metric.name)}</span><b>${value}${target === undefined ? '' : ` / ${target}`}</b><i><em style="width:${progress}%"></em></i></div>`;
-      }).join('')}</div>`).join('')}
-    </section>`).join('');
-
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Goals</title><style>
-    :root{color-scheme:dark}body{max-width:900px;margin:40px auto;padding:0 24px;background:#0b0e14;color:#e6edf3;font:15px system-ui}header{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #30363d}h1{color:#22d3ee}h2{margin-top:32px;color:#22d3ee}h3{margin:20px 0 8px}.metrics{display:grid;gap:8px}.metric{display:grid;grid-template-columns:1fr 100px 160px;gap:16px;align-items:center}.metric b{text-align:right}.metric i{height:8px;background:#21262d}.metric em{display:block;height:100%;background:#22d3ee}</style></head><body>
-    <header><div><h1>Goals</h1><p>Week of ${dates[0]}</p></div><p>${streak.current}d perfect streak · Best ${streak.best}d</p></header>${areas}
-    <footer><p>Generated ${getTodayStr()}</p></footer></body></html>`;
+  return renderGoalsHtml(loadGoals());
 }
