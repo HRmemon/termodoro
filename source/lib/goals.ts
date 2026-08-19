@@ -174,6 +174,10 @@ export function getMetricValue(data: GoalsData, metricId: string, date: string):
   return data.entries[metricId]?.[date];
 }
 
+export function adjustCount(value: GoalValue | undefined, delta: 1 | -1): number | undefined {
+  return Math.max(0, (Number(value) || 0) + delta) || undefined;
+}
+
 export function getWindowDates(window: GoalWindow, anchor = getTodayStr()): string[] {
   if (window === 'today') return [anchor];
   if (window === 'month') {

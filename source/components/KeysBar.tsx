@@ -115,6 +115,7 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
     actionHints.push({ key: hlLabel, label: 'Window' });
     actionHints.push({ key: 'j/k', label: 'Metric' });
     actionHints.push({ key: 'Enter', label: 'Set' });
+    actionHints.push({ key: '+/-', label: 'Count' });
     actionHints.push({ key: 'P/E/M', label: 'Day' });
     actionHints.push({ key: 'n/p', label: 'Period' });
   }

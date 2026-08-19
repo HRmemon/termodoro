@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import type { Keymap } from '../lib/keymap.js';
 import {
+  adjustCount,
   aggregateMetric,
   allMetrics,
   computeDayStreak,
@@ -140,15 +141,15 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
       setData(setDayQuality(data, date, data.dayQuality[date] === quality ? undefined : quality));
     } else if ((key.backspace || key.delete || input === '0') && selectedMetric && window === 'today') {
       setData(setMetricValue(data, selectedMetric.id, anchor, undefined));
-    } else if (input === '-' && selectedMetric?.input === 'count' && window === 'today') {
+    } else if ((input === '+' || input === '-') && selectedMetric?.input === 'count' && window === 'today') {
       const current = Number(getMetricValue(data, selectedMetric.id, anchor)) || 0;
-      setData(setMetricValue(data, selectedMetric.id, anchor, Math.max(0, current - 1) || undefined));
+      setData(setMetricValue(data, selectedMetric.id, anchor, adjustCount(current, input === '+' ? 1 : -1)));
     } else if ((key.return || input === 'x') && selectedMetric && window === 'today') {
       const current = getMetricValue(data, selectedMetric.id, anchor);
       if (selectedMetric.input === 'checkbox') {
         setData(setMetricValue(data, selectedMetric.id, anchor, current ? undefined : true));
       } else if (selectedMetric.input === 'count') {
-        setData(setMetricValue(data, selectedMetric.id, anchor, (Number(current) || 0) + 1));
+        setData(setMetricValue(data, selectedMetric.id, anchor, adjustCount(current, 1)));
       } else {
         setEditing(selectedMetric);
         setEditValue(current === undefined ? '' : String(current));
@@ -205,9 +206,10 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
           if (window === 'today') {
             const raw = getMetricValue(data, row.metric.id, anchor);
             const shown = raw === undefined ? '·' : raw === true ? '✓' : String(raw);
+            const hint = isSelected && row.metric.input === 'count' ? '  (+/-)' : '';
             return (
               <Text key={row.key} color={isSelected ? 'cyan' : undefined} bold={isSelected}>
-                {isSelected ? '  › ' : '    '}{row.metric.name.slice(0, 24).padEnd(24)} {shown}
+                {isSelected ? '  › ' : '    '}{row.metric.name.slice(0, 24).padEnd(24)} {shown}{hint}
               </Text>
             );
           }

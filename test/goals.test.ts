@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  adjustCount,
   aggregateMetric,
   computeDayStreak,
   defaultGoalsData,
@@ -8,6 +9,14 @@ import {
   getWindowDates,
   type GoalMetric,
 } from '../source/lib/goals.js';
+
+test('counters increment, decrement, and stop at zero', () => {
+  assert.equal(adjustCount(undefined, 1), 1);
+  assert.equal(adjustCount(3, 1), 4);
+  assert.equal(adjustCount(3, -1), 2);
+  assert.equal(adjustCount(1, -1), undefined);
+  assert.equal(adjustCount(undefined, -1), undefined);
+});
 
 const weeklyCount: GoalMetric = {
   id: 'attempts',
