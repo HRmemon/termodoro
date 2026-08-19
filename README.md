@@ -383,9 +383,10 @@ Track measurable criteria in an `Area → Goal → Metric` hierarchy. Today is f
 | `Ctrl+X` / `0` | Decrement counter / clear today's value |
 | `P` / `E` / `M` | Mark today Perfect / Missed with reason / Missed without reason |
 | `Ctrl+G` | Edit the complete goal definition and data as JSON |
-| `R` | Open the weekly HTML report |
+| `R` | Open the bookmarkable HTML dashboard |
 
 Only Perfect days extend the global day streak. The 28-day strip belongs to this overall check-in rather than to any individual goal.
+The dashboard is kept current at `~/.local/share/pomodorocli/goals-dashboard.html`, so the same file can be bookmarked.
 
 ---
 

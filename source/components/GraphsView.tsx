@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import type { Keymap } from '../lib/keymap.js';
 import {
@@ -23,7 +20,7 @@ import {
   type GoalWindow,
 } from '../lib/goals.js';
 import { addDays, getTodayStr, MONTH_NAMES_FULL } from '../lib/date-utils.js';
-import { generateGoalsHtmlReport } from '../lib/goals-report.js';
+import { writeGoalsHtmlReport } from '../lib/goals-report.js';
 
 const WINDOWS: GoalWindow[] = ['today', 'week', 'month'];
 const QUALITY: Record<DayQuality, { glyph: string; color: string; label: string }> = {
@@ -95,6 +92,10 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
     }
   }, [selectedRow, scroll, visibleCount, rows]);
 
+  useEffect(() => {
+    writeGoalsHtmlReport(data);
+  }, [data]);
+
   const saveValue = (metric: GoalMetric, raw: string) => {
     const value = metric.input === 'note' ? raw.trim() : Number(raw);
     if (metric.input === 'note' || Number.isFinite(value)) setData(setMetricValue(data, metric.id, anchor, value || undefined));
@@ -162,11 +163,10 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
         setIsTyping(true);
       }
     } else if (input === 'R') {
-      const tmpPath = path.join(os.tmpdir(), `pomodorocli-goals-${Date.now()}.html`);
-      fs.writeFileSync(tmpPath, generateGoalsHtmlReport());
+      const reportPath = writeGoalsHtmlReport(data);
       for (const opener of ['xdg-open', 'open', 'sensible-browser']) {
         if (spawnSync('which', [opener], { stdio: 'ignore' }).status === 0) {
-          spawn(opener, [tmpPath], { detached: true, stdio: 'ignore' }).unref();
+          spawn(opener, [reportPath], { detached: true, stdio: 'ignore' }).unref();
           break;
         }
       }

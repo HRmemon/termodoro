@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   aggregateMetric,
   computeDayStreak,
@@ -10,6 +12,9 @@ import {
   type GoalWindow,
 } from './goals.js';
 import { MONTH_NAMES_FULL, getTodayStr } from './date-utils.js';
+import { DATA_DIR } from './paths.js';
+
+export const GOALS_REPORT_PATH = path.join(DATA_DIR, 'goals-dashboard.html');
 
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const numberLabel = (value: number): string => Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
@@ -138,7 +143,7 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
     <nav class="tabs" role="tablist" aria-label="Goal period"><button id="tab-week" role="tab" aria-controls="panel-week" aria-selected="true">Week</button><button id="tab-month" role="tab" aria-controls="panel-month" aria-selected="false" tabindex="-1">Month</button></nav>
     <section id="panel-week" role="tabpanel" aria-labelledby="tab-week"><div class="period-heading"><h2>This week</h2><span>${weekDates[0]} → ${weekDates.at(-1)}</span></div>${renderPeriod(data, 'week', anchor)}</section>
     <section id="panel-month" role="tabpanel" aria-labelledby="tab-month" hidden><div class="period-heading"><h2>${MONTH_NAMES_FULL[month! - 1]} ${year}</h2><span>${getWindowDates('month', anchor).length} days</span></div>${renderPeriod(data, 'month', anchor)}</section>
-    <footer><span>goals.json → read-only report</span><span>Generated ${anchor}</span></footer>
+    <footer><span>Auto-updated from goals.json</span><span>Dashboard · ${anchor}</span></footer>
   </main>
   <script>
     const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -149,6 +154,10 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
 </html>`;
 }
 
-export function generateGoalsHtmlReport(): string {
-  return renderGoalsHtml(loadGoals());
+export function writeGoalsHtmlReport(data: GoalsData = loadGoals()): string {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmpPath = `${GOALS_REPORT_PATH}.tmp`;
+  fs.writeFileSync(tmpPath, renderGoalsHtml(data), 'utf8');
+  fs.renameSync(tmpPath, GOALS_REPORT_PATH);
+  return GOALS_REPORT_PATH;
 }
