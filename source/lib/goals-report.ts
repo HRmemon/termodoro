@@ -18,11 +18,62 @@ export const GOALS_REPORT_PATH = path.join(DATA_DIR, 'goals-dashboard.html');
 
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const numberLabel = (value: number): string => Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
+const GOAL_PRESENTATION: Record<string, { icon: string; summary: string }> = {
+  'ielts-writing': { icon: '✍️', summary: 'practice + band target' },
+  'ielts-reading': { icon: '📖', summary: 'practice + score target' },
+  'ielts-listening': { icon: '🎧', summary: 'practice + score target' },
+  'ielts-speaking': { icon: '🗣️', summary: 'practice + band + weekly' },
+  'book-chapter-4': { icon: '📚', summary: 'latest percentage' },
+  'book-chapter-5': { icon: '📚', summary: 'latest percentage' },
+  'money-wider': { icon: '🧭', summary: 'research checkpoints' },
+  'money-deeper': { icon: '🔎', summary: '30m research blocks' },
+  'money-decisions': { icon: '◆', summary: 'count target' },
+  'masters-universities': { icon: '🏛️', summary: 'research checkpoint' },
+  'masters-scholarships': { icon: '🎓', summary: 'research checkpoint' },
+  'masters-ielts': { icon: '📅', summary: 'booking decisions' },
+};
 
 function metricValue(metric: GoalMetric, value: number, target?: number): string {
   if (metric.aggregate === 'any') return value ? 'Done' : 'Open';
   const suffix = metric.unit === '%' ? '%' : '';
   return `${numberLabel(value)}${suffix}${target === undefined ? '' : ` <span>/ ${numberLabel(target)}${suffix}</span>`}`;
+}
+
+function renderCompactWeek(data: GoalsData, anchor: string): string {
+  const dates = getWindowDates('week', anchor);
+  return `<div class="compact-week">${data.areas.filter(area => !area.archivedAt).map((area, areaIndex) => {
+    const goals = area.goals.filter(goal => !goal.archivedAt);
+    const metricCount = goals.reduce((count, goal) => count + goal.metrics.length, 0);
+    const met = goals.flatMap(goal => goal.metrics).filter(metric => {
+      const target = getMetricTarget(metric, 'week', dates.length);
+      return target !== undefined && aggregateMetric(metric, data, dates) >= target;
+    }).length;
+    return `<section class="compact-area">
+      <header class="compact-area-head">
+        <span class="num">${String(areaIndex + 1).padStart(2, '0')}</span>
+        <div class="label"><h3>${escapeHtml(area.name)}</h3><small>${goals.length} goals · ${metricCount} metrics</small></div>
+        <span class="summary">${met}/${metricCount} targets met</span>
+      </header>
+      <div class="compact-goals">${goals.map(goal => {
+        const presentation = GOAL_PRESENTATION[goal.id] ?? { icon: '◇', summary: `${goal.metrics.length} metrics` };
+        return `<div class="compact-goal">
+          <div class="compact-goal-name"><span class="goal-icon" aria-hidden="true">${presentation.icon}</span><div><strong>${escapeHtml(goal.name)}</strong><span>${escapeHtml(presentation.summary)}</span></div></div>
+          <div class="compact-metrics">${goal.metrics.map(metric => {
+            const value = aggregateMetric(metric, data, dates);
+            const target = getMetricTarget(metric, 'week', dates.length);
+            const progress = target ? Math.min(100, Math.round(value / target * 100)) : 0;
+            const wide = metric.name.length > 16 ? ' wide' : '';
+            if (metric.input === 'checkbox' && target === 1) {
+              const done = value >= target;
+              return `<div class="metric-chip check ${done ? 'done good' : 'open idle'}${wide}"><span class="m-name">${escapeHtml(metric.name)}</span><span class="state" aria-label="${done ? 'Done' : 'Open'}">${done ? '✓' : '○'}</span></div>`;
+            }
+            const state = value === 0 ? 'idle' : progress >= 75 ? 'good' : 'warn';
+            return `<div class="metric-chip ${state}${wide}"><span class="m-name">${escapeHtml(metric.name)}</span><span class="m-value">${metricValue(metric, value, target)}</span>${target === undefined ? '' : `<span class="tiny-track"><i style="width:${progress}%"></i></span>`}</div>`;
+          }).join('')}</div>
+        </div>`;
+      }).join('')}</div>
+    </section>`;
+  }).join('')}</div><div class="compact-legend"><span><b>Bars</b> = count, score, or latest value</span><span><b>✓ / ○</b> = complete / open checkpoint</span><span>Progress stays in its native unit.</span></div>`;
 }
 
 function renderPeriod(data: GoalsData, window: Exclude<GoalWindow, 'today'>, anchor: string): string {
@@ -37,7 +88,7 @@ function renderPeriod(data: GoalsData, window: Exclude<GoalWindow, 'today'>, anc
       <div class="goal-list">
         ${area.goals.filter(goal => !goal.archivedAt).map(goal => `
           <section class="goal-block">
-            <div class="goal-title"><h3>${escapeHtml(goal.name)}</h3><span>${goal.metrics.length} metrics</span></div>
+            <div class="goal-title"><h3><i aria-hidden="true">${GOAL_PRESENTATION[goal.id]?.icon ?? '◇'}</i>${escapeHtml(goal.name)}</h3><span>${goal.metrics.length} metrics</span></div>
             <div class="metric-grid">
               ${goal.metrics.map(metric => {
                 const value = aggregateMetric(metric, data, dates);
@@ -117,7 +168,7 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
     .area-heading>span { color:var(--line); font:22px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
     .area-heading h2 { margin:0; font-size:22px; font-weight:500; } .area-heading small, .goal-title span { color:var(--muted); font:9px/1 ui-monospace, SFMono-Regular, Consolas, monospace; text-transform:uppercase; letter-spacing:.08em; }
     .goal-block { padding:16px 20px 18px; border-bottom:1px solid var(--line); } .goal-block:last-child { border-bottom:0; }
-    .goal-title { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; } .goal-title h3 { margin:0; font-size:17px; font-weight:500; }
+    .goal-title { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; } .goal-title h3 { display:flex; align-items:center; gap:8px; margin:0; font-size:17px; font-weight:500; } .goal-title h3 i { width:22px; font-style:normal; font-size:16px; filter:saturate(.72); }
     .metric-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); border-top:1px solid var(--line); border-left:1px solid var(--line); }
     .metric { min-height:98px; padding:14px 16px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); background:rgba(241,237,227,.28); }
     .metric-heading { display:flex; justify-content:space-between; gap:18px; align-items:baseline; } .metric h4 { margin:0; font-size:15px; font-weight:500; }
@@ -129,6 +180,37 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
     @media (max-width:900px) { .metric-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
     @media (max-width:620px) { .shell { width:min(100% - 20px, 620px); padding-top:24px; } .stamp { display:none; } .streak-card { grid-template-columns:1fr; padding:18px; } .streak-number { border-right:0; border-bottom:1px solid #4a4d47; padding-bottom:14px; } .metric-grid { grid-template-columns:1fr; } .area-heading { grid-template-columns:38px 1fr; padding:0 14px; } .area-heading small { display:none; } }
     @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
+    #panel-week .compact-week { display:grid; gap:12px; }
+    #panel-week .compact-area { background:var(--card); border:1px solid var(--line); box-shadow:0 10px 30px rgba(42,39,31,.055); }
+    #panel-week .compact-area-head { display:grid; grid-template-columns:40px 1fr auto; align-items:center; min-height:50px; padding:0 14px; border-bottom:1px solid var(--line); }
+    #panel-week .compact-area-head .num { color:var(--line); font:18px/1 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    #panel-week .compact-area-head .label { display:flex; align-items:baseline; gap:9px; min-width:0; }
+    #panel-week .compact-area-head h3 { margin:0; font-size:18px; font-weight:500; }
+    #panel-week .compact-area-head small, #panel-week .compact-area-head .summary { color:var(--muted); font:9px/1 ui-monospace,SFMono-Regular,Consolas,monospace; text-transform:uppercase; letter-spacing:.08em; }
+    #panel-week .compact-goal { display:grid; grid-template-columns:minmax(175px,.85fr) minmax(0,2.6fr); gap:14px; align-items:center; min-height:46px; padding:7px 14px; border-bottom:1px solid rgba(216,210,195,.72); }
+    #panel-week .compact-goal:last-child { border-bottom:0; }
+    #panel-week .compact-goal-name { display:grid; grid-template-columns:24px 1fr; align-items:center; gap:8px; min-width:0; }
+    #panel-week .goal-icon { font-size:17px; filter:saturate(.72); }
+    #panel-week .compact-goal-name strong { display:block; font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #panel-week .compact-goal-name span:not(.goal-icon) { display:block; margin-top:3px; color:var(--muted); font:8px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; text-transform:uppercase; letter-spacing:.07em; }
+    #panel-week .compact-metrics { display:flex; gap:7px; align-items:stretch; min-width:0; flex-wrap:wrap; }
+    #panel-week .metric-chip { display:grid; grid-template-columns:auto auto; gap:4px 10px; align-items:center; min-width:112px; padding:6px 8px; border:1px solid #ddd7ca; background:rgba(241,237,227,.30); border-radius:2px; }
+    #panel-week .metric-chip.wide { min-width:145px; }
+    #panel-week .metric-chip .m-name { color:var(--muted); font:9px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
+    #panel-week .metric-chip .m-value { justify-self:end; color:var(--ink); font:700 11px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
+    #panel-week .metric-chip .m-value span { color:var(--muted); font-size:9px; }
+    #panel-week .metric-chip .tiny-track { grid-column:1/-1; height:3px; background:#dfd9cb; overflow:hidden; border-radius:9px; }
+    #panel-week .metric-chip .tiny-track i { display:block; height:100%; background:var(--moss); }
+    #panel-week .metric-chip.good { background:rgba(201,216,196,.30); border-color:#c5d2c0; }
+    #panel-week .metric-chip.warn .m-value { color:#946c22; }
+    #panel-week .metric-chip.idle { opacity:.72; }
+    #panel-week .metric-chip.check { grid-template-columns:1fr auto; min-width:122px; }
+    #panel-week .metric-chip.check .state { font:700 12px/1 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    #panel-week .metric-chip.check.done .state { color:var(--moss); }
+    #panel-week .metric-chip.check.open .state { color:var(--muted); }
+    #panel-week .compact-legend { display:flex; flex-wrap:wrap; gap:14px; margin:8px 2px 0; color:var(--muted); font:9px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    #panel-week .compact-legend b { color:var(--ink); font-weight:600; }
+    @media (max-width:760px) { #panel-week .compact-area-head { grid-template-columns:32px 1fr; } #panel-week .compact-area-head .summary { display:none; } #panel-week .compact-goal { grid-template-columns:1fr; gap:6px; padding:9px 12px; } #panel-week .compact-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } #panel-week .metric-chip, #panel-week .metric-chip.wide, #panel-week .metric-chip.check { min-width:0; } }
   </style>
 </head>
 <body>
@@ -141,7 +223,7 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
       </div>
     </section>
     <nav class="tabs" role="tablist" aria-label="Goal period"><button id="tab-week" role="tab" aria-controls="panel-week" aria-selected="true">Week</button><button id="tab-month" role="tab" aria-controls="panel-month" aria-selected="false" tabindex="-1">Month</button></nav>
-    <section id="panel-week" role="tabpanel" aria-labelledby="tab-week"><div class="period-heading"><h2>This week</h2><span>${weekDates[0]} → ${weekDates.at(-1)}</span></div>${renderPeriod(data, 'week', anchor)}</section>
+    <section id="panel-week" role="tabpanel" aria-labelledby="tab-week"><div class="period-heading"><h2>This week</h2><span>${weekDates[0]} → ${weekDates.at(-1)}</span></div>${renderCompactWeek(data, anchor)}</section>
     <section id="panel-month" role="tabpanel" aria-labelledby="tab-month" hidden><div class="period-heading"><h2>${MONTH_NAMES_FULL[month! - 1]} ${year}</h2><span>${getWindowDates('month', anchor).length} days</span></div>${renderPeriod(data, 'month', anchor)}</section>
     <footer><span>Auto-updated from goals.json</span><span>Dashboard · ${anchor}</span></footer>
   </main>
