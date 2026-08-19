@@ -144,7 +144,7 @@ Navigate between views with number keys `1`-`0`. Press `?` for the help overlay.
 | `6` | Config | Edit all settings, manage custom sequences |
 | `7` | Web | Browser usage tracking with domain/page breakdowns |
 | `8` | Tracker | Weekly 30-minute time slot grid with categories |
-| `9` | Goals | Daily habit/goal tracking with heatmap visualization |
+| `9` | Goals | Hierarchical goals with daily input and weekly/monthly progress |
 
 ---
 
@@ -368,23 +368,23 @@ A weekly time grid with 30-minute slots for manual activity categorization.
 
 ---
 
-### [0] Goals
+### [9] Goals
 
-Track daily habits and goals with heatmap visualization.
+Track measurable criteria in an `Area → Goal → Metric` hierarchy. Today is for input; Week and Month aggregate the same daily values with `SUM`, `MAX`, `LATEST`, `ANY`, or `COUNT`.
 
 | Key | Action |
 |-----|--------|
-| `Tab` / `h` / `l` | Switch between goals |
-| `←/→` | Navigate dates |
-| `j/k` | Prev / next day |
+| `h/l` or `←/→` | Today / Week / Month |
+| `j/k` | Navigate metrics |
+| `n/p` | Next / previous day, week, or month |
 | `t` | Jump to today |
-| `↑/↓` | Adjust rating / scroll weeks |
-| `Enter` / `x` | Toggle completion or rate picker |
-| `a` | Add goal |
-| `e` | Edit goal |
-| `d` | Delete goal |
+| `Enter` | Toggle checkbox, add one count, or enter a rate/note |
+| `-` / `0` | Decrease count / clear today's value |
+| `P` / `E` / `M` | Mark today Perfect / Missed with reason / Missed without reason |
+| `Ctrl+G` | Edit the complete goal definition and data as JSON |
+| `R` | Open the weekly HTML report |
 
-**Goal types**: Manual (toggle), Auto (count by `#project` pomodoros), Rate (daily rating), Note (daily text note).
+Only Perfect days extend the global day streak. The 28-day strip belongs to this overall check-in rather than to any individual goal.
 
 ---
 

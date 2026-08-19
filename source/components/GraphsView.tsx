@@ -1,513 +1,236 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
-import { type Keymap, kmMatches } from '../lib/keymap.js';
-import { nanoid } from 'nanoid';
-import {
-  loadGoals, addGoal, removeGoal, updateGoal, toggleCompletion,
-  getRecentWeeks,
-  getAllProjects, GOAL_COLORS, GoalsData, TrackedGoal,
-  setRating, getRating, setNote, getNote,
-} from '../lib/goals.js';
-import { getTodayStr } from '../lib/date-utils.js';
-import { generateGoalsHtmlReport } from '../lib/goals-report.js';
-import { sendReminderNotification } from '../lib/notify.js';
+import TextInput from 'ink-text-input';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync, spawn } from 'node:child_process';
-import { GoalSection } from './graphs/GoalSection.js';
-import { GoalFormView } from './graphs/GoalFormView.js';
-import { TabBar } from './graphs/TabBar.js';
-import { DeleteConfirmView } from './graphs/DeleteConfirmView.js';
-import { RatePicker } from './graphs/RatePicker.js';
-import { NoteEditor } from './graphs/NoteEditor.js';
+import { spawn, spawnSync } from 'node:child_process';
+import type { Keymap } from '../lib/keymap.js';
+import {
+  aggregateMetric,
+  allMetrics,
+  computeDayStreak,
+  getMetricTarget,
+  getMetricValue,
+  getRecentDates,
+  getWindowDates,
+  loadGoals,
+  setDayQuality,
+  setMetricValue,
+  type DayQuality,
+  type GoalMetric,
+  type GoalsData,
+  type GoalWindow,
+} from '../lib/goals.js';
+import { addDays, getTodayStr, MONTH_NAMES_FULL } from '../lib/date-utils.js';
+import { generateGoalsHtmlReport } from '../lib/goals-report.js';
 
-const WEEKS_TO_SHOW = 8;
+const WINDOWS: GoalWindow[] = ['today', 'week', 'month'];
+const QUALITY: Record<DayQuality, { glyph: string; color: string; label: string }> = {
+  perfect: { glyph: '■', color: 'green', label: 'Perfect' },
+  excused: { glyph: '■', color: 'yellow', label: 'Missed (reason)' },
+  missed: { glyph: '■', color: 'red', label: 'Missed (no reason)' },
+};
 
-type ViewMode = 'main' | 'add' | 'edit' | 'delete-confirm' | 'rate-picker' | 'note-editor';
-type AddStep = 'name' | 'type' | 'project' | 'rateMax' | 'color';
+type DisplayRow =
+  | { key: string; kind: 'area'; name: string }
+  | { key: string; kind: 'goal'; name: string }
+  | { key: string; kind: 'metric'; metric: GoalMetric };
 
-export function GraphsView({ setIsTyping, keymap }: { setIsTyping: (v: boolean) => void; keymap?: Keymap }) {
+function numberLabel(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
+}
+
+function progressBar(value: number, target?: number): string {
+  if (!target) return '        ';
+  const filled = Math.min(8, Math.round((value / target) * 8));
+  return `${'█'.repeat(filled)}${'░'.repeat(8 - filled)}`;
+}
+
+function windowLabel(window: GoalWindow, anchor: string): string {
+  if (window === 'today') return anchor === getTodayStr() ? 'Today' : anchor;
+  const dates = getWindowDates(window, anchor);
+  if (window === 'week') return `Week of ${new Date(`${dates[0]}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  const [year, month] = anchor.split('-').map(Number);
+  return `${MONTH_NAMES_FULL[month! - 1]} ${year}`;
+}
+
+function valueLabel(metric: GoalMetric, value: number, target: number | undefined): string {
+  if (metric.aggregate === 'any') return value ? '✓' : '·';
+  const suffix = metric.unit === '%' ? '%' : '';
+  const current = `${numberLabel(value)}${suffix}`;
+  if (target === undefined) return current;
+  const targetText = `${numberLabel(target)}${suffix}`;
+  return `${current} / ${targetText}`;
+}
+
+export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void; keymap?: Keymap }) {
   const [data, setData] = useState<GoalsData>(() => loadGoals());
-  const [activeTab, setActiveTab] = useState(0);
-  const [viewMode, setViewMode] = useState<ViewMode>('main');
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [allTabOffset, setAllTabOffset] = useState(0);
-
+  const [window, setWindow] = useState<GoalWindow>('today');
+  const [anchor, setAnchor] = useState(getTodayStr);
+  const [selected, setSelected] = useState(0);
+  const [scroll, setScroll] = useState(0);
+  const [editing, setEditing] = useState<GoalMetric | null>(null);
+  const [editValue, setEditValue] = useState('');
   const { stdout } = useStdout();
-  const termRows = stdout?.rows ?? 24;
-  // Each compact GoalSection uses: 1 header + 1 week row + 7 day rows + 1 footer = 10 rows + 1 margin = 11 lines
-  const GOAL_SECTION_HEIGHT = 11;
-  const visibleGoalCount = Math.max(1, Math.floor((termRows - 6) / GOAL_SECTION_HEIGHT));
 
-  // Selected date for heatmap navigation (Part 4)
-  const [selectedDate, setSelectedDate] = useState<string>(() => getTodayStr());
+  const metrics = useMemo(() => allMetrics(data), [data]);
+  const selectedMetric = metrics[selected];
+  const dates = useMemo(() => getWindowDates(window, anchor), [window, anchor]);
+  const rows = useMemo<DisplayRow[]>(() => data.areas.filter(area => !area.archivedAt).flatMap(area => [
+    { key: area.id, kind: 'area' as const, name: area.name },
+    ...area.goals.filter(goal => !goal.archivedAt).flatMap(goal => [
+      { key: goal.id, kind: 'goal' as const, name: goal.name },
+      ...goal.metrics.map(metric => ({ key: metric.id, kind: 'metric' as const, metric })),
+    ]),
+  ]), [data]);
+  const visibleCount = Math.max(5, (stdout?.rows ?? 24) - 16);
+  const selectedRow = selectedMetric ? rows.findIndex(row => row.key === selectedMetric.id) : 0;
 
-  // Add goal state
-  const [addStep, setAddStep] = useState<AddStep>('name');
-  const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<'manual' | 'auto' | 'rate' | 'note'>('manual');
-  const [newProject, setNewProject] = useState('');
-  const [newRateMax, setNewRateMax] = useState('5');
-  const [newColorIdx, setNewColorIdx] = useState(0);
+  useEffect(() => {
+    if (selectedRow < scroll) setScroll(selectedRow);
+    else if (selectedRow >= scroll + visibleCount) setScroll(selectedRow - visibleCount + 1);
+  }, [selectedRow, scroll, visibleCount]);
 
-  // Rate picker state
-  const [pickerValue, setPickerValue] = useState(0);
-
-  // Note editor state
-  const [noteValue, setNoteValue] = useState('');
-
-  // Project autocomplete (Part 5)
-  const allProjects = useMemo(() => getAllProjects(), [data]);
-  const [projSuggIdx, setProjSuggIdx] = useState(0);
-
-  const projSuggestions = useMemo(() => {
-    const partial = newProject.toLowerCase();
-    if (!partial) return allProjects.slice(0, 8);
-    return allProjects.filter(p => p.toLowerCase().includes(partial)).slice(0, 8);
-  }, [newProject, allProjects]);
-
-  useEffect(() => { setProjSuggIdx(0); }, [projSuggestions.length, newProject]);
-
-  // Delete confirm
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-
-  const tabs = useMemo(() => {
-    const goalTabs = data.goals.map(g => g.name);
-    return [...goalTabs, 'All'];
-  }, [data.goals]);
-
-  const activeGoal = activeTab < data.goals.length ? data.goals[activeTab]! : null;
-  const isAllTab = activeTab >= data.goals.length;
-
-
-  // Part 7: Fix week scrolling
-  const weeks = useMemo(() => getRecentWeeks(WEEKS_TO_SHOW + weekOffset).slice(weekOffset, weekOffset + WEEKS_TO_SHOW), [weekOffset]);
-
-  const today = getTodayStr();
-
-  const header = (
-    <Box>
-      <Box flexGrow={1} />
-      <Text dimColor>R:report</Text>
-    </Box>
-  );
-
-  // Part 4: Toggle selected date instead of today
-  const handleToggleDate = useCallback(() => {
-    if (!activeGoal) return;
-    const updated = toggleCompletion(activeGoal.id, selectedDate, { ...data });
-    setData(updated);
-  }, [activeGoal, selectedDate, data]);
-
-  const handleStartAdd = useCallback(() => {
-    setViewMode('add');
-    setAddStep('name');
-    setNewName('');
-    setNewType('manual');
-    setNewProject('');
-    setNewRateMax('5');
-    setNewColorIdx(data.goals.length % GOAL_COLORS.length);
-    setIsTyping(true);
-  }, [data.goals.length]);
-
-  // Part 8: Start edit
-  const handleStartEdit = useCallback(() => {
-    if (!activeGoal) return;
-    setViewMode('edit');
-    setAddStep('name');
-    setNewName(activeGoal.name);
-    setNewType(activeGoal.type as 'manual' | 'auto' | 'rate' | 'note');
-    setNewProject(activeGoal.autoProject ?? '');
-    setNewRateMax(String(activeGoal.rateMax ?? 5));
-    setNewColorIdx(Math.max(0, GOAL_COLORS.indexOf(activeGoal.color)));
-    setIsTyping(true);
-  }, [activeGoal]);
-
-  const handleFinishAdd = useCallback(() => {
-    if (!newName.trim()) { setViewMode('main'); setIsTyping(false); return; }
-    const goal: TrackedGoal = {
-      id: nanoid(),
-      name: newName.trim(),
-      color: GOAL_COLORS[newColorIdx]!,
-      type: newType,
-      ...(newType === 'auto' && newProject.trim() ? { autoProject: newProject.trim() } : {}),
-      ...(newType === 'rate' ? { rateMax: Math.max(1, parseInt(newRateMax, 10) || 5) } : {}),
-    };
-    const updated = addGoal(goal);
-    setData(updated);
-    setActiveTab(updated.goals.length - 1);
-    setViewMode('main');
+  const saveValue = (metric: GoalMetric, raw: string) => {
+    const value = metric.input === 'note' ? raw.trim() : Number(raw);
+    if (metric.input === 'note' || Number.isFinite(value)) setData(setMetricValue(data, metric.id, anchor, value || undefined));
+    setEditing(null);
     setIsTyping(false);
-  }, [newName, newType, newProject, newRateMax, newColorIdx]);
+  };
 
-  // Part 8: Finish edit
-  const handleFinishEdit = useCallback(() => {
-    if (!activeGoal || !newName.trim()) { setViewMode('main'); setIsTyping(false); return; }
-    const updates: Partial<Omit<TrackedGoal, 'id'>> = {
-      name: newName.trim(),
-      color: GOAL_COLORS[newColorIdx]!,
-      type: newType,
-    };
-    if (newType === 'auto' && newProject.trim()) {
-      updates.autoProject = newProject.trim();
-    } else {
-      updates.autoProject = undefined;
+  const moveWindow = (direction: number) => {
+    if (window === 'today') setAnchor(date => {
+      const next = addDays(date, direction);
+      return next <= getTodayStr() ? next : date;
+    });
+    else if (window === 'week') setAnchor(date => addDays(date, direction * 7));
+    else {
+      const date = new Date(`${anchor}T00:00:00`);
+      date.setMonth(date.getMonth() + direction);
+      setAnchor(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`);
     }
-    if (newType === 'rate') {
-      updates.rateMax = Math.max(1, parseInt(newRateMax, 10) || 5);
-    } else {
-      updates.rateMax = undefined;
-    }
-    const updated = updateGoal(activeGoal.id, updates);
-    setData(updated);
-    setViewMode('main');
-    setIsTyping(false);
-  }, [activeGoal, newName, newType, newProject, newRateMax, newColorIdx]);
-
-  const handleConfirmDelete = useCallback(() => {
-    if (!deleteTarget) return;
-    const updated = removeGoal(deleteTarget);
-    setData(updated);
-    setActiveTab(t => Math.min(t, updated.goals.length));
-    setDeleteTarget(null);
-    setViewMode('main');
-  }, [deleteTarget]);
-
-  // Part 4: h/l date navigation helpers
-  const moveDateBy = useCallback((days: number) => {
-    const d = new Date(selectedDate + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    const str = `${y}-${m}-${dd}`;
-    if (str <= today) setSelectedDate(str);
-  }, [selectedDate, today]);
+  };
 
   useInput((input, key) => {
-    const km = keymap;
-
-    if (viewMode === 'delete-confirm') {
-      if (input === 'y' || input === 'Y') handleConfirmDelete();
-      else if (input === 'n' || input === 'N' || key.escape) { setDeleteTarget(null); setViewMode('main'); }
-      return;
-    }
-
-    // Rate picker mode — up/down to adjust, Enter to confirm, digits as shortcut
-    if (viewMode === 'rate-picker') {
-      const max = activeGoal?.rateMax ?? 5;
-      if (key.escape) { setViewMode('main'); setIsTyping(false); return; }
-      if (key.upArrow || input === 'k') {
-        setPickerValue(v => Math.min(v + 1, max));
-        return;
-      }
-      if (key.downArrow || input === 'j') {
-        setPickerValue(v => Math.max(v - 1, 0));
-        return;
-      }
-      if (key.return) {
-        if (activeGoal) {
-          const updated = setRating(activeGoal.id, selectedDate, pickerValue, { ...data });
-          setData(updated);
-        }
-        setViewMode('main');
-        setIsTyping(false);
-        return;
-      }
-      // Digit shortcut — set and confirm immediately
-      if (activeGoal?.type === 'rate' && /^[0-9]$/.test(input)) {
-        const value = parseInt(input, 10);
-        if (value <= max) {
-          const updated = setRating(activeGoal.id, selectedDate, value, { ...data });
-          setData(updated);
-        }
-        setViewMode('main');
-        setIsTyping(false);
-      }
-      return;
-    }
-
-    // Note editor mode
-    if (viewMode === 'note-editor') {
-      // TextInput handles input; Esc saves and closes
+    if (editing) {
       if (key.escape) {
-        if (activeGoal) {
-          const updated = setNote(activeGoal.id, selectedDate, noteValue, { ...data });
-          setData(updated);
-        }
-        setViewMode('main');
+        setEditing(null);
         setIsTyping(false);
       }
       return;
     }
 
-    if (viewMode === 'add' || viewMode === 'edit') {
-      if (key.escape) { setViewMode('main'); setIsTyping(false); return; }
-
-      if (addStep === 'name') {
-        return;
-      }
-      if (addStep === 'type') {
-        if (input === 'm' || input === 'M') { setNewType('manual'); setAddStep('color'); }
-        else if (input === 'a' || input === 'A') { setNewType('auto'); setAddStep('project'); setIsTyping(true); }
-        else if (input === 'r' || input === 'R') { setNewType('rate'); setAddStep('rateMax'); setIsTyping(true); }
-        else if (input === 'n' || input === 'N') { setNewType('note'); setAddStep('color'); }
-        else if (key.return) {
-          if (newType === 'auto') { setAddStep('project'); setIsTyping(true); }
-          else if (newType === 'rate') { setAddStep('rateMax'); setIsTyping(true); }
-          else setAddStep('color');
-        }
-        else if (key.tab) setNewType(t => t === 'manual' ? 'auto' : t === 'auto' ? 'rate' : t === 'rate' ? 'note' : 'manual');
-        return;
-      }
-      if (addStep === 'rateMax') {
-        // TextInput handles input
-        return;
-      }
-      if (addStep === 'project') {
-        // Handle arrow keys for project suggestions
-        if (key.downArrow) { setProjSuggIdx(i => Math.min(i + 1, projSuggestions.length - 1)); return; }
-        if (key.upArrow) { setProjSuggIdx(i => Math.max(0, i - 1)); return; }
-        if (key.tab && projSuggestions.length > 0) {
-          setNewProject(projSuggestions[projSuggIdx] ?? newProject);
-          return;
-        }
-        return;
-      }
-      if (addStep === 'color') {
-        if (input === 'h' || key.leftArrow) setNewColorIdx(i => (i - 1 + GOAL_COLORS.length) % GOAL_COLORS.length);
-        else if (input === 'l' || key.rightArrow) setNewColorIdx(i => (i + 1) % GOAL_COLORS.length);
-        else if (key.return) {
-          if (viewMode === 'edit') handleFinishEdit();
-          else handleFinishAdd();
-        }
-        return;
-      }
-      return;
-    }
-
-    // Main mode
-    if (key.tab) {
-      setActiveTab(t => {
-        const next = (t + 1) % tabs.length;
-        if (next !== tabs.length - 1) setAllTabOffset(0);
-        return next;
-      });
-    }
-    // h/l tab switching
-    else if (kmMatches(km, 'nav.left', input, key)) {
-      setActiveTab(t => {
-        const next = Math.max(0, t - 1);
-        if (next !== tabs.length - 1) setAllTabOffset(0);
-        return next;
-      });
-    } else if (kmMatches(km, 'nav.right', input, key)) {
-      setActiveTab(t => {
-        const next = Math.min(tabs.length - 1, t + 1);
-        if (next !== tabs.length - 1) setAllTabOffset(0);
-        return next;
-      });
-    }
-    // Date navigation with arrow keys (clamp to today)
-    else if (key.leftArrow) {
-      moveDateBy(-1);
-    } else if (key.rightArrow) {
-      moveDateBy(1);
-    }
-    // t = jump to today
-    else if (input === 't') {
-      setSelectedDate(today);
-    }
-    // Up/down arrows: adjust rating for rate goals, otherwise week scroll (non-All tab)
-    else if (key.upArrow) {
-      if (isAllTab) {
-        setAllTabOffset(o => Math.max(0, o - 1));
-      } else if (activeGoal?.type === 'rate') {
-        const current = getRating(activeGoal, selectedDate, data);
-        const max = activeGoal.rateMax ?? 5;
-        if (current < max) {
-          const updated = setRating(activeGoal.id, selectedDate, current + 1, { ...data });
-          setData(updated);
-        }
+    if (input === 'h' || key.leftArrow) {
+      const index = WINDOWS.indexOf(window);
+      setWindow(WINDOWS[Math.max(0, index - 1)]!);
+      setAnchor(getTodayStr());
+    } else if (input === 'l' || key.rightArrow) {
+      const index = WINDOWS.indexOf(window);
+      setWindow(WINDOWS[Math.min(WINDOWS.length - 1, index + 1)]!);
+      setAnchor(getTodayStr());
+    } else if (input === 'n') moveWindow(1);
+    else if (input === 'p') moveWindow(-1);
+    else if (input === 't') setAnchor(getTodayStr());
+    else if (input === 'j' || key.downArrow) setSelected(value => Math.min(metrics.length - 1, value + 1));
+    else if (input === 'k' || key.upArrow) setSelected(value => Math.max(0, value - 1));
+    else if (input === 'P' || input === 'E' || input === 'M') {
+      const quality: DayQuality = input === 'P' ? 'perfect' : input === 'E' ? 'excused' : 'missed';
+      const date = window === 'today' ? anchor : getTodayStr();
+      setData(setDayQuality(data, date, data.dayQuality[date] === quality ? undefined : quality));
+    } else if ((key.backspace || key.delete || input === '0') && selectedMetric && window === 'today') {
+      setData(setMetricValue(data, selectedMetric.id, anchor, undefined));
+    } else if (input === '-' && selectedMetric?.input === 'count' && window === 'today') {
+      const current = Number(getMetricValue(data, selectedMetric.id, anchor)) || 0;
+      setData(setMetricValue(data, selectedMetric.id, anchor, Math.max(0, current - 1) || undefined));
+    } else if ((key.return || input === 'x') && selectedMetric && window === 'today') {
+      const current = getMetricValue(data, selectedMetric.id, anchor);
+      if (selectedMetric.input === 'checkbox') {
+        setData(setMetricValue(data, selectedMetric.id, anchor, current ? undefined : true));
+      } else if (selectedMetric.input === 'count') {
+        setData(setMetricValue(data, selectedMetric.id, anchor, (Number(current) || 0) + 1));
       } else {
-        setWeekOffset(o => Math.max(0, o - 1));
-      }
-    } else if (key.downArrow) {
-      if (isAllTab) {
-        setAllTabOffset(o => Math.min(o + 1, Math.max(0, data.goals.length - visibleGoalCount)));
-      } else if (activeGoal?.type === 'rate') {
-        const current = getRating(activeGoal, selectedDate, data);
-        if (current > 0) {
-          const updated = setRating(activeGoal.id, selectedDate, current - 1, { ...data });
-          setData(updated);
-        }
-      } else {
-        setWeekOffset(o => o + 1);
-      }
-    }
-    // j/k: on All tab scroll goals, on individual tabs navigate dates
-    else if (kmMatches(km, 'nav.down', input, key)) {
-      if (isAllTab) {
-        setAllTabOffset(o => Math.min(o + 1, Math.max(0, data.goals.length - visibleGoalCount)));
-      } else {
-        moveDateBy(1);
-      }
-    } else if (kmMatches(km, 'nav.up', input, key)) {
-      if (isAllTab) {
-        setAllTabOffset(o => Math.max(0, o - 1));
-      } else {
-        moveDateBy(-1);
-      }
-    }
-    else if (key.return || input === 'x') {
-      if (activeGoal?.type === 'rate') {
-        // Open inline rate picker, start at current value
-        setPickerValue(getRating(activeGoal, selectedDate, data));
-        setViewMode('rate-picker');
+        setEditing(selectedMetric);
+        setEditValue(current === undefined ? '' : String(current));
         setIsTyping(true);
-      } else if (activeGoal?.type === 'note') {
-        // Open inline note editor
-        setNoteValue(getNote(activeGoal, selectedDate, data));
-        setViewMode('note-editor');
-        setIsTyping(true);
-      } else {
-        handleToggleDate();
       }
     } else if (input === 'R') {
-      const html = generateGoalsHtmlReport();
-      const tmpPath = path.join(os.tmpdir(), `pomodorocli-goals-report-${Date.now()}.html`);
-      fs.writeFileSync(tmpPath, html);
-      const openers = ['xdg-open', 'open', 'sensible-browser'];
-      let opened = false;
-      for (const opener of openers) {
-        const which = spawnSync('which', [opener], { stdio: 'ignore' });
-        if (which.status === 0) {
+      const tmpPath = path.join(os.tmpdir(), `pomodorocli-goals-${Date.now()}.html`);
+      fs.writeFileSync(tmpPath, generateGoalsHtmlReport());
+      for (const opener of ['xdg-open', 'open', 'sensible-browser']) {
+        if (spawnSync('which', [opener], { stdio: 'ignore' }).status === 0) {
           spawn(opener, [tmpPath], { detached: true, stdio: 'ignore' }).unref();
-          opened = true;
           break;
         }
-      }
-      if (opened) {
-        sendReminderNotification('Goals Report', 'Opening report in browser...');
-      }
-    } else if (kmMatches(km, 'list.add', input, key)) {
-      handleStartAdd();
-    }
-    // edit goal
-    else if (kmMatches(km, 'list.edit', input, key)) {
-      if (activeGoal) handleStartEdit();
-    }
-    else if (kmMatches(km, 'list.delete', input, key)) {
-      if (activeGoal) {
-        setDeleteTarget(activeGoal.id);
-        setViewMode('delete-confirm');
       }
     }
   });
 
-  // ─── Add / Edit Goal Flow ────────────────────────────────────────────────────
-
-  if (viewMode === 'add' || viewMode === 'edit') {
-    return (
-      <GoalFormView
-        isEdit={viewMode === 'edit'}
-        addStep={addStep}
-        newName={newName}
-        setNewName={setNewName}
-        newType={newType}
-        newProject={newProject}
-        setNewProject={setNewProject}
-        newRateMax={newRateMax}
-        setNewRateMax={setNewRateMax}
-        newColorIdx={newColorIdx}
-        projSuggestions={projSuggestions}
-        projSuggIdx={projSuggIdx}
-        onNameSubmit={() => {
-          if (newName.trim()) { setAddStep('type'); setIsTyping(false); }
-        }}
-        onRateMaxSubmit={() => { setAddStep('color'); setIsTyping(false); }}
-        onProjectSubmit={() => { setAddStep('color'); setIsTyping(false); }}
-      />
-    );
-  }
-
-  // ─── Delete Confirmation ──────────────────────────────────────────────────
-
-  if (viewMode === 'delete-confirm' && deleteTarget) {
-    const goal = data.goals.find(g => g.id === deleteTarget);
-    return <DeleteConfirmView goal={goal} />;
-  }
-
-  // ─── Main View ──────────────────────────────────────────────────────────────
-
-  if (data.goals.length === 0) {
-    return (
-      <Box flexDirection="column" flexGrow={1}>
-        <Text dimColor>No goals configured yet.</Text>
-        <Box marginTop={1}>
-          <Text>Press <Text bold color="cyan">a</Text> to add your first goal</Text>
-        </Box>
-        <Box marginTop={1} flexDirection="column">
-          <Text dimColor>Goals can be:</Text>
-          <Text dimColor>  manual — you toggle daily (e.g. Exercise, Reading)</Text>
-          <Text dimColor>  auto   — tracks pomodoro sessions by #project</Text>
-        </Box>
-      </Box>
-    );
-  }
-
-  // Selected date display
-  const selDateLabel = selectedDate === today ? 'Today' : selectedDate.slice(5).replace('-', '/');
-
-  const tabBar = <TabBar tabs={tabs} activeTab={activeTab} selDateLabel={selDateLabel} />;
-
-  const ratePicker = viewMode === 'rate-picker' && activeGoal?.type === 'rate'
-    ? <RatePicker goal={activeGoal} selDateLabel={selDateLabel} pickerValue={pickerValue} />
-    : null;
-
-  const noteEditor = viewMode === 'note-editor' && activeGoal?.type === 'note' ? (
-    <NoteEditor
-      goal={activeGoal}
-      selDateLabel={selDateLabel}
-      noteValue={noteValue}
-      onChange={setNoteValue}
-      onSubmit={(v: string) => {
-        const updated = setNote(activeGoal.id, selectedDate, v, { ...data });
-        setData(updated);
-        setViewMode('main');
-        setIsTyping(false);
-      }}
-    />
-  ) : null;
-
-  if (isAllTab) {
-    const visibleGoals = data.goals.slice(allTabOffset, allTabOffset + visibleGoalCount);
-    const showScrollIndicator = data.goals.length > visibleGoalCount;
-    return (
-      <Box flexDirection="column" flexGrow={1}>
-        {header}
-        {tabBar}
-        {visibleGoals.map(goal => (
-          <GoalSection key={goal.id} goal={goal} data={data} weeks={weeks} today={today} selectedDate={selectedDate} compact />
-        ))}
-        {showScrollIndicator && (
-          <Text dimColor>
-            j/k: scroll  Showing {allTabOffset + 1}-{Math.min(allTabOffset + visibleGoalCount, data.goals.length)} of {data.goals.length} goals
-          </Text>
-        )}
-      </Box>
-    );
-  }
+  const streak = computeDayStreak(data);
+  const recentDates = getRecentDates(28);
+  const qualityDate = window === 'today' ? anchor : getTodayStr();
+  const shownQuality = data.dayQuality[qualityDate];
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {header}
-      {tabBar}
-      {activeGoal && <GoalSection goal={activeGoal} data={data} weeks={weeks} today={today} selectedDate={selectedDate} />}
-      {ratePicker}
-      {noteEditor}
+      <Box>
+        {WINDOWS.map(item => (
+          <Text key={item} bold={item === window} color={item === window ? 'cyan' : 'gray'}>
+            {item === window ? '▔' : ' '}{item[0]!.toUpperCase() + item.slice(1)}{'  '}
+          </Text>
+        ))}
+        <Box flexGrow={1} />
+        <Text dimColor>{windowLabel(window, anchor)}</Text>
+      </Box>
+
+      <Box marginTop={1}>
+        <Text bold>DAY  </Text>
+        <Text color={streak.current ? 'green' : 'gray'}>{streak.current}d</Text>
+        <Text dimColor> · Best {streak.best}d  </Text>
+        {recentDates.map(date => {
+          const quality = data.dayQuality[date];
+          return <Text key={date} color={quality ? QUALITY[quality].color : 'gray'}>{quality ? QUALITY[quality].glyph : '·'}</Text>;
+        })}
+      </Box>
+      <Text dimColor>
+        {qualityDate === getTodayStr() ? 'Today' : qualityDate}: {shownQuality ? QUALITY[shownQuality].label : 'unchecked'} · P:Perfect E:Reason M:Missed
+      </Text>
+
+      <Box flexDirection="column" marginTop={1}>
+        {rows.slice(scroll, scroll + visibleCount).map(row => {
+          if (row.kind === 'area') return <Text key={row.key} bold color="cyan">{row.name}</Text>;
+          if (row.kind === 'goal') return <Text key={row.key} bold>  {row.name}</Text>;
+
+          const isSelected = row.metric.id === selectedMetric?.id;
+          if (window === 'today') {
+            const raw = getMetricValue(data, row.metric.id, anchor);
+            const shown = raw === undefined ? '·' : raw === true ? '✓' : String(raw);
+            return (
+              <Text key={row.key} color={isSelected ? 'cyan' : undefined} bold={isSelected}>
+                {isSelected ? '  › ' : '    '}{row.metric.name.slice(0, 24).padEnd(24)} {shown}
+              </Text>
+            );
+          }
+
+          const value = aggregateMetric(row.metric, data, dates);
+          const target = getMetricTarget(row.metric, window, dates.length);
+          return (
+            <Text key={row.key} color={isSelected ? 'cyan' : undefined} bold={isSelected}>
+              {isSelected ? '  › ' : '    '}{row.metric.name.slice(0, 20).padEnd(20)} {valueLabel(row.metric, value, target).padEnd(11)} {progressBar(value, target)}
+            </Text>
+          );
+        })}
+      </Box>
+
+      {rows.length > visibleCount && <Text dimColor>Showing {scroll + 1}-{Math.min(rows.length, scroll + visibleCount)} of {rows.length}</Text>}
+
+      {editing && (
+        <Box marginTop={1}>
+          <Text color="cyan">{editing.name}: </Text>
+          <TextInput value={editValue} onChange={setEditValue} onSubmit={value => saveValue(editing, value)} />
+          <Text dimColor>  Enter save · Esc cancel</Text>
+        </Box>
+      )}
     </Box>
   );
 }
-

@@ -112,15 +112,11 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
 
   if (view === 'graphs') {
     const hlLabel = km ? `${km.label('nav.left')}/${km.label('nav.right')}` : 'h/l';
-    actionHints.push({ key: hlLabel, label: 'Switch' });
-    actionHints.push({ key: '\u2190\u2192', label: 'Select date' });
-    actionHints.push({ key: 'Enter', label: 'Toggle/Rate' });
-    actionHints.push({ key: km ? km.label('list.add') : 'a', label: 'Add' });
-    actionHints.push({ key: km ? km.label('list.edit') : 'e', label: 'Edit' });
-    actionHints.push({ key: km ? km.label('list.delete') : 'd', label: 'Delete' });
-    const jkLabel = km ? `${km.label('nav.down')}/${km.label('nav.up')}` : 'j/k';
-    actionHints.push({ key: jkLabel, label: 'Scroll weeks' });
-    actionHints.push({ key: 'R', label: 'Report' });
+    actionHints.push({ key: hlLabel, label: 'Window' });
+    actionHints.push({ key: 'j/k', label: 'Metric' });
+    actionHints.push({ key: 'Enter', label: 'Set' });
+    actionHints.push({ key: 'P/E/M', label: 'Day' });
+    actionHints.push({ key: 'n/p', label: 'Period' });
   }
 
   if (view === 'config') {
