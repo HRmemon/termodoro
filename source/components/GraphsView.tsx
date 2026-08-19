@@ -125,7 +125,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
     }
 
     if (key.tab) {
-      if (areas.length) setActiveAreaIndex(value => (value + 1) % areas.length);
+      if (areas.length) setActiveAreaIndex(value => (value + (key.shift ? -1 : 1) + areas.length) % areas.length);
       setSelected(0);
       setScroll(0);
     } else if (input === 'h' || key.leftArrow) {

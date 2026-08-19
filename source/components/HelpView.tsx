@@ -127,7 +127,7 @@ function buildSections(km: Keymap): HelpSection[] {
     {
       title: '[9] Goals',
       hints: [
-        ['Tab', 'Next area'],
+        ['Tab/Shift+Tab', 'Next / previous area'],
         [km.label('nav.left') + '/' + km.label('nav.right'), 'Today / Week / Month'],
         [km.label('nav.down') + '/' + km.label('nav.up'), 'Navigate metrics'],
         ['n/p', 'Next / previous period'],

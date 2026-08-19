@@ -35,6 +35,15 @@ test('weekly values sum and weekly targets scale to the actual month length', ()
   assert.equal(getMetricTarget(weeklyCount, 'month', 31), 31);
 });
 
+test('occasional checkboxes count completed days toward a weekly target', () => {
+  const data = defaultGoalsData();
+  const videoDays: GoalMetric = { id: 'videos', name: 'Videos', input: 'checkbox', aggregate: 'count', weeklyTarget: 2 };
+  data.entries.videos = { '2026-08-17': true, '2026-08-19': true };
+
+  assert.equal(aggregateMetric(videoDays, data, getWindowDates('week', '2026-08-19')), 2);
+  assert.equal(getMetricTarget(videoDays, 'month', 31), 9);
+});
+
 test('overall metrics retain their best value in later windows', () => {
   const data = defaultGoalsData();
   const bestBand: GoalMetric = { id: 'band', name: 'Best band', input: 'rate', aggregate: 'max', target: 7.5 };

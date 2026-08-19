@@ -374,7 +374,7 @@ Track measurable criteria in an `Area → Goal → Metric` hierarchy. Today is f
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Next goal area |
+| `Tab` / `Shift+Tab` | Next / previous goal area |
 | `h/l` or `←/→` | Today / Week / Month |
 | `j/k` | Navigate metrics |
 | `n/p` | Next / previous day, week, or month |

@@ -112,11 +112,10 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
 
   if (view === 'graphs') {
     const hlLabel = km ? `${km.label('nav.left')}/${km.label('nav.right')}` : 'h/l';
-    actionHints.push({ key: 'Tab', label: 'Area' });
+    actionHints.push({ key: 'Tab/⇧Tab', label: 'Area' });
     actionHints.push({ key: hlLabel, label: 'Window' });
     actionHints.push({ key: 'j/k', label: 'Metric' });
-    actionHints.push({ key: 'Enter', label: 'Set' });
-    actionHints.push({ key: 'Ctrl+A/X', label: 'Count' });
+    actionHints.push({ key: 'C-a/x', label: 'Count' });
     actionHints.push({ key: 'P/E/M', label: 'Day' });
   }
 

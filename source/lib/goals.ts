@@ -82,7 +82,7 @@ export function defaultGoalsData(): GoalsData {
             metric('ielts-speaking-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 7 }),
             metric('ielts-speaking-band', 'Best band', 'rate', 'max', { target: 7.5, max: 9, unit: 'band' }),
             metric('ielts-speaking-lessons', 'Lessons', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-speaking-video', 'Watch speaking video', 'checkbox', 'any', { weeklyTarget: 1 }),
+            metric('ielts-speaking-video', 'Watch speaking video', 'checkbox', 'count', { weeklyTarget: 1 }),
           ] },
         ],
       },
