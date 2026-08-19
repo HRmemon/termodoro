@@ -141,9 +141,9 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
       setData(setDayQuality(data, date, data.dayQuality[date] === quality ? undefined : quality));
     } else if ((key.backspace || key.delete || input === '0') && selectedMetric && window === 'today') {
       setData(setMetricValue(data, selectedMetric.id, anchor, undefined));
-    } else if ((input === '+' || input === '-') && selectedMetric?.input === 'count' && window === 'today') {
+    } else if (key.ctrl && (input === 'a' || input === 'x') && selectedMetric?.input === 'count' && window === 'today') {
       const current = Number(getMetricValue(data, selectedMetric.id, anchor)) || 0;
-      setData(setMetricValue(data, selectedMetric.id, anchor, adjustCount(current, input === '+' ? 1 : -1)));
+      setData(setMetricValue(data, selectedMetric.id, anchor, adjustCount(current, input === 'a' ? 1 : -1)));
     } else if ((key.return || input === 'x') && selectedMetric && window === 'today') {
       const current = getMetricValue(data, selectedMetric.id, anchor);
       if (selectedMetric.input === 'checkbox') {
@@ -206,7 +206,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
           if (window === 'today') {
             const raw = getMetricValue(data, row.metric.id, anchor);
             const shown = raw === undefined ? '·' : raw === true ? '✓' : String(raw);
-            const hint = isSelected && row.metric.input === 'count' ? '  (+/-)' : '';
+            const hint = isSelected && row.metric.input === 'count' ? '  (C-a/C-x)' : '';
             return (
               <Text key={row.key} color={isSelected ? 'cyan' : undefined} bold={isSelected}>
                 {isSelected ? '  › ' : '    '}{row.metric.name.slice(0, 24).padEnd(24)} {shown}{hint}

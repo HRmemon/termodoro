@@ -378,8 +378,8 @@ Track measurable criteria in an `Area → Goal → Metric` hierarchy. Today is f
 | `j/k` | Navigate metrics |
 | `n/p` | Next / previous day, week, or month |
 | `t` | Jump to today |
-| `Enter` / `+` | Toggle checkbox, increment counter, or enter a rate/note |
-| `-` / `0` | Decrement counter / clear today's value |
+| `Enter` / `Ctrl+A` | Toggle checkbox, increment counter, or enter a rate/note |
+| `Ctrl+X` / `0` | Decrement counter / clear today's value |
 | `P` / `E` / `M` | Mark today Perfect / Missed with reason / Missed without reason |
 | `Ctrl+G` | Edit the complete goal definition and data as JSON |
 | `R` | Open the weekly HTML report |
