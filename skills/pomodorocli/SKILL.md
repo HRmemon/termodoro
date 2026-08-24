@@ -89,9 +89,11 @@ Goals is TUI-only: start the app and press `9`. It stores one hierarchy—`Area 
 - `N`: add, edit, or clear the selected day's check-in note.
 - `R`: open the canonical HTML dashboard.
 - `Ctrl+G`: edit complete Goals JSON when a bulk/schema change is explicitly requested.
+- `Tab` / `Shift+Tab`: move forward / backward through Today, Week, and Month.
+- `h` / `l`: move backward / forward through goal areas.
 
 The input type and aggregation are independent. Common pairs are count+SUM, rate+MAX, rate+LATEST, checkbox+ANY, and checkbox+COUNT for once/twice-per-week goals. Preserve existing IDs when changing definitions because entries are keyed by metric ID.
 
-Before rewriting definitions, inspect and snapshot `goals.json`. Replace definitions without discarding `entries`, `dayQuality`, or `dayNotes`. Translate requested actions one-to-one: do not combine distinct steps such as “identify” and “practise,” turn “each stream” into one shared counter, or invent an unstated target. Use `target` for a lasting one-time milestone, `weeklyTarget` for work that resets each week, and `monthlyTarget` when Month must not be derived from the weekly cadence. A recurring checkbox uses checkbox+COUNT; checkbox+ANY is a lasting milestone. Use note+LATEST for information that must carry into future weeks.
+Before rewriting definitions, inspect and snapshot `goals.json`. Replace definitions without discarding `entries`, `dayQuality`, or `dayNotes`. Translate requested actions one-to-one: do not combine distinct steps such as “identify” and “practise,” turn “each stream” into one shared counter, or invent an unstated target. `target` describes a threshold; add `cumulative: true` only when its recorded value should carry into later windows. Use `weeklyTarget` for work that resets each week, and `monthlyTarget` when Month must not be derived from the weekly cadence. A recurring checkbox uses checkbox+COUNT; checkbox+ANY with `cumulative: true` is a lasting milestone. Use note+LATEST for information that must carry into future weeks. `weekStartsOn` controls the weekly boundary using JavaScript day numbers (`0` Sunday through `6` Saturday); the default is `1` for Monday.
 
 Goals data is `~/.local/share/pomodorocli/goals.json`. The bookmarkable report is `~/.local/share/pomodorocli/goals-dashboard.html`; Goals changes regenerate that same file atomically. Day notes live separately from metric entries and appear in HTML heatmap tooltips.

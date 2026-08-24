@@ -19,6 +19,7 @@ export interface GoalMetric {
   monthlyTarget?: number;
   max?: number;
   unit?: string;
+  cumulative?: boolean;
 }
 
 export interface TrackedGoal {
@@ -37,6 +38,7 @@ export interface GoalArea {
 
 export interface GoalsData {
   version: 2;
+  weekStartsOn: number;
   areas: GoalArea[];
   entries: Record<string, Record<string, GoalValue>>;
   dayQuality: Record<string, DayQuality>;
@@ -57,12 +59,13 @@ const metric = (
   name: string,
   input: GoalInput,
   aggregate: GoalAggregation,
-  targets: Pick<GoalMetric, 'target' | 'weeklyTarget' | 'monthlyTarget' | 'max' | 'unit'> = {},
+  targets: Pick<GoalMetric, 'target' | 'weeklyTarget' | 'monthlyTarget' | 'max' | 'unit' | 'cumulative'> = {},
 ): GoalMetric => ({ id, name, input, aggregate, ...targets });
 
 export function defaultGoalsData(): GoalsData {
   return {
     version: 2,
+    weekStartsOn: 1,
     areas: [
       {
         id: 'interview', name: 'INTERVIEW PREPARATION', goals: [
@@ -113,21 +116,21 @@ export function defaultGoalsData(): GoalsData {
       },
       {
         id: 'masters', name: 'MASTERS', goals: [
-          { id: 'masters-universities', name: 'Universities', metrics: [metric('masters-admission-dates', 'Admission dates researched', 'checkbox', 'any', { target: 1 })] },
-          { id: 'masters-scholarships', name: 'Scholarships', metrics: [metric('masters-scholarship-dates', 'Scholarship dates researched', 'checkbox', 'any', { target: 1 })] },
+          { id: 'masters-universities', name: 'Universities', metrics: [metric('masters-admission-dates', 'Admission dates researched', 'checkbox', 'any', { target: 1, cumulative: true })] },
+          { id: 'masters-scholarships', name: 'Scholarships', metrics: [metric('masters-scholarship-dates', 'Scholarship dates researched', 'checkbox', 'any', { target: 1, cumulative: true })] },
           { id: 'masters-ielts', name: 'IELTS', metrics: [
-            metric('masters-test-date', 'Decide test date', 'checkbox', 'any', { target: 1 }),
-            metric('masters-booking-deadline', 'Decide hard booking deadline', 'checkbox', 'any', { target: 1 }),
+            metric('masters-test-date', 'Decide test date', 'checkbox', 'any', { target: 1, cumulative: true }),
+            metric('masters-booking-deadline', 'Decide hard booking deadline', 'checkbox', 'any', { target: 1, cumulative: true }),
           ] },
         ],
       },
       {
         id: 'jit-learning', name: 'JUST-IN-TIME LEARNING', goals: [
           { id: 'jit-current-book', name: 'The Algorithm Book', metrics: [
-            metric('jit-book-progress', 'Progress', 'rate', 'latest', { target: 100, max: 100, unit: '%' }),
+            metric('jit-book-progress', 'Progress', 'rate', 'latest', { target: 100, max: 100, unit: '%', cumulative: true }),
             metric('jit-book-lessons', 'Useful lessons captured', 'count', 'sum'),
             metric('jit-applied-lessons', 'Lessons applied in daily life', 'count', 'sum'),
-            metric('jit-simplify-system', 'Simplify productivity system', 'checkbox', 'any', { target: 1 }),
+            metric('jit-simplify-system', 'Simplify productivity system', 'checkbox', 'any', { target: 1, cumulative: true }),
           ] },
           { id: 'jit-learning-plan', name: 'Learning focused on helping me', metrics: [
             metric('jit-useful-books', 'Useful books / lists identified', 'count', 'sum', { weeklyTarget: 1 }),
@@ -176,6 +179,7 @@ export function loadGoals(): GoalsData {
   const raw = readJSON<GoalsData | LegacyGoalsData | null>(GOALS_PATH, null);
   if (!raw) return defaultGoalsData();
   if ('version' in raw && raw.version === 2) {
+    raw.weekStartsOn ??= 1;
     raw.dayNotes ??= {};
     return raw;
   }
@@ -226,7 +230,7 @@ export function adjustCount(value: GoalValue | undefined, delta: 1 | -1): number
   return Math.max(0, (Number(value) || 0) + delta) || undefined;
 }
 
-export function getWindowDates(window: GoalWindow, anchor = getTodayStr()): string[] {
+export function getWindowDates(window: GoalWindow, anchor = getTodayStr(), weekStartsOn = 1): string[] {
   if (window === 'today') return [anchor];
   if (window === 'month') {
     const [year, month] = anchor.split('-').map(Number);
@@ -234,14 +238,14 @@ export function getWindowDates(window: GoalWindow, anchor = getTodayStr()): stri
     return Array.from({ length: count }, (_, i) => `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`);
   }
   const d = new Date(`${anchor}T00:00:00`);
-  const mondayOffset = d.getDay() === 0 ? -6 : 1 - d.getDay();
-  const monday = localDateStr(new Date(d.getFullYear(), d.getMonth(), d.getDate() + mondayOffset));
-  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const startDay = Number.isInteger(weekStartsOn) && weekStartsOn >= 0 && weekStartsOn <= 6 ? weekStartsOn : 1;
+  const offset = (d.getDay() - startDay + 7) % 7;
+  const start = localDateStr(new Date(d.getFullYear(), d.getMonth(), d.getDate() - offset));
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
 export function aggregateMetric(metric: GoalMetric, data: GoalsData, dates: string[]): number {
-  const cumulative = metric.target !== undefined && metric.weeklyTarget === undefined && metric.monthlyTarget === undefined;
-  const includedDates = cumulative
+  const includedDates = metric.cumulative
     ? Object.keys(data.entries[metric.id] ?? {}).filter(date => date <= dates.at(-1)!)
     : dates;
   const entries = includedDates

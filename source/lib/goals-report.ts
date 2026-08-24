@@ -42,7 +42,7 @@ function metricValue(metric: GoalMetric, value: number, target?: number): string
 }
 
 function renderCompactWeek(data: GoalsData, anchor: string): string {
-  const dates = getWindowDates('week', anchor);
+  const dates = getWindowDates('week', anchor, data.weekStartsOn);
   return `<div class="compact-week">${data.areas.filter(area => !area.archivedAt).map((area, areaIndex) => {
     const goals = area.goals.filter(goal => !goal.archivedAt);
     const metricCount = goals.reduce((count, goal) => count + goal.metrics.length, 0);
@@ -84,7 +84,7 @@ function renderCompactWeek(data: GoalsData, anchor: string): string {
 }
 
 function renderPeriod(data: GoalsData, window: Exclude<GoalWindow, 'today'>, anchor: string): string {
-  const dates = getWindowDates(window, anchor);
+  const dates = getWindowDates(window, anchor, data.weekStartsOn);
   return data.areas.filter(area => !area.archivedAt).map((area, areaIndex) => `
     <section class="area-card">
       <header class="area-heading">
@@ -140,7 +140,7 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
     return counts;
   }, { perfect: 0, excused: 0, missed: 0 });
   const [year, month] = anchor.split('-').map(Number);
-  const weekDates = getWindowDates('week', anchor);
+  const weekDates = getWindowDates('week', anchor, data.weekStartsOn);
 
   return `<!doctype html>
 <html lang="en">

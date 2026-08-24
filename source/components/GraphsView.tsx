@@ -45,9 +45,9 @@ function progressBar(value: number, target?: number): string {
   return `${'█'.repeat(filled)}${'░'.repeat(8 - filled)}`;
 }
 
-function windowLabel(window: GoalWindow, anchor: string): string {
+function windowLabel(window: GoalWindow, anchor: string, weekStartsOn: number): string {
   if (window === 'today') return anchor === getTodayStr() ? 'Today' : anchor;
-  const dates = getWindowDates(window, anchor);
+  const dates = getWindowDates(window, anchor, weekStartsOn);
   if (window === 'week') return `Week of ${new Date(`${dates[0]}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
   const [year, month] = anchor.split('-').map(Number);
   return `${MONTH_NAMES_FULL[month! - 1]} ${year}`;
@@ -78,7 +78,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
   const activeArea = areas[activeAreaIndex];
   const metrics = useMemo(() => activeArea?.goals.filter(goal => !goal.archivedAt).flatMap(goal => goal.metrics) ?? [], [activeArea]);
   const selectedMetric = metrics[selected];
-  const dates = useMemo(() => getWindowDates(window, anchor), [window, anchor]);
+  const dates = useMemo(() => getWindowDates(window, anchor, data.weekStartsOn), [window, anchor, data.weekStartsOn]);
   const rows = useMemo<DisplayRow[]>(() => activeArea?.goals.filter(goal => !goal.archivedAt).flatMap(goal => [
       { key: goal.id, kind: 'goal' as const, name: goal.name },
       ...goal.metrics.map(metric => ({ key: metric.id, kind: 'metric' as const, metric })),
@@ -130,17 +130,17 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
     }
 
     if (key.tab) {
-      if (areas.length) setActiveAreaIndex(value => (value + (key.shift ? -1 : 1) + areas.length) % areas.length);
+      const index = WINDOWS.indexOf(window);
+      setWindow(WINDOWS[(index + (key.shift ? -1 : 1) + WINDOWS.length) % WINDOWS.length]!);
+      setAnchor(getTodayStr());
+    } else if (input === 'h' || key.leftArrow) {
+      if (areas.length) setActiveAreaIndex(value => (value - 1 + areas.length) % areas.length);
       setSelected(0);
       setScroll(0);
-    } else if (input === 'h' || key.leftArrow) {
-      const index = WINDOWS.indexOf(window);
-      setWindow(WINDOWS[Math.max(0, index - 1)]!);
-      setAnchor(getTodayStr());
     } else if (input === 'l' || key.rightArrow) {
-      const index = WINDOWS.indexOf(window);
-      setWindow(WINDOWS[Math.min(WINDOWS.length - 1, index + 1)]!);
-      setAnchor(getTodayStr());
+      if (areas.length) setActiveAreaIndex(value => (value + 1) % areas.length);
+      setSelected(0);
+      setScroll(0);
     } else if (input === 'n') moveWindow(1);
     else if (input === 'p') moveWindow(-1);
     else if (input === 't') setAnchor(getTodayStr());
@@ -196,7 +196,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
           </Text>
         ))}
         <Box flexGrow={1} />
-        <Text dimColor>{windowLabel(window, anchor)}{window === 'today' && data.dayNotes[anchor] ? ' · note' : ''}</Text>
+        <Text dimColor>{windowLabel(window, anchor, data.weekStartsOn)}{window === 'today' && data.dayNotes[anchor] ? ' · note' : ''}</Text>
       </Box>
 
       <Box marginTop={1}>
@@ -224,7 +224,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
           </Text>
         ))}
         <Box flexGrow={1} />
-        <Text dimColor>Tab · {activeAreaIndex + 1}/{areas.length}</Text>
+        <Text dimColor>h/l · {activeAreaIndex + 1}/{areas.length}</Text>
       </Box>
 
       <Box flexDirection="column" marginTop={1}>
