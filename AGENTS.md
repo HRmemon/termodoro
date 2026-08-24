@@ -7,12 +7,17 @@ Guidelines for AI agents working on this codebase.
 Terminal-first Pomodoro + productivity system built with **Ink** (React for terminal UIs).
 Entry point: `source/cli.tsx` → `source/app.tsx`.
 
+## Repository Skill
+
+For requests to use or automate functionality exposed through `pomodorocli` or its TUI, read `skills/pomodorocli/SKILL.md` completely before acting. It contains the supported command surface, safe operating practices, and Goals workflow. Keep it synchronized when CLI commands, view shortcuts, or Goals controls change. Development and commit instructions belong in this file, not in the operational skill.
+
 ## Commands
 
 ```bash
 npm run dev      # Run directly via tsx (no build step, fast iteration)
 npm run build    # Compile TypeScript → dist/
 npm start        # Run compiled dist/cli.js
+npm test         # Run Node tests
 ```
 
 Always run `npm run build` after changes before committing — `npm start` uses the compiled output.
@@ -27,13 +32,16 @@ Zen mode bypasses the layout entirely and renders a full-screen centered compone
 ### Views
 | Key | View | Component |
 |-----|------|-----------|
+| 0 | Planner | `DayPlannerView.tsx` |
 | 1 | Timer | `TimerView.tsx` — shows active tasks + big timer + sequence progress |
-| 2 | Sequences | `PlannerView.tsx` — browse/activate/create/edit sequences |
-| 3 | Stats | `ReportsView.tsx` |
-| 4 | Config | `ConfigView.tsx` |
-| 5 | Clock | `ClockView.tsx` |
-| 6 | Reminders | `RemindersView.tsx` — scheduled notifications |
-| 7 | Tasks | `TasksView.tsx` — full task CRUD, active toggling |
+| 2 | Tasks | `TasksView.tsx` — full task CRUD, active toggling |
+| 3 | Reminders | `RemindersView.tsx` — scheduled notifications |
+| 4 | Clock | `ClockView.tsx` |
+| 5 | Stats | `ReportsView.tsx` |
+| 6 | Config | `ConfigView.tsx` |
+| 7 | Web Time | `WebView.tsx` |
+| 8 | Tracker | `TrackerView.tsx` |
+| 9 | Goals | `GraphsView.tsx` — daily input, day quality/notes, weekly/monthly progress |
 
 Zen mode (`z` key, timer and clock views only): `ZenMode.tsx` / `ZenClock.tsx`.
 
@@ -82,6 +90,8 @@ Child components that use `TextInput` must call `setIsTyping(true)` on input foc
 | `lib/notify.ts` | node-notifier wrapper; `notifySessionEnd`, `sendReminderNotification` |
 | `lib/bigDigits.ts` | ASCII art renderer: `renderBigTime(seconds)`, `renderBigString(str)` |
 | `lib/stats.ts` | Streak, heatmap, and summary stats computation |
+| `lib/goals.ts` | Goal hierarchy, daily values, aggregation, day quality, and day notes |
+| `lib/goals-report.ts` | Canonical bookmarkable Goals dashboard renderer |
 
 ## Data Storage
 
@@ -91,6 +101,8 @@ All data lives under `~/.local/share/pomodorocli/`:
 - `sequences.json` — user-created custom sequences
 - `reminders.json` — scheduled notifications
 - `plans.json` — day plans (legacy, still used by planner lib)
+- `goals.json` — goal definitions, daily metric values, day quality, and day notes
+- `goals-dashboard.html` — canonical Goals report, regenerated after Goals changes
 
 Config: `~/.config/pomodorocli/config.json`
 
