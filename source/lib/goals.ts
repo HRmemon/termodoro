@@ -40,6 +40,7 @@ export interface GoalsData {
   areas: GoalArea[];
   entries: Record<string, Record<string, GoalValue>>;
   dayQuality: Record<string, DayQuality>;
+  dayNotes: Record<string, string>;
 }
 
 interface LegacyGoalsData {
@@ -112,6 +113,7 @@ export function defaultGoalsData(): GoalsData {
     ],
     entries: {},
     dayQuality: {},
+    dayNotes: {},
   };
 }
 
@@ -146,7 +148,11 @@ function migrateLegacy(raw: LegacyGoalsData): GoalsData {
 export function loadGoals(): GoalsData {
   const raw = readJSON<GoalsData | LegacyGoalsData | null>(GOALS_PATH, null);
   if (!raw) return defaultGoalsData();
-  return 'version' in raw && raw.version === 2 ? raw : migrateLegacy(raw as LegacyGoalsData);
+  if ('version' in raw && raw.version === 2) {
+    raw.dayNotes ??= {};
+    return raw;
+  }
+  return migrateLegacy(raw as LegacyGoalsData);
 }
 
 export function saveGoals(data: GoalsData): GoalsData {
@@ -167,6 +173,14 @@ export function setDayQuality(data: GoalsData, date: string, quality?: DayQualit
   const next = structuredClone(data);
   if (quality) next.dayQuality[date] = quality;
   else delete next.dayQuality[date];
+  return saveGoals(next);
+}
+
+export function setDayNote(data: GoalsData, date: string, note?: string): GoalsData {
+  const next = structuredClone(data);
+  const value = note?.trim();
+  if (value) next.dayNotes[date] = value;
+  else delete next.dayNotes[date];
   return saveGoals(next);
 }
 

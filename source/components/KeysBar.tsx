@@ -117,6 +117,7 @@ export const KeysBar = React.memo(function KeysBar({ view, isRunning, isPaused, 
     actionHints.push({ key: 'j/k', label: 'Metric' });
     actionHints.push({ key: 'C-a/x', label: 'Count' });
     actionHints.push({ key: 'P/E/M', label: 'Day' });
+    actionHints.push({ key: 'N', label: 'Note' });
   }
 
   if (view === 'config') {

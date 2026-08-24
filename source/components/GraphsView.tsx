@@ -12,6 +12,7 @@ import {
   getRecentDates,
   getWindowDates,
   loadGoals,
+  setDayNote,
   setDayQuality,
   setMetricValue,
   type DayQuality,
@@ -68,6 +69,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
   const [selected, setSelected] = useState(0);
   const [scroll, setScroll] = useState(0);
   const [editing, setEditing] = useState<GoalMetric | null>(null);
+  const [editingDayNote, setEditingDayNote] = useState(false);
   const [editValue, setEditValue] = useState('');
   const { stdout } = useStdout();
 
@@ -80,7 +82,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
       { key: goal.id, kind: 'goal' as const, name: goal.name },
       ...goal.metrics.map(metric => ({ key: metric.id, kind: 'metric' as const, metric })),
     ]) ?? [], [activeArea]);
-  const visibleCount = Math.max(5, (stdout?.rows ?? 24) - 17);
+  const visibleCount = Math.max(5, (stdout?.rows ?? 24) - (window === 'today' ? 18 : 17));
   const selectedRow = selectedMetric ? rows.findIndex(row => row.key === selectedMetric.id) : 0;
 
   useEffect(() => {
@@ -117,9 +119,10 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
   };
 
   useInput((input, key) => {
-    if (editing) {
+    if (editing || editingDayNote) {
       if (key.escape) {
         setEditing(null);
+        setEditingDayNote(false);
         setIsTyping(false);
       }
       return;
@@ -140,6 +143,11 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
     } else if (input === 'n') moveWindow(1);
     else if (input === 'p') moveWindow(-1);
     else if (input === 't') setAnchor(getTodayStr());
+    else if (input === 'N' && window === 'today') {
+      setEditingDayNote(true);
+      setEditValue(data.dayNotes[anchor] ?? '');
+      setIsTyping(true);
+    }
     else if (input === 'j' || key.downArrow) setSelected(value => Math.min(metrics.length - 1, value + 1));
     else if (input === 'k' || key.upArrow) setSelected(value => Math.max(0, value - 1));
     else if (input === 'P' || input === 'E' || input === 'M') {
@@ -175,6 +183,8 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
 
   const streak = computeDayStreak(data);
   const recentDates = getRecentDates(28);
+  const selectedDayIndex = window === 'today' ? recentDates.indexOf(anchor) : -1;
+  const streakIndent = `DAY  ${streak.current}d · Best ${streak.best}d  `.length;
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -185,7 +195,7 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
           </Text>
         ))}
         <Box flexGrow={1} />
-        <Text dimColor>{windowLabel(window, anchor)}</Text>
+        <Text dimColor>{windowLabel(window, anchor)}{window === 'today' && data.dayNotes[anchor] ? ' · note' : ''}</Text>
       </Box>
 
       <Box marginTop={1}>
@@ -194,9 +204,16 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
         <Text dimColor> · Best {streak.best}d  </Text>
         {recentDates.map(date => {
           const quality = data.dayQuality[date];
-          return <Text key={date} color={quality ? QUALITY[quality].color : 'gray'}>{quality ? QUALITY[quality].glyph : '·'}</Text>;
+          return <Text key={date} color={quality ? QUALITY[quality].color : 'gray'} underline={window === 'today' && date === anchor}>{quality ? QUALITY[quality].glyph : '·'}</Text>;
         })}
       </Box>
+
+      {window === 'today' && (
+        <Box>
+          <Text>{' '.repeat(streakIndent)}</Text>
+          {selectedDayIndex >= 0 ? <Text color="cyan">{' '.repeat(selectedDayIndex)}▲</Text> : <Text color="cyan">↳</Text>}
+        </Box>
+      )}
 
       <Box marginTop={1}>
         <Text dimColor>AREAS  </Text>
@@ -242,6 +259,22 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
           <Text color="cyan">{editing.name}: </Text>
           <TextInput value={editValue} onChange={setEditValue} onSubmit={value => saveValue(editing, value)} />
           <Text dimColor>  Enter save · Esc cancel</Text>
+        </Box>
+      )}
+
+      {editingDayNote && (
+        <Box marginTop={1}>
+          <Text color="cyan">Note {anchor}: </Text>
+          <TextInput
+            value={editValue}
+            onChange={setEditValue}
+            onSubmit={value => {
+              setData(setDayNote(data, anchor, value));
+              setEditingDayNote(false);
+              setIsTyping(false);
+            }}
+          />
+          <Text dimColor>  Enter save · empty clears · Esc cancel</Text>
         </Box>
       )}
     </Box>

@@ -70,6 +70,7 @@ test('HTML report renders period tabs, hierarchy, and three-state day history', 
   const data = defaultGoalsData();
   data.areas[0]!.name = 'IELTS <current>';
   data.dayQuality['2026-08-19'] = 'perfect';
+  data.dayNotes['2026-08-19'] = 'Strong focus <no distractions>';
   const html = renderGoalsHtml(data, '2026-08-19');
 
   assert.match(html, /Goal ledger/);
@@ -77,6 +78,8 @@ test('HTML report renders period tabs, hierarchy, and three-state day history', 
   assert.match(html, /id="tab-month"/);
   assert.match(html, /IELTS &lt;current&gt;/);
   assert.match(html, /heat-cell perfect/);
+  assert.match(html, /heat-cell perfect has-note/);
+  assert.match(html, /Note: Strong focus &lt;no distractions&gt;/);
   assert.match(html, /class="compact-week"/);
   assert.match(html, /class="goal-icon"[^>]*>✍️</);
   assert.match(html, /class="metric-chip/);

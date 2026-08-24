@@ -115,7 +115,9 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
   const heatmap = `${'<span class="heat-blank"></span>'.repeat(blanks)}${history.map(date => {
     const quality = data.dayQuality[date];
     const label = quality === 'perfect' ? 'Perfect' : quality === 'excused' ? 'Missed with reason' : quality === 'missed' ? 'Missed without reason' : 'Unchecked';
-    return `<span class="heat-cell ${quality ?? ''}" title="${date} · ${label}" aria-label="${date} · ${label}" role="img"></span>`;
+    const note = data.dayNotes[date];
+    const tooltip = `${date} · ${label}${note ? ` · Note: ${note}` : ''}`;
+    return `<span class="heat-cell ${quality ?? ''}${note ? ' has-note' : ''}" title="${escapeHtml(tooltip)}" aria-label="${escapeHtml(tooltip)}" role="img"></span>`;
   }).join('')}`;
   const qualityCounts = history.reduce((counts, date) => {
     const quality = data.dayQuality[date];
@@ -152,6 +154,7 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
     .heatmap { display:grid; grid-template-rows:repeat(7, 10px); grid-auto-flow:column; grid-auto-columns:10px; gap:4px; width:max-content; min-width:100%; }
     .heat-cell { width:10px; height:10px; border-radius:2px; background:#3c4039; }
     .heat-cell.perfect { background:#71a36f; } .heat-cell.excused { background:var(--amber); } .heat-cell.missed { background:var(--red); }
+    .heat-cell.has-note { box-shadow:inset 0 0 0 1px #eef0e7, 0 0 0 1px #7e8278; }
     .heat-blank { visibility:hidden; }
     .heat-legend { display:flex; justify-content:space-between; gap:18px; margin-top:7px; color:#aeb0a9; font:10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; text-transform:uppercase; letter-spacing:.07em; }
     .legend-items { display:flex; gap:14px; } .legend-items i { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:2px; }

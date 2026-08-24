@@ -135,6 +135,7 @@ function buildSections(km: Keymap): HelpSection[] {
         ['Enter/Ctrl+A', 'Toggle / increment / enter value'],
         ['Ctrl+X/0', 'Decrement counter / clear value'],
         ['P/E/M', 'Perfect / excused / missed day'],
+        ['N', 'Add / edit selected day note'],
         ['Ctrl+G', 'Edit goal definitions'],
         ['R', 'HTML report'],
       ],
