@@ -92,4 +92,6 @@ Goals is TUI-only: start the app and press `9`. It stores one hierarchy—`Area 
 
 The input type and aggregation are independent. Common pairs are count+SUM, rate+MAX, rate+LATEST, checkbox+ANY, and checkbox+COUNT for once/twice-per-week goals. Preserve existing IDs when changing definitions because entries are keyed by metric ID.
 
+Before rewriting definitions, inspect and snapshot `goals.json`. Replace definitions without discarding `entries`, `dayQuality`, or `dayNotes`. Translate requested actions one-to-one: do not combine distinct steps such as “identify” and “practise,” turn “each stream” into one shared counter, or invent an unstated target. Use `target` for a lasting one-time milestone, `weeklyTarget` for work that resets each week, and `monthlyTarget` when Month must not be derived from the weekly cadence. A recurring checkbox uses checkbox+COUNT; checkbox+ANY is a lasting milestone. Use note+LATEST for information that must carry into future weeks.
+
 Goals data is `~/.local/share/pomodorocli/goals.json`. The bookmarkable report is `~/.local/share/pomodorocli/goals-dashboard.html`; Goals changes regenerate that same file atomically. Day notes live separately from metric entries and appear in HTML heatmap tooltips.

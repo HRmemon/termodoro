@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import {
   aggregateMetric,
   computeDayStreak,
+  getLatestMetricNote,
   getMetricTarget,
   getRecentDates,
   getWindowDates,
@@ -19,18 +20,19 @@ export const GOALS_REPORT_PATH = path.join(DATA_DIR, 'goals-dashboard.html');
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const numberLabel = (value: number): string => Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
 const GOAL_PRESENTATION: Record<string, { icon: string; summary: string }> = {
+  'interview-preparation': { icon: '🎯', summary: 'review + practise + retain' },
   'ielts-writing': { icon: '✍️', summary: 'practice + band target' },
   'ielts-reading': { icon: '📖', summary: 'practice + score target' },
   'ielts-listening': { icon: '🎧', summary: 'practice + score target' },
   'ielts-speaking': { icon: '🗣️', summary: 'practice + band + weekly' },
-  'book-chapter-4': { icon: '📚', summary: 'latest percentage' },
-  'book-chapter-5': { icon: '📚', summary: 'latest percentage' },
   'money-wider': { icon: '🧭', summary: 'research checkpoints' },
   'money-deeper': { icon: '🔎', summary: '30m research blocks' },
   'money-decisions': { icon: '◆', summary: 'count target' },
   'masters-universities': { icon: '🏛️', summary: 'research checkpoint' },
   'masters-scholarships': { icon: '🎓', summary: 'research checkpoint' },
   'masters-ielts': { icon: '📅', summary: 'booking decisions' },
+  'jit-current-book': { icon: '📚', summary: 'learn + apply + simplify' },
+  'jit-learning-plan': { icon: '🧠', summary: 'AI-led learning plan' },
 };
 
 function metricValue(metric: GoalMetric, value: number, target?: number): string {
@@ -44,7 +46,8 @@ function renderCompactWeek(data: GoalsData, anchor: string): string {
   return `<div class="compact-week">${data.areas.filter(area => !area.archivedAt).map((area, areaIndex) => {
     const goals = area.goals.filter(goal => !goal.archivedAt);
     const metricCount = goals.reduce((count, goal) => count + goal.metrics.length, 0);
-    const met = goals.flatMap(goal => goal.metrics).filter(metric => {
+    const targetedMetrics = goals.flatMap(goal => goal.metrics).filter(metric => getMetricTarget(metric, 'week', dates.length) !== undefined);
+    const met = targetedMetrics.filter(metric => {
       const target = getMetricTarget(metric, 'week', dates.length);
       return target !== undefined && aggregateMetric(metric, data, dates) >= target;
     }).length;
@@ -52,13 +55,17 @@ function renderCompactWeek(data: GoalsData, anchor: string): string {
       <header class="compact-area-head">
         <span class="num">${String(areaIndex + 1).padStart(2, '0')}</span>
         <div class="label"><h3>${escapeHtml(area.name)}</h3><small>${goals.length} goals · ${metricCount} metrics</small></div>
-        <span class="summary">${met}/${metricCount} targets met</span>
+        <span class="summary">${met}/${targetedMetrics.length} targets met</span>
       </header>
       <div class="compact-goals">${goals.map(goal => {
         const presentation = GOAL_PRESENTATION[goal.id] ?? { icon: '◇', summary: `${goal.metrics.length} metrics` };
         return `<div class="compact-goal">
           <div class="compact-goal-name"><span class="goal-icon" aria-hidden="true">${presentation.icon}</span><div><strong>${escapeHtml(goal.name)}</strong><span>${escapeHtml(presentation.summary)}</span></div></div>
           <div class="compact-metrics">${goal.metrics.map(metric => {
+            if (metric.input === 'note') {
+              const note = getLatestMetricNote(data, metric.id, dates.at(-1)!);
+              return `<div class="metric-chip note wide ${note ? 'good' : 'idle'}"${note ? ` title="${escapeHtml(note)}"` : ''}><span class="m-name">${escapeHtml(metric.name)}</span><span class="state">${note ? '📝' : '○'}</span></div>`;
+            }
             const value = aggregateMetric(metric, data, dates);
             const target = getMetricTarget(metric, 'week', dates.length);
             const progress = target ? Math.min(100, Math.round(value / target * 100)) : 0;
@@ -91,6 +98,14 @@ function renderPeriod(data: GoalsData, window: Exclude<GoalWindow, 'today'>, anc
             <div class="goal-title"><h3><i aria-hidden="true">${GOAL_PRESENTATION[goal.id]?.icon ?? '◇'}</i>${escapeHtml(goal.name)}</h3><span>${goal.metrics.length} metrics</span></div>
             <div class="metric-grid">
               ${goal.metrics.map(metric => {
+                if (metric.input === 'note') {
+                  const note = getLatestMetricNote(data, metric.id, dates.at(-1)!);
+                  return `<article class="metric${note ? ' complete' : ''}">
+                    <div class="metric-heading"><h4>${escapeHtml(metric.name)}</h4><strong>${note ? 'Saved' : 'Open'}</strong></div>
+                    <div class="note-preview"${note ? ` title="${escapeHtml(note)}"` : ''}>${note ? escapeHtml(note) : 'No note yet'}</div>
+                    <p>note · carried forward</p>
+                  </article>`;
+                }
                 const value = aggregateMetric(metric, data, dates);
                 const target = getMetricTarget(metric, window, dates.length);
                 const progress = target ? Math.min(100, Math.round(value / target * 100)) : 0;
@@ -177,6 +192,7 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
     .metric-heading { display:flex; justify-content:space-between; gap:18px; align-items:baseline; } .metric h4 { margin:0; font-size:15px; font-weight:500; }
     .metric strong { white-space:nowrap; font:16px/1 ui-monospace, SFMono-Regular, Consolas, monospace; } .metric strong span { color:var(--muted); font-size:10px; }
     .metric p { margin:9px 0 0; color:var(--muted); font-size:8px; }
+    .note-preview { margin-top:15px; overflow:hidden; color:var(--muted); font:11px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; text-overflow:ellipsis; }
     .progress-track { height:7px; margin-top:18px; overflow:hidden; background:#ded8c9; border-radius:99px; } .progress-track span { display:block; height:100%; background:var(--moss); border-radius:inherit; }
     .metric.complete { background:rgba(201,216,196,.28); } .metric.complete .progress-track span { background:#527b5c; }
     footer { display:flex; justify-content:space-between; margin-top:34px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font:10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; text-transform:uppercase; letter-spacing:.08em; }

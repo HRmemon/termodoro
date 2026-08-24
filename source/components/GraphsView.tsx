@@ -7,6 +7,7 @@ import {
   adjustCount,
   aggregateMetric,
   computeDayStreak,
+  getLatestMetricNote,
   getMetricTarget,
   getMetricValue,
   getRecentDates,
@@ -238,6 +239,15 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
             return (
               <Text key={row.key} color={isSelected ? 'cyan' : undefined} bold={isSelected}>
                 {isSelected ? '  › ' : '    '}{row.metric.name.slice(0, 24).padEnd(24)} {shown}{hint}
+              </Text>
+            );
+          }
+
+          if (row.metric.input === 'note') {
+            const note = getLatestMetricNote(data, row.metric.id, dates.at(-1)!);
+            return (
+              <Text key={row.key} color={isSelected ? 'cyan' : undefined} bold={isSelected}>
+                {isSelected ? '  › ' : '    '}{row.metric.name.slice(0, 20).padEnd(20)} {note ? `📝 ${note.slice(0, 22)}` : '·'}
               </Text>
             );
           }

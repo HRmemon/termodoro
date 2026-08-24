@@ -5,6 +5,7 @@ import {
   aggregateMetric,
   computeDayStreak,
   defaultGoalsData,
+  getLatestMetricNote,
   getMetricTarget,
   getWindowDates,
   type GoalMetric,
@@ -26,6 +27,19 @@ const weeklyCount: GoalMetric = {
   aggregate: 'sum',
   weeklyTarget: 7,
 };
+
+test('default weekly goals keep distinct requested actions and per-stream targets', () => {
+  const data = defaultGoalsData();
+  const metric = (goalId: string, metricId: string) => data.areas.flatMap(area => area.goals).find(goal => goal.id === goalId)!.metrics.find(item => item.id === metricId)!;
+  const deeper = data.areas.flatMap(area => area.goals).find(goal => goal.id === 'money-deeper')!;
+
+  assert.equal(metric('ielts-writing', 'ielts-writing-attempts').weeklyTarget, 6);
+  assert.equal(metric('ielts-writing', 'ielts-writing-flaws-identified').weeklyTarget, 3);
+  assert.equal(metric('ielts-writing', 'ielts-writing-flaws-practised').weeklyTarget, 3);
+  assert.equal(metric('ielts-speaking', 'ielts-speaking-follow-lessons').weeklyTarget, 6);
+  assert.equal(deeper.metrics.length, 5);
+  assert.ok(deeper.metrics.every(item => item.input === 'checkbox' && item.aggregate === 'count' && item.weeklyTarget === 1));
+});
 
 test('weekly values sum and weekly targets scale to the actual month length', () => {
   const data = defaultGoalsData();
@@ -50,6 +64,17 @@ test('overall metrics retain their best value in later windows', () => {
   data.entries.band = { '2026-07-30': 6.5, '2026-08-02': 6 };
 
   assert.equal(aggregateMetric(bestBand, data, getWindowDates('month', '2026-08-19')), 6.5);
+});
+
+test('latest note carries interview preparation forward', () => {
+  const data = defaultGoalsData();
+  data.entries['interview-playbook'] = {
+    '2026-08-10': 'Use concise STAR answers',
+    '2026-08-20': 'Lead with the outcome, then evidence',
+  };
+
+  assert.equal(getLatestMetricNote(data, 'interview-playbook', '2026-08-19'), 'Use concise STAR answers');
+  assert.equal(getLatestMetricNote(data, 'interview-playbook', '2026-08-24'), 'Lead with the outcome, then evidence');
 });
 
 test('only consecutive perfect days count toward the day streak', () => {

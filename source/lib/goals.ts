@@ -65,39 +65,50 @@ export function defaultGoalsData(): GoalsData {
     version: 2,
     areas: [
       {
+        id: 'interview', name: 'INTERVIEW PREPARATION', goals: [
+          { id: 'interview-preparation', name: 'Reusable interview preparation', metrics: [
+            metric('interview-playbook', 'Carry-forward playbook', 'note', 'latest'),
+            metric('interview-review-playbook', 'Review previous lessons', 'checkbox', 'count', { weeklyTarget: 1 }),
+            metric('interview-practice', 'Practice sessions', 'count', 'sum', { weeklyTarget: 1 }),
+          ] },
+        ],
+      },
+      {
         id: 'ielts', name: 'IELTS', goals: [
           { id: 'ielts-writing', name: 'Writing', metrics: [
-            metric('ielts-writing-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 7 }),
+            metric('ielts-writing-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 6 }),
+            metric('ielts-writing-flaws-identified', 'Flaws identified', 'count', 'sum', { weeklyTarget: 3 }),
+            metric('ielts-writing-flaws-practised', 'Flaws practised', 'count', 'sum', { weeklyTarget: 3 }),
+            metric('ielts-writing-templates', 'New templates', 'count', 'sum', { weeklyTarget: 2 }),
             metric('ielts-writing-band', 'Best band', 'rate', 'max', { target: 7, max: 9, unit: 'band' }),
-            metric('ielts-writing-lessons', 'Lessons', 'count', 'sum', { weeklyTarget: 3 }),
           ] },
           { id: 'ielts-reading', name: 'Reading', metrics: [
             metric('ielts-reading-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 3 }),
+            metric('ielts-reading-review-lessons', 'Review previous lessons', 'checkbox', 'count', { weeklyTarget: 3 }),
+            metric('ielts-reading-lessons', 'Lessons / mistakes captured', 'count', 'sum', { weeklyTarget: 3 }),
             metric('ielts-reading-score', 'Best score', 'rate', 'max', { target: 40, max: 40 }),
           ] },
           { id: 'ielts-listening', name: 'Listening', metrics: [
             metric('ielts-listening-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 3 }),
+            metric('ielts-listening-review-lessons', 'Review previous lessons', 'checkbox', 'count', { weeklyTarget: 3 }),
+            metric('ielts-listening-lessons', 'Lessons / mistakes captured', 'count', 'sum', { weeklyTarget: 3 }),
             metric('ielts-listening-score', 'Best score', 'rate', 'max', { target: 40, max: 40 }),
           ] },
           { id: 'ielts-speaking', name: 'Speaking', metrics: [
-            metric('ielts-speaking-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 7 }),
+            metric('ielts-speaking-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 6 }),
+            metric('ielts-speaking-follow-lessons', 'Follow previous lessons', 'checkbox', 'count', { weeklyTarget: 6 }),
+            metric('ielts-speaking-flaws-identified', 'Flaws identified', 'count', 'sum', { weeklyTarget: 3 }),
+            metric('ielts-speaking-flaws-practised', 'Flaws practised', 'count', 'sum', { weeklyTarget: 3 }),
+            metric('ielts-speaking-templates', 'New templates', 'count', 'sum', { weeklyTarget: 2 }),
             metric('ielts-speaking-band', 'Best band', 'rate', 'max', { target: 7.5, max: 9, unit: 'band' }),
-            metric('ielts-speaking-lessons', 'Lessons', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-speaking-video', 'Watch speaking video', 'checkbox', 'count', { weeklyTarget: 1 }),
           ] },
         ],
       },
       {
-        id: 'reading', name: 'READING', goals: [
-          { id: 'book-chapter-4', name: 'Book Chapter 4', metrics: [metric('book-chapter-4-progress', 'Progress', 'rate', 'latest', { target: 100, max: 100, unit: '%' })] },
-          { id: 'book-chapter-5', name: 'Book Chapter 5', metrics: [metric('book-chapter-5-progress', 'Progress', 'rate', 'latest', { target: 100, max: 100, unit: '%' })] },
-        ],
-      },
-      {
-        id: 'money', name: 'MONEY', goals: [
-          { id: 'money-wider', name: 'Wider research', metrics: ['Job', 'Business', 'Stocks', 'Content creation', 'Other'].map((name, i) => metric(`money-wider-${i + 1}`, name, 'checkbox', 'any', { target: 1 })) },
-          { id: 'money-deeper', name: 'Deeper research (30m+)', metrics: ['Job', 'Business', 'Stocks', 'Content', 'Other'].map((name, i) => metric(`money-deeper-${i + 1}`, name, 'checkbox', 'any', { target: 1 })) },
-          { id: 'money-decisions', name: 'Decide promising streams', metrics: [metric('money-decisions-count', 'Decisions', 'count', 'sum', { target: 2 })] },
+        id: 'money', name: 'MONEY STREAMS', goals: [
+          { id: 'money-wider', name: 'Wider research first', metrics: ['Job', 'Business', 'Stocks', 'Content creation', 'Other'].map((name, i) => metric(`money-wider-${i + 1}`, name, 'checkbox', 'count', { weeklyTarget: 1 })) },
+          { id: 'money-deeper', name: 'Deeper research (30–60m each)', metrics: ['Job', 'Business', 'Stocks', 'Content creation', 'Other'].map((name, i) => metric(`money-deeper-${i + 1}`, name, 'checkbox', 'count', { weeklyTarget: 1 })) },
+          { id: 'money-decisions', name: 'Decide promising streams', metrics: [metric('money-decisions-count', 'Decisions', 'count', 'sum', { weeklyTarget: 2 })] },
         ],
       },
       {
@@ -107,6 +118,22 @@ export function defaultGoalsData(): GoalsData {
           { id: 'masters-ielts', name: 'IELTS', metrics: [
             metric('masters-test-date', 'Decide test date', 'checkbox', 'any', { target: 1 }),
             metric('masters-booking-deadline', 'Decide hard booking deadline', 'checkbox', 'any', { target: 1 }),
+          ] },
+        ],
+      },
+      {
+        id: 'jit-learning', name: 'JUST-IN-TIME LEARNING', goals: [
+          { id: 'jit-current-book', name: 'The Algorithm Book', metrics: [
+            metric('jit-book-progress', 'Progress', 'rate', 'latest', { target: 100, max: 100, unit: '%' }),
+            metric('jit-book-lessons', 'Useful lessons captured', 'count', 'sum'),
+            metric('jit-applied-lessons', 'Lessons applied in daily life', 'count', 'sum', { weeklyTarget: 2 }),
+            metric('jit-simplify-system', 'Simplify productivity system', 'checkbox', 'any', { target: 1 }),
+          ] },
+          { id: 'jit-learning-plan', name: 'Learning focused on helping me', metrics: [
+            metric('jit-useful-books', 'Useful books / lists identified', 'count', 'sum', { weeklyTarget: 1 }),
+            metric('jit-ai-interview', 'AI interview completed', 'checkbox', 'count', { weeklyTarget: 1 }),
+            metric('jit-weaknesses-goals', 'Weaknesses and goals identified', 'checkbox', 'count', { weeklyTarget: 1 }),
+            metric('jit-content-prepared', 'Content prepared accordingly', 'checkbox', 'count', { weeklyTarget: 1 }),
           ] },
         ],
       },
@@ -186,6 +213,13 @@ export function setDayNote(data: GoalsData, date: string, note?: string): GoalsD
 
 export function getMetricValue(data: GoalsData, metricId: string, date: string): GoalValue | undefined {
   return data.entries[metricId]?.[date];
+}
+
+export function getLatestMetricNote(data: GoalsData, metricId: string, throughDate: string): string | undefined {
+  return Object.entries(data.entries[metricId] ?? {})
+    .filter(([date, value]) => date <= throughDate && typeof value === 'string' && value.trim())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .at(-1)?.[1] as string | undefined;
 }
 
 export function adjustCount(value: GoalValue | undefined, delta: 1 | -1): number | undefined {
