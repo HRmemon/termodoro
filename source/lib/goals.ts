@@ -69,7 +69,7 @@ export function defaultGoalsData(): GoalsData {
           { id: 'interview-preparation', name: 'Reusable interview preparation', metrics: [
             metric('interview-playbook', 'Carry-forward playbook', 'note', 'latest'),
             metric('interview-review-playbook', 'Review previous lessons', 'checkbox', 'count', { weeklyTarget: 1 }),
-            metric('interview-practice', 'Practice sessions', 'count', 'sum', { weeklyTarget: 1 }),
+            metric('interview-practice', 'Practice sessions', 'count', 'sum'),
           ] },
         ],
       },
@@ -126,7 +126,7 @@ export function defaultGoalsData(): GoalsData {
           { id: 'jit-current-book', name: 'The Algorithm Book', metrics: [
             metric('jit-book-progress', 'Progress', 'rate', 'latest', { target: 100, max: 100, unit: '%' }),
             metric('jit-book-lessons', 'Useful lessons captured', 'count', 'sum'),
-            metric('jit-applied-lessons', 'Lessons applied in daily life', 'count', 'sum', { weeklyTarget: 2 }),
+            metric('jit-applied-lessons', 'Lessons applied in daily life', 'count', 'sum'),
             metric('jit-simplify-system', 'Simplify productivity system', 'checkbox', 'any', { target: 1 }),
           ] },
           { id: 'jit-learning-plan', name: 'Learning focused on helping me', metrics: [
