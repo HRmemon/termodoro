@@ -78,8 +78,6 @@ Use `?` for the current key map, `/` for global search, `:` for the command pale
 
 Goals is TUI-only: start the app and press `9`. It stores one hierarchy—`Area -> Goal -> Metric`—with daily values aggregated into Week and Month.
 
-- `Tab` / `Shift+Tab`: next / previous area.
-- `h/l` or arrows: Today / Week / Month.
 - `n/p`: next / previous day or period; `t`: today.
 - `j/k`: select metric.
 - `Enter`: toggle checkbox, increment count, or edit rate/note.

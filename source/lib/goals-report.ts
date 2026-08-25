@@ -20,7 +20,7 @@ export const GOALS_REPORT_PATH = path.join(DATA_DIR, 'goals-dashboard.html');
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const numberLabel = (value: number): string => Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
 const GOAL_PRESENTATION: Record<string, { icon: string; summary: string }> = {
-  'interview-preparation': { icon: '🎯', summary: 'review + practise + retain' },
+  'interview-preparation': { icon: '🎯', summary: 'study + capture notes' },
   'ielts-writing': { icon: '✍️', summary: 'practice + band target' },
   'ielts-reading': { icon: '📖', summary: 'practice + score target' },
   'ielts-listening': { icon: '🎧', summary: 'practice + score target' },

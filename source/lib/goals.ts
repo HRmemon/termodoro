@@ -69,10 +69,9 @@ export function defaultGoalsData(): GoalsData {
     areas: [
       {
         id: 'interview', name: 'INTERVIEW PREPARATION', goals: [
-          { id: 'interview-preparation', name: 'Reusable interview preparation', metrics: [
-            metric('interview-playbook', 'Carry-forward playbook', 'note', 'latest'),
-            metric('interview-review-playbook', 'Review previous lessons', 'checkbox', 'count', { weeklyTarget: 1 }),
-            metric('interview-practice', 'Practice sessions', 'count', 'sum'),
+          { id: 'interview-preparation', name: 'Interview preparation', metrics: [
+            metric('interview-practice', 'Studying sessions', 'count', 'sum', { weeklyTarget: 2 }),
+            metric('interview-notes-sessions', 'Notes sessions', 'count', 'sum', { weeklyTarget: 1 }),
           ] },
         ],
       },

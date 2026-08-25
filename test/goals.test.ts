@@ -34,6 +34,9 @@ test('default weekly goals keep distinct requested actions and per-stream target
   const deeper = data.areas.flatMap(area => area.goals).find(goal => goal.id === 'money-deeper')!;
 
   assert.equal(data.weekStartsOn, 1);
+  assert.equal(metric('interview-preparation', 'interview-practice').weeklyTarget, 2);
+  assert.equal(metric('interview-preparation', 'interview-notes-sessions').weeklyTarget, 1);
+  assert.equal(data.areas.find(area => area.id === 'interview')!.goals[0]!.metrics.length, 2);
   assert.equal(metric('ielts-writing', 'ielts-writing-attempts').weeklyTarget, 6);
   assert.equal(metric('ielts-writing', 'ielts-writing-flaws-identified').weeklyTarget, 3);
   assert.equal(metric('ielts-writing', 'ielts-writing-flaws-practised').weeklyTarget, 3);
