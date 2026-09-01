@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { atomicWriteJSON, readJSON, ensureDir } from './fs-utils.js';
+import { getSlotDomainBreakdown, type SlotDomainBreakdown } from './browser-stats.js';
 
 export interface SlotCategory {
   code: string;
@@ -175,6 +176,22 @@ export interface TrackerTimeSummary {
   wastedHours: number;
 }
 
+export function computeBrowserWastedHours(
+  slots: Record<string, string>,
+  breakdown: SlotDomainBreakdown[],
+  rules: DomainRule[],
+): number {
+  return breakdown.reduce((total, slot) => {
+    if (slots[slot.time]) return total;
+    const category = slot.path
+      ? matchUrl(slot.domain, slot.path, rules)
+      : matchDomain(slot.domain, rules);
+    return category === 'W'
+      ? total + Math.min(30, Math.max(0, slot.activeMinutes)) / 60
+      : total;
+  }, 0);
+}
+
 export function getTrackerTimeSummary(date: Date = new Date()): TrackerTimeSummary {
   const week = loadWeek(getISOWeekStr(getMondayOfWeek(date)));
   const dateStr = dateToString(date);
@@ -193,6 +210,12 @@ export function getTrackerTimeSummary(date: Date = new Date()): TrackerTimeSumma
     if (suggestion.suggested === 'D') deepHours += 0.5;
     else if (suggestion.suggested === 'hD') deepHours += 0.25;
   }
+
+  wastedHours += computeBrowserWastedHours(
+    slots,
+    getSlotDomainBreakdown(dateStr),
+    loadTrackerConfigFull().domainRules,
+  );
 
   return { deepHours, wastedHours };
 }
