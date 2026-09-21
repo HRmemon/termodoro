@@ -370,7 +370,7 @@ A weekly time grid with 30-minute slots for manual activity categorization.
 
 ### [9] Goals
 
-Track measurable criteria in an `Area → Goal → Metric` hierarchy. Today is for input; Week and Month aggregate the same daily values with `SUM`, `MAX`, `LATEST`, `ANY`, or `COUNT`.
+Track measurable criteria in separate, period-specific weekly and monthly `Area → Goal → Metric` plans. A weekly metric may link to a monthly metric so one daily update contributes to both without replacing either definition.
 
 | Key | Action |
 |-----|--------|
@@ -385,6 +385,11 @@ Track measurable criteria in an `Area → Goal → Metric` hierarchy. Today is f
 | `N` | Add, edit, or clear the selected day's note |
 | `Ctrl+G` | Edit the complete goal definition and data as JSON |
 | `R` | Open the bookmarkable HTML dashboard |
+| `a` | Add a goal metric to the selected Week or Month plan |
+| `e` / `d` | Rename the selected metric / archive its goal for this period |
+| `L` | Link/unlink the selected weekly metric to a compatible monthly metric |
+| `C` | Copy the previous plan when the selected period is empty |
+| `u` | Expand/collapse weekly-only additions in Month |
 
 Only Perfect days extend the global day streak. The 28-day strip belongs to this overall check-in rather than to any individual goal.
 The dashboard is kept current at `~/.local/share/pomodorocli/goals-dashboard.html`, so the same file can be bookmarked.

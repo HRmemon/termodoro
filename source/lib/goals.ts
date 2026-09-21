@@ -20,6 +20,8 @@ export interface GoalMetric {
   max?: number;
   unit?: string;
   cumulative?: boolean;
+  /** Weekly metrics may feed one monthly metric without sharing definitions. */
+  contributesTo?: string;
 }
 
 export interface TrackedGoal {
@@ -37,12 +39,18 @@ export interface GoalArea {
 }
 
 export interface GoalsData {
-  version: 2;
+  version: 3;
   weekStartsOn: number;
-  areas: GoalArea[];
+  weeklyPlans: Record<string, GoalArea[]>;
+  monthlyPlans: Record<string, GoalArea[]>;
   entries: Record<string, Record<string, GoalValue>>;
   dayQuality: Record<string, DayQuality>;
   dayNotes: Record<string, string>;
+}
+
+interface GoalsDataV2 extends Omit<GoalsData, 'version' | 'weeklyPlans' | 'monthlyPlans'> {
+  version: 2;
+  areas: GoalArea[];
 }
 
 interface LegacyGoalsData {
@@ -62,84 +70,90 @@ const metric = (
   targets: Pick<GoalMetric, 'target' | 'weeklyTarget' | 'monthlyTarget' | 'max' | 'unit' | 'cumulative'> = {},
 ): GoalMetric => ({ id, name, input, aggregate, ...targets });
 
-export function defaultGoalsData(): GoalsData {
-  return {
-    version: 2,
-    weekStartsOn: 1,
-    areas: [
-      {
-        id: 'interview', name: 'INTERVIEW PREPARATION', goals: [
-          { id: 'interview-preparation', name: 'Interview preparation', metrics: [
-            metric('interview-practice', 'Studying sessions', 'count', 'sum', { weeklyTarget: 2 }),
-            metric('interview-notes-sessions', 'Notes sessions', 'count', 'sum', { weeklyTarget: 1 }),
-          ] },
-        ],
-      },
+function periodAreas(areas: GoalArea[], period: 'week' | 'month'): GoalArea[] {
+  return structuredClone(areas).map(area => ({ ...area, goals: area.goals.map(goal => ({
+    ...goal,
+    metrics: goal.metrics.map(item => ({
+      ...item,
+      target: period === 'week' ? item.weeklyTarget ?? item.target : item.monthlyTarget ?? item.target,
+      weeklyTarget: undefined,
+      monthlyTarget: undefined,
+    })),
+  })) }));
+}
+
+function defaultMonthlyAreas(): GoalArea[] {
+  return [
       {
         id: 'ielts', name: 'IELTS', goals: [
+          { id: 'ielts-booking', name: 'Test booking', metrics: [
+            metric('ielts-test-booked', 'Book IELTS test', 'checkbox', 'any', { target: 1, cumulative: true }),
+          ] },
           { id: 'ielts-writing', name: 'Writing', metrics: [
-            metric('ielts-writing-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 6 }),
-            metric('ielts-writing-flaws-identified', 'Flaws identified', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-writing-flaws-practised', 'Flaws practised', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-writing-templates', 'New templates', 'count', 'sum', { weeklyTarget: 2 }),
+            metric('ielts-writing-attempts', 'Daily attempts', 'count', 'sum', { weeklyTarget: 7 }),
+            metric('ielts-writing-feedback', 'Work on feedback', 'checkbox', 'count', { weeklyTarget: 7 }),
             metric('ielts-writing-band', 'Best band', 'rate', 'max', { target: 7, max: 9, unit: 'band' }),
           ] },
           { id: 'ielts-reading', name: 'Reading', metrics: [
-            metric('ielts-reading-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-reading-review-lessons', 'Review previous lessons', 'checkbox', 'count', { weeklyTarget: 3 }),
-            metric('ielts-reading-lessons', 'Lessons / mistakes captured', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-reading-score', 'Best score', 'rate', 'max', { target: 40, max: 40 }),
+            metric('ielts-reading-score', 'Latest score', 'rate', 'latest', { target: 38, max: 40 }),
           ] },
           { id: 'ielts-listening', name: 'Listening', metrics: [
-            metric('ielts-listening-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-listening-review-lessons', 'Review previous lessons', 'checkbox', 'count', { weeklyTarget: 3 }),
-            metric('ielts-listening-lessons', 'Lessons / mistakes captured', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-listening-score', 'Best score', 'rate', 'max', { target: 40, max: 40 }),
+            metric('ielts-listening-score', 'Latest score', 'rate', 'latest', { target: 38, max: 40 }),
           ] },
           { id: 'ielts-speaking', name: 'Speaking', metrics: [
-            metric('ielts-speaking-attempts', 'Attempts', 'count', 'sum', { weeklyTarget: 6 }),
-            metric('ielts-speaking-follow-lessons', 'Follow previous lessons', 'checkbox', 'count', { weeklyTarget: 6 }),
-            metric('ielts-speaking-flaws-identified', 'Flaws identified', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-speaking-flaws-practised', 'Flaws practised', 'count', 'sum', { weeklyTarget: 3 }),
-            metric('ielts-speaking-templates', 'New templates', 'count', 'sum', { weeklyTarget: 2 }),
-            metric('ielts-speaking-band', 'Best band', 'rate', 'max', { target: 7.5, max: 9, unit: 'band' }),
+            metric('ielts-speaking-attempts', 'Daily attempts', 'count', 'sum', { weeklyTarget: 7 }),
+            metric('ielts-speaking-feedback', 'Work on feedback', 'checkbox', 'count', { weeklyTarget: 7 }),
+            metric('ielts-speaking-band', 'Best band', 'rate', 'max', { target: 7, max: 9, unit: 'band' }),
           ] },
-        ],
-      },
-      {
-        id: 'money', name: 'MONEY STREAMS', goals: [
-          { id: 'money-wider', name: 'Wider research first', metrics: ['Job', 'Business', 'Stocks', 'Content creation', 'Other'].map((name, i) => metric(`money-wider-${i + 1}`, name, 'checkbox', 'count', { weeklyTarget: 1 })) },
-          { id: 'money-deeper', name: 'Deeper research (30–60m each)', metrics: ['Job', 'Business', 'Stocks', 'Content creation', 'Other'].map((name, i) => metric(`money-deeper-${i + 1}`, name, 'checkbox', 'count', { weeklyTarget: 1 })) },
-          { id: 'money-decisions', name: 'Decide promising streams', metrics: [metric('money-decisions-count', 'Decisions', 'count', 'sum', { weeklyTarget: 2 })] },
         ],
       },
       {
         id: 'masters', name: 'MASTERS', goals: [
-          { id: 'masters-universities', name: 'Universities', metrics: [metric('masters-admission-dates', 'Admission dates researched', 'checkbox', 'any', { target: 1, cumulative: true })] },
-          { id: 'masters-scholarships', name: 'Scholarships', metrics: [metric('masters-scholarship-dates', 'Scholarship dates researched', 'checkbox', 'any', { target: 1, cumulative: true })] },
-          { id: 'masters-ielts', name: 'IELTS', metrics: [
-            metric('masters-test-date', 'Decide test date', 'checkbox', 'any', { target: 1, cumulative: true }),
-            metric('masters-booking-deadline', 'Decide hard booking deadline', 'checkbox', 'any', { target: 1, cumulative: true }),
+          { id: 'masters-planning', name: 'Scholarship preparation', metrics: [
+            metric('masters-calendar', 'Create dates calendar', 'checkbox', 'any', { target: 1, cumulative: true }),
+            metric('masters-scholarship-list', 'List scholarships', 'checkbox', 'any', { target: 1, cumulative: true }),
+            metric('masters-recommendation-letters', 'Recommendation letters', 'checkbox', 'any', { target: 1, cumulative: true }),
+            metric('masters-research-lead-time', 'Research 7 days before opening', 'checkbox', 'any', { target: 1, cumulative: true }),
           ] },
         ],
       },
       {
-        id: 'jit-learning', name: 'JUST-IN-TIME LEARNING', goals: [
-          { id: 'jit-current-book', name: 'The Algorithm Book', metrics: [
-            metric('jit-book-progress', 'Progress', 'rate', 'latest', { target: 100, max: 100, unit: '%', cumulative: true }),
-            metric('jit-book-lessons', 'Useful lessons captured', 'count', 'sum'),
-            metric('jit-applied-lessons', 'Lessons applied in daily life', 'count', 'sum'),
-            metric('jit-simplify-system', 'Simplify productivity system', 'checkbox', 'any', { target: 1, cumulative: true }),
-          ] },
-          { id: 'jit-learning-plan', name: 'Learning focused on helping me', metrics: [
-            metric('jit-useful-books', 'Useful books / lists identified', 'count', 'sum', { weeklyTarget: 1 }),
-            metric('jit-ai-interview', 'AI interview completed', 'checkbox', 'count', { weeklyTarget: 1 }),
-            metric('jit-weaknesses-goals', 'Weaknesses and goals identified', 'checkbox', 'count', { weeklyTarget: 1 }),
-            metric('jit-content-prepared', 'Content prepared accordingly', 'checkbox', 'count', { weeklyTarget: 1 }),
+        id: 'revenue', name: 'REVENUE STREAMS', goals: [
+          { id: 'revenue-career-path', name: 'Find the best-fit career path', metrics: [
+            metric('revenue-stocks', 'Research stocks', 'checkbox', 'count', { weeklyTarget: 1 }),
+            metric('revenue-common-streams', 'List common streams', 'checkbox', 'count', { weeklyTarget: 1 }),
+            metric('revenue-best-fit-three', 'Best-suited paths chosen', 'count', 'sum', { weeklyTarget: 3, monthlyTarget: 3 }),
           ] },
         ],
       },
-    ],
+      {
+        id: 'exercise', name: 'EXERCISE', goals: [
+          { id: 'exercise-monthly', name: 'Exercise and weight', metrics: [
+            metric('exercise-days', 'Exercise days', 'checkbox', 'count', { weeklyTarget: 5 }),
+            metric('exercise-weight-lost', 'Weight lost', 'rate', 'latest', { monthlyTarget: 3, max: 3, unit: ' kg' }),
+          ] },
+        ],
+      },
+    ];
+}
+
+export function getWeekStart(anchor = getTodayStr(), weekStartsOn = 1): string {
+  return getWindowDates('week', anchor, weekStartsOn)[0]!;
+}
+
+export function getPlanAreas(data: GoalsData, window: GoalWindow, anchor: string): GoalArea[] {
+  return window === 'month'
+    ? data.monthlyPlans[anchor.slice(0, 7)] ?? []
+    : data.weeklyPlans[getWeekStart(anchor, data.weekStartsOn)] ?? [];
+}
+
+export function defaultGoalsData(): GoalsData {
+  const today = getTodayStr();
+  return {
+    version: 3,
+    weekStartsOn: 1,
+    weeklyPlans: {},
+    monthlyPlans: { [today.slice(0, 7)]: periodAreas(defaultMonthlyAreas(), 'month') },
     entries: {},
     dayQuality: {},
     dayNotes: {},
@@ -170,24 +184,47 @@ function migrateLegacy(raw: LegacyGoalsData): GoalsData {
     if (Object.keys(values).length) data.entries[metricId] = values;
   }
 
-  if (imported.length) data.areas.push({ id: 'imported', name: 'IMPORTED', goals: imported });
+  if (imported.length) data.weeklyPlans[getWeekStart()] = [{ id: 'imported', name: 'IMPORTED', goals: imported }];
   return data;
 }
 
-export function loadGoals(): GoalsData {
-  const raw = readJSON<GoalsData | LegacyGoalsData | null>(GOALS_PATH, null);
+export function normalizeGoals(raw: GoalsData | GoalsDataV2 | LegacyGoalsData | null): GoalsData {
   if (!raw) return defaultGoalsData();
+  if ('version' in raw && raw.version === 3) return raw;
   if ('version' in raw && raw.version === 2) {
-    raw.weekStartsOn ??= 1;
-    raw.dayNotes ??= {};
-    return raw;
+    const defaults = defaultGoalsData();
+    return {
+      ...defaults,
+      weeklyPlans: { [getWeekStart(getTodayStr(), raw.weekStartsOn ?? 1)]: periodAreas(raw.areas, 'week') },
+      entries: raw.entries,
+      dayQuality: raw.dayQuality,
+      dayNotes: raw.dayNotes ?? {},
+      weekStartsOn: raw.weekStartsOn ?? 1,
+    };
   }
   return migrateLegacy(raw as LegacyGoalsData);
 }
 
+export function loadGoals(): GoalsData {
+  return normalizeGoals(readJSON<GoalsData | GoalsDataV2 | LegacyGoalsData | null>(GOALS_PATH, null));
+}
+
 export function saveGoals(data: GoalsData): GoalsData {
+  validateGoals(data);
   atomicWriteJSON(GOALS_PATH, data);
   return data;
+}
+
+export function validateGoals(data: GoalsData): void {
+  if (data.version !== 3 || !data.weeklyPlans || !data.monthlyPlans) throw new Error('Invalid Goals v3 data');
+  const monthly = new Map(Object.values(data.monthlyPlans).flatMap(areas => areas.flatMap(area => area.goals.flatMap(goal => goal.metrics))).map(item => [item.id, item]));
+  for (const areas of Object.values(data.weeklyPlans)) for (const area of areas) for (const goal of area.goals) for (const source of goal.metrics) {
+    if (!source.contributesTo) continue;
+    const target = monthly.get(source.contributesTo);
+    if (!target || target.id === source.id) throw new Error(`Invalid monthly link for ${source.name}`);
+    const compatible = source.input === target.input || (source.input === 'checkbox' && target.input === 'count');
+    if (!compatible || (source.input === 'note') !== (target.input === 'note')) throw new Error(`Incompatible monthly link for ${source.name}`);
+  }
 }
 
 export function setMetricValue(data: GoalsData, metricId: string, date: string, value: GoalValue | undefined): GoalsData {
@@ -244,11 +281,19 @@ export function getWindowDates(window: GoalWindow, anchor = getTodayStr(), weekS
 }
 
 export function aggregateMetric(metric: GoalMetric, data: GoalsData, dates: string[]): number {
+  const sourceIds = new Set([metric.id]);
+  if (dates.length > 7) {
+    for (const date of dates) {
+      for (const area of getPlanAreas(data, 'week', date)) for (const goal of area.goals) for (const source of goal.metrics) {
+        if (source.contributesTo === metric.id) sourceIds.add(source.id);
+      }
+    }
+  }
   const includedDates = metric.cumulative
-    ? Object.keys(data.entries[metric.id] ?? {}).filter(date => date <= dates.at(-1)!)
+    ? [...new Set([...sourceIds].flatMap(id => Object.keys(data.entries[id] ?? {})))].filter(date => date <= dates.at(-1)!)
     : dates;
   const entries = includedDates
-    .map(date => ({ date, value: data.entries[metric.id]?.[date] }))
+    .flatMap(date => [...sourceIds].map(id => ({ date, value: data.entries[id]?.[date] })))
     .filter((entry): entry is { date: string; value: GoalValue } => entry.value !== undefined && entry.value !== '' && entry.value !== false);
 
   if (metric.aggregate === 'any') return entries.length ? 1 : 0;
@@ -291,5 +336,6 @@ export function getRecentDates(count: number, anchor = getTodayStr()): string[] 
 }
 
 export function allMetrics(data: GoalsData): GoalMetric[] {
-  return data.areas.filter(area => !area.archivedAt).flatMap(area => area.goals.filter(goal => !goal.archivedAt).flatMap(goal => goal.metrics));
+  const plans = [...Object.values(data.weeklyPlans), ...Object.values(data.monthlyPlans)];
+  return plans.flatMap(areas => areas.filter(area => !area.archivedAt).flatMap(area => area.goals.filter(goal => !goal.archivedAt).flatMap(goal => goal.metrics)));
 }

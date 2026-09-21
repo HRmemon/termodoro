@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { atomicWriteJSON, readJSON, ensureDir } from './fs-utils.js';
-import { getSlotDomainBreakdown, type SlotDomainBreakdown } from './browser-stats.js';
+import { getSlotPageBreakdown, type SlotDomainBreakdown } from './browser-stats.js';
 
 export interface SlotCategory {
   code: string;
@@ -181,15 +181,18 @@ export function computeBrowserWastedHours(
   breakdown: SlotDomainBreakdown[],
   rules: DomainRule[],
 ): number {
-  return breakdown.reduce((total, slot) => {
-    if (slots[slot.time]) return total;
+  const minutesBySlot = new Map<string, number>();
+  for (const slot of breakdown) {
+    if (slots[slot.time]) continue;
     const category = slot.path
       ? matchUrl(slot.domain, slot.path, rules)
       : matchDomain(slot.domain, rules);
-    return category === 'W'
-      ? total + Math.min(30, Math.max(0, slot.activeMinutes)) / 60
-      : total;
-  }, 0);
+    if (category === 'W') {
+      minutesBySlot.set(slot.time, Math.min(30,
+        (minutesBySlot.get(slot.time) ?? 0) + Math.max(0, slot.activeMinutes)));
+    }
+  }
+  return [...minutesBySlot.values()].reduce((total, minutes) => total + minutes, 0) / 60;
 }
 
 export function getTrackerTimeSummary(date: Date = new Date()): TrackerTimeSummary {
@@ -213,7 +216,7 @@ export function getTrackerTimeSummary(date: Date = new Date()): TrackerTimeSumma
 
   wastedHours += computeBrowserWastedHours(
     slots,
-    getSlotDomainBreakdown(dateStr),
+    getSlotPageBreakdown(dateStr),
     loadTrackerConfigFull().domainRules,
   );
 

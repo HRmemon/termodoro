@@ -306,63 +306,55 @@ export function getAllDomains(): string[] {
   }
 }
 
-export function getSlotDomainBreakdown(date: string): SlotDomainBreakdown[] {
+export function getSlotPageBreakdown(date: string): SlotDomainBreakdown[] {
   if (!fs.existsSync(DB_PATH)) return [];
 
   let db: InstanceType<typeof Database> | null = null;
   try {
     db = new Database(DB_PATH, { readonly: true });
 
-    // Group by 30-min time slots, find dominant domain per slot.
-    // First aggregate by (time_slot, domain) summing active minutes across
-    // paths so that a domain split across multiple URLs in the same slot is
-    // counted correctly, then pick the dominant domain per slot.
+    // Keep every page: a slot's dominant domain cannot represent its waste.
     const rows = db.prepare(`
       SELECT
         PRINTF('%02d:', CAST(strftime('%H', recorded_at) AS INTEGER)) ||
         CASE WHEN CAST(strftime('%M', recorded_at) AS INTEGER) < 30 THEN '00' ELSE '30' END as time_slot,
         domain,
         path,
-        ROUND(SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) / 60.0, 1) as activeMinutes
+        SUM(CASE WHEN is_active = 1 THEN duration_sec ELSE 0 END) / 60.0 as activeMinutes
       FROM page_visits
       WHERE DATE(recorded_at) = ?
       GROUP BY time_slot, domain, path
       ORDER BY time_slot, activeMinutes DESC
     `).all(date) as { time_slot: string; domain: string; path: string; activeMinutes: number }[];
 
-    // Aggregate by (time_slot, domain), summing across paths
-    const domainAgg = new Map<string, { time_slot: string; domain: string; path: string; activeMinutes: number }>();
-    for (const row of rows) {
-      const key = `${row.time_slot}|${row.domain}`;
-      const existing = domainAgg.get(key);
-      if (existing) {
-        existing.activeMinutes += row.activeMinutes;
-        if (row.activeMinutes > existing.activeMinutes) existing.path = row.path;
-      } else {
-        domainAgg.set(key, { time_slot: row.time_slot, domain: row.domain, path: row.path, activeMinutes: row.activeMinutes });
-      }
-    }
-
-    // Pick dominant domain per slot
-    const slotMap = new Map<string, SlotDomainBreakdown>();
-    for (const entry of domainAgg.values()) {
-      const existing = slotMap.get(entry.time_slot);
-      if (!existing || entry.activeMinutes > existing.activeMinutes) {
-        slotMap.set(entry.time_slot, {
-          time: entry.time_slot,
-          domain: entry.domain,
-          path: entry.path,
-          activeMinutes: entry.activeMinutes,
-        });
-      }
-    }
-
-    return [...slotMap.values()];
+    return rows.map(({ time_slot, ...page }) => ({ time: time_slot, ...page }));
   } catch {
     return [];
   } finally {
     db?.close();
   }
+}
+
+export function getSlotDomainBreakdown(date: string): SlotDomainBreakdown[] {
+  const domains = new Map<string, SlotDomainBreakdown>();
+  for (const row of getSlotPageBreakdown(date)) {
+    const key = `${row.time}|${row.domain}`;
+    const existing = domains.get(key);
+    if (existing) {
+      existing.activeMinutes += row.activeMinutes;
+    } else {
+      // Rows are sorted by minutes, so the first path is the dominant one.
+      domains.set(key, { ...row });
+    }
+  }
+
+  const slots = new Map<string, SlotDomainBreakdown>();
+  for (const entry of domains.values()) {
+    if (entry.activeMinutes > (slots.get(entry.time)?.activeMinutes ?? -1)) {
+      slots.set(entry.time, entry);
+    }
+  }
+  return [...slots.values()];
 }
 
 export function getBrowserStatsForRange(startDate: string, endDate: string): BrowserStats | null {

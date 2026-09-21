@@ -10,12 +10,15 @@ import {
   getLatestMetricNote,
   getMetricTarget,
   getMetricValue,
+  getPlanAreas,
+  getWeekStart,
   getRecentDates,
   getWindowDates,
   loadGoals,
   setDayNote,
   setDayQuality,
   setMetricValue,
+  saveGoals,
   type DayQuality,
   type GoalMetric,
   type GoalsData,
@@ -72,9 +75,12 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
   const [editing, setEditing] = useState<GoalMetric | null>(null);
   const [editingDayNote, setEditingDayNote] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [showWeeklyOnly, setShowWeeklyOnly] = useState(false);
   const { stdout } = useStdout();
 
-  const areas = useMemo(() => data.areas.filter(area => !area.archivedAt), [data]);
+  const areas = useMemo(() => getPlanAreas(data, window, anchor).filter(area => !area.archivedAt), [data, window, anchor]);
   const activeArea = areas[activeAreaIndex];
   const metrics = useMemo(() => activeArea?.goals.filter(goal => !goal.archivedAt).flatMap(goal => goal.metrics) ?? [], [activeArea]);
   const selectedMetric = metrics[selected];
@@ -85,6 +91,14 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
     ]) ?? [], [activeArea]);
   const visibleCount = Math.max(5, (stdout?.rows ?? 24) - (window === 'today' ? 18 : 17));
   const selectedRow = selectedMetric ? rows.findIndex(row => row.key === selectedMetric.id) : 0;
+  const weeklyOnly = useMemo(() => {
+    if (window !== 'month') return [];
+    const month = anchor.slice(0, 7);
+    const seen = new Set<string>();
+    return Object.entries(data.weeklyPlans).filter(([start]) => getWindowDates('week', start, data.weekStartsOn).some(date => date.startsWith(month))).flatMap(([start, plan]) =>
+      plan.flatMap(area => area.goals.flatMap(goal => goal.metrics.filter(item => !item.contributesTo).map(item => ({ area: area.name || 'Untitled Category', goal: goal.name, metric: item, week: start })))))
+      .filter(item => { const key = `${item.metric.id}:${item.week}`; if (seen.has(key)) return false; seen.add(key); return true; });
+  }, [data, window, anchor]);
 
   useEffect(() => {
     if (selectedRow < scroll) setScroll(selectedRow);
@@ -101,9 +115,29 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
 
   const saveValue = (metric: GoalMetric, raw: string) => {
     const value = metric.input === 'note' ? raw.trim() : Number(raw);
-    if (metric.input === 'note' || Number.isFinite(value)) setData(setMetricValue(data, metric.id, anchor, value || undefined));
+    if (metric.input === 'note' || Number.isFinite(value)) setData(setMetricValue(data, metric.id, window === 'month' ? getTodayStr() : anchor, value || undefined));
     setEditing(null);
     setIsTyping(false);
+  };
+
+  const planKey = window === 'month' ? anchor.slice(0, 7) : getWeekStart(anchor, data.weekStartsOn);
+  const canEditValue = window === 'today' || (window === 'month' && anchor.slice(0, 7) === getTodayStr().slice(0, 7));
+  const valueDate = window === 'month' ? getTodayStr() : anchor;
+
+  const addDefinition = (raw: string) => {
+    const [categoryName, goalName, metricName, inputName = 'checkbox', targetText = '1'] = raw.split('/').map(value => value.trim());
+    if (!goalName || !metricName || !['checkbox', 'count', 'rate', 'note'].includes(inputName)) { setAdding(false); setIsTyping(false); return; }
+    const next = structuredClone(data);
+    const plans = window === 'month' ? next.monthlyPlans : next.weeklyPlans;
+    const plan = plans[planKey] ??= [];
+    const category = categoryName || 'Untitled Category';
+    let area = plan.find(item => item.name === category);
+    if (!area) { area = { id: `area-${Date.now()}`, name: category, goals: [] }; plan.push(area); }
+    let goal = area.goals.find(item => item.name === goalName);
+    if (!goal) { goal = { id: `goal-${Date.now()}`, name: goalName, metrics: [] }; area.goals.push(goal); }
+    const input = inputName as GoalMetric['input'];
+    goal.metrics.push({ id: `metric-${Date.now()}`, name: metricName, input, aggregate: input === 'checkbox' ? 'any' : input === 'note' ? 'latest' : input === 'rate' ? 'max' : 'sum', target: input === 'note' ? undefined : Number(targetText) || 1 });
+    setData(saveGoals(next)); setAdding(false); setIsTyping(false);
   };
 
   const moveWindow = (direction: number) => {
@@ -120,11 +154,11 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
   };
 
   useInput((input, key) => {
-    if (editing || editingDayNote) {
+    if (editing || editingDayNote || adding || editingName) {
       if (key.escape) {
         setEditing(null);
         setEditingDayNote(false);
-        setIsTyping(false);
+        setAdding(false); setEditingName(false); setIsTyping(false);
       }
       return;
     }
@@ -141,7 +175,24 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
       if (areas.length) setActiveAreaIndex(value => (value + 1) % areas.length);
       setSelected(0);
       setScroll(0);
-    } else if (input === 'n') moveWindow(1);
+    } else if (input === 'a' && window !== 'today') { setAdding(true); setEditValue(''); setIsTyping(true); }
+    else if (input === 'e' && window !== 'today' && selectedMetric) { setEditingName(true); setEditValue(selectedMetric.name); setIsTyping(true); }
+    else if (input === 'd' && window !== 'today' && selectedMetric) {
+      const next = structuredClone(data); const goal = getPlanAreas(next, window, anchor).flatMap(area => area.goals).find(item => item.metrics.some(metric => metric.id === selectedMetric.id));
+      if (goal) { goal.archivedAt = new Date().toISOString(); setData(saveGoals(next)); setSelected(0); }
+    }
+    else if (input === 'C' && window !== 'today' && !getPlanAreas(data, window, anchor).length) {
+      const next = structuredClone(data); const plans = window === 'month' ? next.monthlyPlans : next.weeklyPlans;
+      const previous = Object.keys(plans).filter(key => key < planKey).sort().at(-1);
+      if (previous) { plans[planKey] = structuredClone(plans[previous]!); setData(saveGoals(next)); }
+    } else if (input === 'L' && window === 'week' && selectedMetric) {
+      const targets = getPlanAreas(data, 'month', anchor).flatMap(area => area.goals.flatMap(goal => goal.metrics)).filter(item => item.input === selectedMetric.input || (selectedMetric.input === 'checkbox' && item.input === 'count'));
+      const index = targets.findIndex(item => item.id === selectedMetric.contributesTo);
+      const nextTarget = targets[index + 1]; const next = structuredClone(data);
+      const source = getPlanAreas(next, 'week', anchor).flatMap(area => area.goals.flatMap(goal => goal.metrics)).find(item => item.id === selectedMetric.id);
+      if (source) { source.contributesTo = nextTarget?.id; setData(saveGoals(next)); }
+    } else if (input === 'u' && window === 'month') setShowWeeklyOnly(value => !value);
+    else if (input === 'n') moveWindow(1);
     else if (input === 'p') moveWindow(-1);
     else if (input === 't') setAnchor(getTodayStr());
     else if (input === 'N' && window === 'today') {
@@ -155,17 +206,17 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
       const quality: DayQuality = input === 'P' ? 'perfect' : input === 'E' ? 'excused' : 'missed';
       const date = window === 'today' ? anchor : getTodayStr();
       setData(setDayQuality(data, date, data.dayQuality[date] === quality ? undefined : quality));
-    } else if ((key.backspace || key.delete || input === '0') && selectedMetric && window === 'today') {
-      setData(setMetricValue(data, selectedMetric.id, anchor, undefined));
-    } else if (key.ctrl && (input === 'a' || input === 'x') && selectedMetric?.input === 'count' && window === 'today') {
-      const current = Number(getMetricValue(data, selectedMetric.id, anchor)) || 0;
-      setData(setMetricValue(data, selectedMetric.id, anchor, adjustCount(current, input === 'a' ? 1 : -1)));
-    } else if ((key.return || input === 'x') && selectedMetric && window === 'today') {
-      const current = getMetricValue(data, selectedMetric.id, anchor);
+    } else if ((key.backspace || key.delete || input === '0') && selectedMetric && canEditValue) {
+      setData(setMetricValue(data, selectedMetric.id, valueDate, undefined));
+    } else if (key.ctrl && (input === 'a' || input === 'x') && selectedMetric?.input === 'count' && canEditValue) {
+      const current = Number(getMetricValue(data, selectedMetric.id, valueDate)) || 0;
+      setData(setMetricValue(data, selectedMetric.id, valueDate, adjustCount(current, input === 'a' ? 1 : -1)));
+    } else if ((key.return || input === 'x') && selectedMetric && canEditValue) {
+      const current = getMetricValue(data, selectedMetric.id, valueDate);
       if (selectedMetric.input === 'checkbox') {
-        setData(setMetricValue(data, selectedMetric.id, anchor, current ? undefined : true));
+        setData(setMetricValue(data, selectedMetric.id, valueDate, current ? undefined : true));
       } else if (selectedMetric.input === 'count') {
-        setData(setMetricValue(data, selectedMetric.id, anchor, adjustCount(current, 1)));
+        setData(setMetricValue(data, selectedMetric.id, valueDate, adjustCount(current, 1)));
       } else {
         setEditing(selectedMetric);
         setEditValue(current === undefined ? '' : String(current));
@@ -232,8 +283,8 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
           if (row.kind === 'goal') return <Text key={row.key} bold color="white">◆ {row.name}</Text>;
 
           const isSelected = row.metric.id === selectedMetric?.id;
-          if (window === 'today') {
-            const raw = getMetricValue(data, row.metric.id, anchor);
+          if (canEditValue) {
+            const raw = getMetricValue(data, row.metric.id, valueDate);
             const shown = raw === undefined ? '·' : raw === true ? '✓' : String(raw);
             const hint = isSelected && row.metric.input === 'count' ? '  (C-a/C-x)' : '';
             return (
@@ -262,6 +313,11 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
         })}
       </Box>
 
+      {window === 'month' && <Box flexDirection="column" marginTop={1}>
+        <Text dimColor>{showWeeklyOnly ? '▾' : '▸'} Weekly-only additions ({weeklyOnly.length}) · u toggle</Text>
+        {showWeeklyOnly && weeklyOnly.map(item => <Text key={`${item.week}:${item.metric.id}`}>  {item.area} · {item.goal} · {item.metric.name} <Text dimColor>({item.week})</Text></Text>)}
+      </Box>}
+
       {rows.length > visibleCount && <Text dimColor>{activeArea?.name} · rows {scroll + 1}-{Math.min(rows.length, scroll + visibleCount)} of {rows.length}</Text>}
 
       {editing && (
@@ -287,6 +343,8 @@ export function GraphsView({ setIsTyping }: { setIsTyping: (v: boolean) => void;
           <Text dimColor>  Enter save · empty clears · Esc cancel</Text>
         </Box>
       )}
+      {adding && <Box marginTop={1}><Text color="cyan">Category / Goal / Metric / checkbox|count|rate|note / target: </Text><TextInput value={editValue} onChange={setEditValue} onSubmit={addDefinition} /></Box>}
+      {editingName && <Box marginTop={1}><Text color="cyan">Metric name: </Text><TextInput value={editValue} onChange={setEditValue} onSubmit={value => { const next = structuredClone(data); const item = getPlanAreas(next, window, anchor).flatMap(area => area.goals.flatMap(goal => goal.metrics)).find(metric => metric.id === selectedMetric?.id); if (item && value.trim()) { item.name = value.trim(); setData(saveGoals(next)); } setEditingName(false); setIsTyping(false); }} /></Box>}
     </Box>
   );
 }

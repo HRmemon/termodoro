@@ -1,7 +1,6 @@
-import { logBrowserEvent, upsertDomainUsage, getTodayDomainUsage, getYesterdayDomainUsage, getThisWeekDomainUsage } from '../lib/browser-stats.js';
-import type { NotificationRule } from '../types.js';
+import { logBrowserEvent, upsertDomainUsage, getTodayDomainUsage } from '../lib/browser-stats.js';
 import { loadConfig } from '../lib/config.js';
-import { loadTrackerConfigFull } from '../lib/tracker.js';
+import { loadTrackerConfigFull, matchUrl } from '../lib/tracker.js';
 import type { EngineFullState } from '../engine/timer-engine.js';
 import { sendReminderNotification } from '../lib/notify.js';
 import jexl from 'jexl';
@@ -33,12 +32,19 @@ export class BrowserTracker {
 
   public handlePomodoroStateChange(state: EngineFullState) {
     this.currentPomodoroState = state;
-    if (this.lastEventState?.windowFocused && this.lastEventState.activeTab?.domain) {
+    if (!gapExceeds(this.lastEventTimestamp, Date.now(), BROWSER_EVENT_GAP_MS)
+        && this.lastEventState?.windowFocused && this.lastEventState.activeTab?.domain) {
       this.evaluateRules(this.lastEventState.activeTab.domain, this.lastEventState);
     }
   }
 
   public handleEvent(payload: any) {
+    if (!loadConfig().browserTracking) {
+      this.lastEventState = null;
+      this.lastEventTimestamp = 0;
+      this.continuousTimes = {};
+      return;
+    }
     logBrowserEvent(payload.trigger, payload);
 
     const now = Date.now();
@@ -115,16 +121,15 @@ export class BrowserTracker {
 
   private async evaluateRules(domain: string, state: BrowserState) {
     const config = loadConfig();
+    if (!config.browserTracking || !config.notifications) return;
     const rules = config.browserRules;
     if (!rules || rules.length === 0) return;
     const trackerConfig = loadTrackerConfigFull();
 
     // Extract base domain
     const baseDomain = domain.replace(/^www\./, '');
-    const domainRules = trackerConfig.domainRules.length > 0
-      ? trackerConfig.domainRules
-      : (config.domainRules || []);
-    const category = this.getDomainCategory(domain, domainRules) || 'Unknown';
+    const domainRules = trackerConfig.domainRules;
+    const category = matchUrl(domain, state.activeTab?.path ?? '/', domainRules) || 'Unknown';
     
     let currentMode = 'idle';
     if (this.currentPomodoroState && this.currentPomodoroState.isRunning) {
@@ -163,10 +168,10 @@ export class BrowserTracker {
         if (result) {
           // Rule triggered
           const now = Date.now();
-          const throttleKey = `${rule.id}_${baseDomain}`;
+          const throttleKey = `${rule.id}_${rule.condition}_${baseDomain}`;
           const lastWarn = this.lastWarningTimes[throttleKey] || 0;
           
-          if (now - lastWarn < rule.throttleMinutes * 60 * 1000) {
+          if (now - lastWarn < (rule.throttleMinutes ?? 5) * 60 * 1000) {
             continue; // Throttled
           }
 
@@ -192,23 +197,6 @@ export class BrowserTracker {
     }
     
     this.pruneOldWarnings(Date.now());
-  }
-
-  private getDomainCategory(domain: string, domainRules: any[]): string | null {
-    for (const rule of domainRules) {
-      if (rule.pattern.includes('/')) continue;
-      
-      let pattern = rule.pattern;
-      if (!pattern.startsWith('*')) {
-        if (domain.toLowerCase() === pattern.toLowerCase() || domain.toLowerCase().endsWith('.' + pattern.toLowerCase())) {
-          return rule.category;
-        }
-      } else {
-        const regex = new RegExp('^' + pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*') + '$', 'i');
-        if (regex.test(domain)) return rule.category;
-      }
-    }
-    return null;
   }
 
   private pruneOldWarnings(now: number) {

@@ -5,17 +5,21 @@ import {
   computeDayStreak,
   getLatestMetricNote,
   getMetricTarget,
+  getPlanAreas,
   getRecentDates,
   getWindowDates,
   loadGoals,
+  normalizeGoals,
   type GoalMetric,
   type GoalsData,
   type GoalWindow,
 } from './goals.js';
 import { MONTH_NAMES_FULL, getTodayStr } from './date-utils.js';
 import { DATA_DIR } from './paths.js';
+import { atomicWriteJSON, readJSON } from './fs-utils.js';
 
 export const GOALS_REPORT_PATH = path.join(DATA_DIR, 'goals-dashboard.html');
+export const GOALS_HISTORY_DIR = path.join(DATA_DIR, 'goals-history');
 
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const numberLabel = (value: number): string => Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
@@ -43,7 +47,7 @@ function metricValue(metric: GoalMetric, value: number, target?: number): string
 
 function renderCompactWeek(data: GoalsData, anchor: string): string {
   const dates = getWindowDates('week', anchor, data.weekStartsOn);
-  return `<div class="compact-week">${data.areas.filter(area => !area.archivedAt).map((area, areaIndex) => {
+  return `<div class="compact-week">${getPlanAreas(data, 'week', anchor).filter(area => !area.archivedAt).map((area, areaIndex) => {
     const goals = area.goals.filter(goal => !goal.archivedAt);
     const metricCount = goals.reduce((count, goal) => count + goal.metrics.length, 0);
     const targetedMetrics = goals.flatMap(goal => goal.metrics).filter(metric => getMetricTarget(metric, 'week', dates.length) !== undefined);
@@ -85,7 +89,7 @@ function renderCompactWeek(data: GoalsData, anchor: string): string {
 
 function renderPeriod(data: GoalsData, window: Exclude<GoalWindow, 'today'>, anchor: string): string {
   const dates = getWindowDates(window, anchor, data.weekStartsOn);
-  return data.areas.filter(area => !area.archivedAt).map((area, areaIndex) => `
+  return getPlanAreas(data, window, anchor).filter(area => !area.archivedAt).map((area, areaIndex) => `
     <section class="area-card">
       <header class="area-heading">
         <span>${String(areaIndex + 1).padStart(2, '0')}</span>
@@ -122,7 +126,14 @@ function renderPeriod(data: GoalsData, window: Exclude<GoalWindow, 'today'>, anc
     </section>`).join('');
 }
 
-export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string {
+function renderWeeklyOnly(data: GoalsData, anchor: string): string {
+  const month = anchor.slice(0, 7);
+  const items = Object.entries(data.weeklyPlans).filter(([start]) => getWindowDates('week', start, data.weekStartsOn).some(date => date.startsWith(month))).flatMap(([start, areas]) =>
+    areas.flatMap(area => area.goals.flatMap(goal => goal.metrics.filter(metric => !metric.contributesTo).map(metric => `${escapeHtml(area.name || 'Untitled Category')} · ${escapeHtml(goal.name)} · ${escapeHtml(metric.name)} <small>${start}</small>`))));
+  return `<details class="weekly-only"><summary>Weekly-only additions (${items.length})</summary>${items.map(item => `<div>${item}</div>`).join('')}</details>`;
+}
+
+export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr(), initialWindow: 'week' | 'month' = 'week'): string {
   const streak = computeDayStreak(data, anchor);
   const history = getRecentDates(365, anchor);
   const firstDay = new Date(`${history[0]}T00:00:00`).getDay();
@@ -193,6 +204,7 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
     .metric strong { white-space:nowrap; font:16px/1 ui-monospace, SFMono-Regular, Consolas, monospace; } .metric strong span { color:var(--muted); font-size:10px; }
     .metric p { margin:9px 0 0; color:var(--muted); font-size:8px; }
     .note-preview { margin-top:15px; overflow:hidden; color:var(--muted); font:11px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; text-overflow:ellipsis; }
+    .weekly-only { margin:18px 0; padding:14px 18px; border:1px solid var(--line); background:var(--card); } .weekly-only summary { cursor:pointer; } .weekly-only div { margin-top:8px; color:var(--muted); font:12px/1.4 ui-monospace,monospace; }
     .progress-track { height:7px; margin-top:18px; overflow:hidden; background:#ded8c9; border-radius:99px; } .progress-track span { display:block; height:100%; background:var(--moss); border-radius:inherit; }
     .metric.complete { background:rgba(201,216,196,.28); } .metric.complete .progress-track span { background:#527b5c; }
     footer { display:flex; justify-content:space-between; margin-top:34px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font:10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; text-transform:uppercase; letter-spacing:.08em; }
@@ -241,9 +253,9 @@ export function renderGoalsHtml(data: GoalsData, anchor = getTodayStr()): string
         <div class="heat-legend"><span>Past year · day quality</span><div class="legend-items"><span><i style="background:#71a36f"></i>${qualityCounts.perfect} perfect</span><span><i style="background:var(--amber)"></i>${qualityCounts.excused} reason</span><span><i style="background:var(--red)"></i>${qualityCounts.missed} missed</span></div></div>
       </div>
     </section>
-    <nav class="tabs" role="tablist" aria-label="Goal period"><button id="tab-week" role="tab" aria-controls="panel-week" aria-selected="true">Week</button><button id="tab-month" role="tab" aria-controls="panel-month" aria-selected="false" tabindex="-1">Month</button></nav>
-    <section id="panel-week" role="tabpanel" aria-labelledby="tab-week"><div class="period-heading"><h2>This week</h2><span>${weekDates[0]} → ${weekDates.at(-1)}</span></div>${renderCompactWeek(data, anchor)}</section>
-    <section id="panel-month" role="tabpanel" aria-labelledby="tab-month" hidden><div class="period-heading"><h2>${MONTH_NAMES_FULL[month! - 1]} ${year}</h2><span>${getWindowDates('month', anchor).length} days</span></div>${renderPeriod(data, 'month', anchor)}</section>
+    <nav class="tabs" role="tablist" aria-label="Goal period"><button id="tab-week" role="tab" aria-controls="panel-week" aria-selected="${initialWindow === 'week'}"${initialWindow === 'month' ? ' tabindex="-1"' : ''}>Week</button><button id="tab-month" role="tab" aria-controls="panel-month" aria-selected="${initialWindow === 'month'}"${initialWindow === 'week' ? ' tabindex="-1"' : ''}>Month</button></nav>
+    <section id="panel-week" role="tabpanel" aria-labelledby="tab-week"${initialWindow === 'month' ? ' hidden' : ''}><div class="period-heading"><h2>This week</h2><span>${weekDates[0]} → ${weekDates.at(-1)}</span></div>${renderCompactWeek(data, anchor)}</section>
+    <section id="panel-month" role="tabpanel" aria-labelledby="tab-month"${initialWindow === 'week' ? ' hidden' : ''}><div class="period-heading"><h2>${MONTH_NAMES_FULL[month! - 1]} ${year}</h2><span>${getWindowDates('month', anchor).length} days</span></div>${renderPeriod(data, 'month', anchor)}${renderWeeklyOnly(data, anchor)}</section>
     <footer><span>Auto-updated from goals.json</span><span>Dashboard · ${anchor}</span></footer>
   </main>
   <script>
@@ -261,4 +273,31 @@ export function writeGoalsHtmlReport(data: GoalsData = loadGoals()): string {
   fs.writeFileSync(tmpPath, renderGoalsHtml(data), 'utf8');
   fs.renameSync(tmpPath, GOALS_REPORT_PATH);
   return GOALS_REPORT_PATH;
+}
+
+function assertMonth(month: string): void {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error(`Invalid month: ${month}. Use YYYY-MM.`);
+}
+
+export function archiveGoalsMonth(month: string, data: GoalsData = loadGoals()): string {
+  assertMonth(month);
+  const snapshotPath = path.join(GOALS_HISTORY_DIR, `${month}.json`);
+  atomicWriteJSON(snapshotPath, data);
+  return snapshotPath;
+}
+
+export function writeArchivedGoalsReport(month: string): string {
+  assertMonth(month);
+  const snapshotPath = path.join(GOALS_HISTORY_DIR, `${month}.json`);
+  const raw = readJSON<unknown | null>(snapshotPath, null);
+  if (!raw) throw new Error(`No Goals snapshot for ${month}. Archive it first.`);
+  const data = normalizeGoals(raw as Parameters<typeof normalizeGoals>[0]);
+  const [year, monthNumber] = month.split('-').map(Number);
+  const lastDay = new Date(year!, monthNumber!, 0).getDate();
+  const reportPath = path.join(GOALS_HISTORY_DIR, `${month}.html`);
+  fs.mkdirSync(GOALS_HISTORY_DIR, { recursive: true });
+  const tmpPath = `${reportPath}.tmp`;
+  fs.writeFileSync(tmpPath, renderGoalsHtml(data, `${month}-${lastDay}`, 'month'), 'utf8');
+  fs.renameSync(tmpPath, reportPath);
+  return reportPath;
 }

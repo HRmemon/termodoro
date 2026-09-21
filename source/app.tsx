@@ -183,7 +183,7 @@ export function App({ config: initialConfig, initialView, initialProject, initia
 
     // Zen mode: allow toggle and timer controls, but block everything else
     if (overlay === 'zen') {
-      if (keymap.matches('global.zen', input, key) && (view === 'timer' || view === 'clock')) {
+      if (keymap.matches('global.zen', input, key)) {
         setOverlay(null);
         return;
       }

@@ -5,18 +5,10 @@ import { join } from 'node:path';
 
 const DAEMON_SOCKET_PATH = join(tmpdir(), 'pomodorocli-daemon.sock');
 
-let sock = null;
-
-function connectSocket() {
-  if (sock) return;
-  sock = net.createConnection(DAEMON_SOCKET_PATH);
-  sock.on('error', () => {
-    sock = null;
-  });
-  sock.on('close', () => {
-    sock = null;
-  });
-}
+// The extension owns reconnects and sends a fresh snapshot after reconnecting.
+const sock = net.createConnection(DAEMON_SOCKET_PATH);
+sock.on('error', () => process.exit(1));
+sock.on('close', () => process.exit(0));
 
 let buf = Buffer.alloc(0);
 
@@ -38,10 +30,7 @@ process.stdin.on('data', (chunk) => {
 
     try {
       const msg = JSON.parse(msgBytes.toString('utf-8'));
-      if (!sock) connectSocket();
-      if (sock) {
-        sock.write(JSON.stringify(msg) + '\n');
-      }
+      sock.write(JSON.stringify(msg) + '\n');
     } catch {
       // Skip malformed JSON
     }
@@ -49,13 +38,11 @@ process.stdin.on('data', (chunk) => {
 });
 
 process.stdin.on('end', () => {
-  if (sock) sock.end();
+  sock.end();
   process.exit(0);
 });
 
 process.stdin.on('error', () => {
-  if (sock) sock.end();
+  sock.end();
   process.exit(0);
 });
-
-connectSocket();

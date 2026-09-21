@@ -1,125 +1,63 @@
 let port = null;
 let reconnectTimeout = null;
-let windowFocused = true;
-let audibleTabs = new Set();
-let activeTabInfo = null;
 
 function connect() {
   try {
     port = browser.runtime.connectNative("pomodorocli_host");
-    port.onDisconnect.addListener(() => {
-      port = null;
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      reconnectTimeout = setTimeout(connect, 5000);
-    });
+    port.onDisconnect.addListener(reconnect);
+    reportActivity("connected");
   } catch {
-    port = null;
-    if (reconnectTimeout) clearTimeout(reconnectTimeout);
-    reconnectTimeout = setTimeout(connect, 5000);
+    reconnect();
   }
 }
 
-connect();
-
-function isTrackableUrl(url) {
-  if (!url) return false;
-  return !(
-    url.startsWith("about:") ||
-    url.startsWith("moz-extension:") ||
-    url.startsWith("chrome:") ||
-    url.startsWith("file:")
-  );
+function reconnect() {
+  port = null;
+  clearTimeout(reconnectTimeout);
+  reconnectTimeout = setTimeout(connect, 5000);
 }
 
 function parseTab(tab) {
-  if (!tab.url || !isTrackableUrl(tab.url)) return null;
   try {
-    const u = new URL(tab.url);
-    return { url: tab.url, domain: u.hostname, path: u.pathname, title: tab.title || "" };
+    const url = new URL(tab.url);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    return { url: tab.url, domain: url.hostname, path: url.pathname, title: tab.title || "" };
   } catch {
     return null;
   }
 }
 
-async function broadcastState(trigger) {
+async function reportActivity(trigger) {
   if (!port) return;
-  
-  const allAudible = [];
   try {
-    const tabs = await browser.tabs.query({ audible: true });
-    for (const t of tabs) {
-      const info = parseTab(t);
-      if (info) allAudible.push(info);
-    }
-  } catch {}
-
-  const payload = {
-    cmd: "browser-event",
-    timestamp: Date.now(),
-    trigger,
-    windowFocused,
-    activeTab: activeTabInfo,
-    audibleTabs: allAudible
-  };
-
-  try {
-    port.postMessage(payload);
-  } catch {}
+    const [window, audible] = await Promise.all([
+      browser.windows.getLastFocused({ populate: true }),
+      browser.tabs.query({ audible: true }),
+    ]);
+    const active = window.tabs?.find(tab => tab.active);
+    port?.postMessage({
+      cmd: "browser-event",
+      timestamp: Date.now(),
+      trigger,
+      windowFocused: window.focused,
+      activeTab: active ? parseTab(active) : null,
+      audibleTabs: audible.map(parseTab).filter(Boolean),
+    });
+  } catch (error) {
+    console.warn("Could not report browser activity", error);
+  }
 }
 
-async function updateActiveTab(trigger) {
-  try {
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    if (!tab) {
-      activeTabInfo = null;
-    } else {
-      activeTabInfo = parseTab(tab);
-    }
-    broadcastState(trigger || "tab_switched");
-  } catch {}
-}
-
-browser.tabs.onActivated.addListener(() => {
-  updateActiveTab("tab_switched");
+browser.tabs.onActivated.addListener(() => reportActivity("tab_switched"));
+browser.tabs.onUpdated.addListener((_id, change) => {
+  if ("url" in change || "audible" in change) reportActivity("tab_updated");
 });
+browser.tabs.onRemoved.addListener(() => reportActivity("tab_closed"));
+browser.windows.onFocusChanged.addListener(() => reportActivity("focus_changed"));
 
-browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  let changed = false;
-  let trigger = "tab_updated";
-  if ("audible" in changeInfo) {
-    if (changeInfo.audible) {
-      audibleTabs.add(tabId);
-    } else {
-      audibleTabs.delete(tabId);
-    }
-    changed = true;
-    trigger = "audible_change";
-  }
-
-  if (changeInfo.url && tab.active) {
-    activeTabInfo = parseTab(tab);
-    changed = true;
-  }
-
-  if (changed) {
-    broadcastState(trigger);
-  }
+// Checkpoint unchanged tabs; all accounting and notifications belong to Pomodoro.
+browser.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === "heartbeat") reportActivity("heartbeat");
 });
-
-browser.tabs.onRemoved.addListener((tabId) => {
-  if (audibleTabs.has(tabId)) {
-    audibleTabs.delete(tabId);
-    broadcastState("tab_closed");
-  }
-});
-
-browser.windows.onFocusChanged.addListener((windowId) => {
-  if (windowId === browser.windows.WINDOW_ID_NONE) {
-    windowFocused = false;
-  } else {
-    windowFocused = true;
-  }
-  updateActiveTab("focus_changed");
-});
-
-setTimeout(() => updateActiveTab("startup"), 1000);
+browser.alarms.create("heartbeat", { periodInMinutes: 1 });
+connect();

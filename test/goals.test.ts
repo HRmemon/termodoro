@@ -8,6 +8,7 @@ import {
   getLatestMetricNote,
   getMetricTarget,
   getWindowDates,
+  validateGoals,
   type GoalMetric,
 } from '../source/lib/goals.js';
 import { renderGoalsHtml } from '../source/lib/goals-report.js';
@@ -28,21 +29,19 @@ const weeklyCount: GoalMetric = {
   weeklyTarget: 7,
 };
 
-test('default weekly goals keep distinct requested actions and per-stream targets', () => {
+test('default goals match the September monthly and weekly plan', () => {
   const data = defaultGoalsData();
-  const metric = (goalId: string, metricId: string) => data.areas.flatMap(area => area.goals).find(goal => goal.id === goalId)!.metrics.find(item => item.id === metricId)!;
-  const deeper = data.areas.flatMap(area => area.goals).find(goal => goal.id === 'money-deeper')!;
+  const areas = Object.values(data.monthlyPlans)[0]!;
+  const metric = (goalId: string, metricId: string) => areas.flatMap(area => area.goals).find(goal => goal.id === goalId)!.metrics.find(item => item.id === metricId)!;
 
   assert.equal(data.weekStartsOn, 1);
-  assert.equal(metric('interview-preparation', 'interview-practice').weeklyTarget, 2);
-  assert.equal(metric('interview-preparation', 'interview-notes-sessions').weeklyTarget, 1);
-  assert.equal(data.areas.find(area => area.id === 'interview')!.goals[0]!.metrics.length, 2);
-  assert.equal(metric('ielts-writing', 'ielts-writing-attempts').weeklyTarget, 6);
-  assert.equal(metric('ielts-writing', 'ielts-writing-flaws-identified').weeklyTarget, 3);
-  assert.equal(metric('ielts-writing', 'ielts-writing-flaws-practised').weeklyTarget, 3);
-  assert.equal(metric('ielts-speaking', 'ielts-speaking-follow-lessons').weeklyTarget, 6);
-  assert.equal(deeper.metrics.length, 5);
-  assert.ok(deeper.metrics.every(item => item.input === 'checkbox' && item.aggregate === 'count' && item.weeklyTarget === 1));
+  assert.equal(metric('ielts-booking', 'ielts-test-booked').cumulative, true);
+  assert.equal(metric('ielts-writing', 'ielts-writing-attempts').target, undefined);
+  assert.equal(metric('ielts-reading', 'ielts-reading-score').target, 38);
+  assert.equal(metric('ielts-listening', 'ielts-listening-score').aggregate, 'latest');
+  assert.equal(metric('masters-planning', 'masters-scholarship-list').cumulative, true);
+  assert.equal(metric('revenue-career-path', 'revenue-best-fit-three').target, 3);
+  assert.equal(metric('exercise-monthly', 'exercise-weight-lost').target, 3);
 });
 
 test('weekly values sum and weekly targets scale to the actual month length', () => {
@@ -83,6 +82,21 @@ test('week start is configurable and defaults to Monday', () => {
   assert.deepEqual(getWindowDates('week', '2026-08-26', 0), ['2026-08-23', '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29']);
 });
 
+test('linked weekly values contribute to monthly totals without replacing plans', () => {
+  const data = defaultGoalsData();
+  const monthly: GoalMetric = { id: 'monthly-attempts', name: 'Monthly attempts', input: 'count', aggregate: 'sum', target: 10 };
+  const weekly: GoalMetric = { id: 'weekly-attempts', name: 'Weekly attempts', input: 'count', aggregate: 'sum', target: 3, contributesTo: monthly.id };
+  data.monthlyPlans['2026-09'] = [{ id: 'ielts', name: 'IELTS', goals: [{ id: 'monthly', name: 'Monthly', metrics: [monthly] }] }];
+  data.weeklyPlans['2026-09-07'] = [{ id: 'ielts', name: 'IELTS', goals: [{ id: 'weekly', name: 'Weekly', metrics: [weekly] }] }];
+  data.entries['weekly-attempts'] = { '2026-09-08': 2 };
+  data.entries['monthly-attempts'] = { '2026-09-09': 1 };
+
+  validateGoals(data);
+  assert.equal(aggregateMetric(monthly, data, getWindowDates('month', '2026-09-08')), 3);
+  assert.equal(data.weeklyPlans['2026-09-07']![0]!.goals[0]!.name, 'Weekly');
+  assert.equal(data.monthlyPlans['2026-09']![0]!.goals[0]!.name, 'Monthly');
+});
+
 test('latest note carries interview preparation forward', () => {
   const data = defaultGoalsData();
   data.entries['interview-playbook'] = {
@@ -110,7 +124,10 @@ test('only consecutive perfect days count toward the day streak', () => {
 
 test('HTML report renders period tabs, hierarchy, and three-state day history', () => {
   const data = defaultGoalsData();
-  data.areas[0]!.name = 'IELTS <current>';
+  const monthly = Object.values(data.monthlyPlans)[0]!;
+  data.weeklyPlans['2026-08-17'] = structuredClone(monthly);
+  data.monthlyPlans['2026-08'] = structuredClone(monthly);
+  data.weeklyPlans['2026-08-17'][0]!.name = 'IELTS <current>';
   data.dayQuality['2026-08-19'] = 'perfect';
   data.dayNotes['2026-08-19'] = 'Strong focus <no distractions>';
   const html = renderGoalsHtml(data, '2026-08-19');
@@ -126,4 +143,14 @@ test('HTML report renders period tabs, hierarchy, and three-state day history', 
   assert.match(html, /class="goal-icon"[^>]*>✍️</);
   assert.match(html, /class="metric-chip/);
   assert.match(html, /class="metric-grid"/);
+});
+
+test('month reports open on the requested month view', () => {
+  const data = defaultGoalsData();
+  data.monthlyPlans['2026-08'] = structuredClone(Object.values(data.monthlyPlans)[0]!);
+  const html = renderGoalsHtml(data, '2026-08-31', 'month');
+
+  assert.match(html, /<h2>August 2026<\/h2>/);
+  assert.match(html, /id="tab-month"[^>]*aria-selected="true"/);
+  assert.match(html, /id="panel-month" role="tabpanel" aria-labelledby="tab-month"><div/);
 });

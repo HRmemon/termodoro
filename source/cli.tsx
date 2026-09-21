@@ -1,13 +1,8 @@
 #!/usr/bin/env node
-import React from 'react';
-import { render } from 'ink';
 import meow from 'meow';
 import { loadConfig, validateConfig } from './lib/config.js';
-import { App } from './app.js';
-import { ErrorBoundary } from './components/ErrorBoundary.js';
 import type { View } from './types.js';
 import { isDaemonRunning, sendCommand } from './daemon/client.js';
-import { startDaemon } from './daemon/server.js';
 import { DAEMON_PID_PATH, DAEMON_SOCKET_PATH } from './daemon/protocol.js';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -24,6 +19,8 @@ const cli = meow(`
     export        Export sessions to CSV
     import        Import sessions from file
     track         Set up Firefox browser tracking
+    goals archive <YYYY-MM>  Preserve that month's goal definitions and data
+    goals report <YYYY-MM>   Generate a report from a preserved month
 
   Timer Control
     pause         Pause the timer
@@ -148,6 +145,23 @@ if (command === 'import') {
   handleImport(file);
   process.exit(0);
 }
+if (command === 'goals') {
+  const subcommand = cli.input[1];
+  const month = cli.input[2];
+  if (!month || (subcommand !== 'archive' && subcommand !== 'report')) {
+    console.error('Usage: pomodorocli goals <archive|report> <YYYY-MM>');
+    process.exit(1);
+  }
+  const { archiveGoalsMonth, writeArchivedGoalsReport } = await import('./lib/goals-report.js');
+  try {
+    const result = subcommand === 'archive' ? archiveGoalsMonth(month) : writeArchivedGoalsReport(month);
+    console.log(result);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+  process.exit(0);
+}
 
 // --- Daemon management ---
 
@@ -159,6 +173,7 @@ if (command === 'daemon') {
       console.log('Daemon is already running.');
       process.exit(0);
     }
+    const { startDaemon } = await import('./daemon/server.js');
     // startDaemon() starts the server and keeps the process alive.
     startDaemon();
     await new Promise(() => {});
@@ -361,6 +376,13 @@ if (!process.stdout.isTTY) {
   // But just in case:
   process.exit(0);
 }
+
+const [{ default: React }, { render }, { App }, { ErrorBoundary }] = await Promise.all([
+  import('react'),
+  import('ink'),
+  import('./app.js'),
+  import('./components/ErrorBoundary.js'),
+]);
 
 render(
   <ErrorBoundary>

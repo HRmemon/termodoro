@@ -1,4 +1,4 @@
-import { useState, useMemo, useContext } from 'react';
+import { useState, useMemo, useContext, useEffect } from 'react';
 import { type Keymap, kmMatches } from '../lib/keymap.js';
 import { spawnSync, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -57,6 +57,11 @@ function getRangeDates(range: Range, customDate?: string): { start: string; end:
 }
 
 export function WebView({ keymap }: { keymap?: Keymap }) {
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setRefresh(value => value + 1), 30_000);
+    return () => clearInterval(timer);
+  }, []);
   const [tab, setTab] = useState<Tab>('domains');
   const [scrollOffset, setScrollOffset] = useState(0);
   const [range, setRange] = useState<Range>('day');
@@ -69,7 +74,7 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
   const appConfig = useMemo(() => loadConfig(), []);
   const domainLimit = Math.max(10, appConfig.webDomainLimit ?? 50);
 
-  const { start, end } = useMemo(() => getRangeDates(range, customDate), [range, customDate]);
+  const { start, end } = useMemo(() => getRangeDates(range, customDate), [range, customDate, refresh]);
 
   const stats: BrowserStats | null = useMemo(() => {
     if (range === 'day') {
@@ -78,7 +83,7 @@ export function WebView({ keymap }: { keymap?: Keymap }) {
       return getBrowserStatsForDate(customDate);
     }
     return getBrowserStatsForRange(start, end);
-  }, [range, start, end, customDate]);
+  }, [range, start, end, customDate, refresh]);
 
   // Merge path-pattern entries into domains for non-day ranges
   const mergedStats: BrowserStats | null = useMemo(() => {

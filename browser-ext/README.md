@@ -1,124 +1,55 @@
 # Pomodorocli Browser Tracker
 
-Firefox extension that tracks active tabs and background audio, feeding time data into pomodorocli's **Web Time** view (key `8`).
+The Firefox extension is an activity sensor. Pomodoro owns storage, classification,
+notifications, and the Web Time and Waybar displays.
 
-## How it works
+## Data flow
 
-```
-Firefox Extension
-  │  tab events (activate, navigate, audible)
-  │  window focus/blur
-  ▼
-Native Messaging Host (Node.js)
-  │  4-byte length-prefixed JSON over stdin/stdout
-  ▼
-~/.local/share/pomodorocli/browser.db  (SQLite)
-  ▲
-pomodorocli TUI — Web Time view
-```
+Firefox → native messaging bridge → Pomodoro daemon → browser.db → Web Time / Waybar
 
-The extension tracks time **event-driven**, not on a fixed tick:
+- The extension reports the active tab, window focus, audible tabs, and a timestamp.
+- It sends snapshots on tab/navigation/audio/focus changes and a one-minute alarm.
+  The alarm keeps long visits measurable even when the page never changes.
+- The bridge only forwards JSON to the daemon's Unix socket. If the daemon stops,
+  the bridge exits; the extension reconnects every five seconds and sends fresh state.
+- The daemon attributes elapsed time to the previous snapshot. Gaps longer than five
+  minutes are discarded to avoid counting suspension or a disconnected browser.
+- Background audio is stored separately. Only foreground active time contributes
+  to automatic wasted time.
+- Domain/path rules live in Pomodoro's Config → Domain Rules
+  (`tracker-config.json`). Notifications use the same matcher as wasted time.
+  Notification conditions and cooldowns live in `config.json` under `browserRules`;
+  omitted cooldowns default to five minutes.
+- Waybar counts every matching page in each half-hour, capped at 30 minutes.
+  A manual tracker classification takes priority over automatic browser waste.
+- Web Time and the Waybar status file refresh every 30 seconds. With the heartbeat,
+  unchanged-page time can take about 90 seconds to appear.
 
-- Every tab switch, navigation, or audio state change closes the previous span and opens a new one with an accurate `duration_sec`
-- A 5s debounce + 30s max timer flushes buffered entries to the native host
-- Every 60s, long-running spans are checkpointed so durations stay bounded
-- When Firefox loses window focus, active tab tracking pauses; audible tabs (background audio) keep accumulating
+The extension contains no domain rules, timers for accounting, database access,
+or notification logic. Changing Pomodoro rules does not require an extension update.
 
-## Files
+## Setup and updates
 
-| File | Purpose |
-|------|---------|
-| `manifest.json` | Firefox Manifest V3 — permissions: `tabs`, `nativeMessaging`, `alarms`, `notifications` |
-| `background.js` | Service worker — event listeners, span tracking, flush logic, focus warnings |
+1. Run `pomodorocli track` to register the native messaging bridge.
+2. Install the signed XPI in Firefox: `about:addons` → gear →
+   **Install Add-on From File**. Updating source files alone does not update an
+   installed signed extension.
+3. Enable **Browser Tracking** in Pomodoro Config (key `6`).
+4. Open Web Time (key `7`) to check recorded activity.
 
-### `../native-host/`
+For temporary development, use `about:debugging` → This Firefox →
+Load Temporary Add-on → select `browser-ext/manifest.json`.
 
-| File | Purpose |
-|------|---------|
-| `pomodorocli-host.mjs` | Node.js stdio host — reads native messaging protocol, writes to SQLite, focus-mode domain checks |
-| `package.json` | Separate `node_modules` compiled against system Node (`/usr/bin/node`) |
-
-> **Why separate `node_modules`?** The host must run under the system Node (`/usr/bin/node v25`) which Firefox resolves via `PATH`. The main project uses nvm's Node v24. `better-sqlite3` is a native addon — it must be compiled for the Node version that actually runs it.
-
-## Setup (one-time)
-
-```bash
-# 1. Install native messaging manifest
-pomodorocli track
-
-# 2. Install the extension in Firefox
-#    Option A — permanent (requires web-ext + AMO API key):
-cd browser-ext
-web-ext sign --api-key=user:XXX --api-secret=XXX --channel=unlisted
-# Then: about:addons → gear → Install Add-on From File → select .xpi
-
-#    Option B — temporary (lost on Firefox restart):
-# about:debugging → This Firefox → Load Temporary Add-on → select manifest.json
-
-# 3. Enable in pomodorocli
-# Config view (key 7) → Browser Tracking → ON
-```
-
-`pomodorocli track` only needs to run **once**. It writes a persistent file at `~/.mozilla/native-messaging-hosts/pomodorocli_host.json` and survives reboots. Re-run only if you move the project directory.
-
-## SQLite schema
-
-Database at `~/.local/share/pomodorocli/browser.db`:
-
-```sql
-CREATE TABLE page_visits (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  url          TEXT    NOT NULL,
-  domain       TEXT    NOT NULL,
-  path         TEXT    NOT NULL DEFAULT '/',
-  title        TEXT    NOT NULL DEFAULT '',
-  is_active    INTEGER NOT NULL DEFAULT 0,  -- 1 = foreground tab in focused window
-  is_audible   INTEGER NOT NULL DEFAULT 0,  -- 1 = tab playing audio
-  duration_sec INTEGER NOT NULL DEFAULT 60,
-  recorded_at  TEXT    NOT NULL             -- local ISO datetime, e.g. 2026-02-25T14:30:00
-);
-```
-
-`is_active` and `is_audible` are not mutually exclusive — a tab can be both foregrounded and playing audio.
-
-## Permissions used
-
-| Permission | Why |
-|-----------|-----|
-| `tabs` | Read tab URLs, titles, active/audible state |
-| `nativeMessaging` | Communicate with the Node.js host process |
-| `alarms` | (Reserved) Periodic checkpoint — currently handled by `setInterval` |
-| `notifications` | Show focus-mode warnings when visiting flagged domains during work sessions |
-
-## Focus Mode Warnings
-
-When a work session is running, navigating to a domain flagged as **W** (Wasted) in your domain rules triggers a browser notification:
-
-> **Focus Mode** — Close youtube.com — you're in a focus session
-
-Clicking the notification closes all tabs matching that domain.
-
-**How it works**: On every tab switch or navigation, the extension sends the domain and path to the native host. The host reads `/tmp/pomodorocli-status.json` to check if a work session is active, then checks `~/.local/share/pomodorocli/tracker-config.json` for matching W-flagged domain rules. If both conditions match, it sends a `warn` message back and the extension shows the notification.
-
-**Setup**: Add W domain rules in Config view (key `7`) → Domain Rules (e.g. `youtube.com → W`). Warnings appear automatically during work sessions.
+The bridge uses only Node's standard library. It needs no separate npm install.
+Run `pomodorocli track` again if the repository is moved.
 
 ## Troubleshooting
 
-**Extension connects but immediately disconnects**
-The native host is crashing. Check the log:
-```bash
-cat ~/.local/share/pomodorocli/host-debug.log
-```
-Most common cause: `better-sqlite3` compiled for wrong Node version. Fix:
-```bash
-cd native-host && /usr/bin/npm install better-sqlite3
-```
-
-**No data in Web Time view**
-- Confirm extension is loaded and not in error state (`about:debugging`)
-- Confirm `Browser Tracking` is ON in Config view
-- Check DB exists: `ls ~/.local/share/pomodorocli/browser.db`
-- Data only appears for the current local date
-
-**Moved the project directory**
-Re-run `pomodorocli track` to update the absolute path in the native messaging manifest.
+- Check the extension is enabled, Browser Tracking is on, and the daemon is running.
+- Verify recent `browser_events_log` rows in
+  `~/.local/share/pomodorocli/browser.db`. An unchanged page should send
+  `heartbeat` every minute.
+- Check `/tmp/pomodorocli-status.json` for the actual Waybar payload.
+- A browser extension update is required for heartbeat changes; restarting only
+  the daemon cannot update Firefox's installed code.
+- Time discarded before the heartbeat fix cannot be reconstructed reliably.

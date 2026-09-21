@@ -18,6 +18,7 @@ interface ZenModeProps {
 
 export const ZenMode = React.memo(function ZenMode({ secondsLeft, totalSeconds, sessionType, isPaused, isRunning, timerFormat, timerMode, stopwatchElapsed }: ZenModeProps) {
   const { columns, rows } = useFullScreen();
+  const safeRows = Math.max(1, rows - 1);
   const isStopwatch = timerMode === 'stopwatch';
   const displaySeconds = isStopwatch ? stopwatchElapsed : secondsLeft;
   const lines = renderBigTime(displaySeconds, timerFormat ?? 'mm:ss', isStopwatch);
@@ -25,10 +26,10 @@ export const ZenMode = React.memo(function ZenMode({ secondsLeft, totalSeconds, 
 
   // Center everything vertically
   const contentHeight = 5 + 1 + 3; // digits + mode label + space hint
-  const topPad = Math.max(0, Math.floor((rows - contentHeight) / 2));
+  const topPad = Math.max(0, Math.floor((safeRows - contentHeight) / 2));
 
   return (
-    <Box flexDirection="column" width={columns} height={rows} alignItems="center">
+    <Box flexDirection="column" width={columns} height={safeRows} alignItems="center">
       <Box height={topPad} />
       <Box marginBottom={1}>
         <Text color={color} bold>{MODE_LABELS[sessionType]}</Text>
